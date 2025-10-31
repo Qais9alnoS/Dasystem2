@@ -1,0 +1,445 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* iOS-inspired light mode variables */
+    --background: 0 0% 100%; /* Pure white background */
+    --foreground: 0 0% 0%; /* Pure black text */
+    
+    --muted: 0 0% 95%; /* Light gray for muted elements */
+    --muted-foreground: 0 0% 45%; /* Medium gray for muted text */
+    
+    --popover: 0 0% 100%; /* White popover */
+    --popover-foreground: 0 0% 0%; /* Black text */
+    
+    --border: 0 0% 90%; /* Light border */
+    --input: 0 0% 88%; /* Slightly darker input border */
+    
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 0 0% 0%; /* Black text */
+    --card-hover: 0 0% 98%; /* Slightly off-white on hover */
+    
+    /* Updated brand palette - Blue primary, Yellow accent, Orange secondary */
+    --primary: 220 90% 50%; /* Blue */
+    --primary-foreground: 0 0% 100%; /* White text */
+    --primary-glow: 45 100% 65%; /* Yellow for glow effects */
+    
+    --secondary: 25 100% 65%; /* Orange */
+    --secondary-foreground: 0 0% 100%; /* White text */
+    
+    --accent: 45 100% 65%; /* Yellow */
+    --accent-foreground: 0 0% 0%; /* Black text */
+    --accent-glow: 45 100% 75%; /* Brighter yellow for glow effects */
+    
+    --destructive: 0 84% 60%; /* iOS red */
+    --destructive-foreground: 0 0% 100%; /* White text */
+    
+    --ring: 217 90% 60%; /* iOS blue ring */
+    
+    --radius: 1.1rem; /* iOS-style rounded corners */
+    
+    /* iOS-inspired gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217, 90%, 65%), hsl(217, 90%, 55%));
+    --gradient-secondary: linear-gradient(135deg, hsl(28, 92%, 65%), hsl(28, 92%, 55%));
+    --gradient-accent: linear-gradient(135deg, hsl(280, 80%, 70%), hsl(280, 80%, 60%));
+    --gradient-hero: linear-gradient(135deg, hsl(217, 90%, 65%), hsl(280, 80%, 65%));
+    --gradient-glass: linear-gradient(135deg, hsla(0, 0%, 100%, 0.8), hsla(0, 0%, 100%, 0.6));
+    
+    /* iOS-inspired shadows */
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.09), 0 4px 10px rgba(0, 0, 0, 0.06);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08);
+    --shadow-glow: 0 0 15px hsl(217, 90%, 60%, 0.3);
+  }
+
+  .dark {
+    /* iOS-inspired dark mode variables */
+    --background: 0 0% 8%; /* Dark background */
+    --foreground: 0 0% 100%; /* White text */
+    
+    --muted: 0 0% 15%; /* Darker gray for muted elements */
+    --muted-foreground: 0 0% 65%; /* Light gray for muted text */
+    
+    --popover: 0 0% 12%; /* Dark popover */
+    --popover-foreground: 0 0% 100%; /* White text */
+    
+    --border: 0 0% 20%; /* Dark border */
+    --input: 0 0% 22%; /* Slightly lighter input border */
+    
+    --card: 0 0% 12%; /* Dark cards */
+    --card-foreground: 0 0% 100%; /* White text */
+    --card-hover: 0 0% 18%; /* Slightly lighter on hover */
+    
+    /* Updated colors for dark mode - Blue primary, Yellow accent, Orange secondary */
+    --primary: 220 90% 60%; /* Brighter blue */
+    --primary-foreground: 0 0% 100%; /* White text */
+    --primary-glow: 45 100% 75%; /* Yellow for glow effects */
+    
+    --secondary: 25 100% 70%; /* Brighter orange */
+    --secondary-foreground: 0 0% 100%; /* White text */
+    
+    --accent: 45 100% 75%; /* Brighter yellow */
+    --accent-foreground: 0 0% 0%; /* Black text */
+    --accent-glow: 45 100% 85%; /* Even brighter yellow for glow effects */
+    
+    --destructive: 0 70% 55%; /* Adjusted iOS red */
+    --destructive-foreground: 0 0% 100%; /* White text */
+    
+    --ring: 217 92% 65%; /* Brighter iOS blue ring */
+    
+    --radius: 1.1rem; /* iOS-style rounded corners */
+    
+    /* iOS-inspired gradients for dark mode */
+    --gradient-primary: linear-gradient(135deg, hsl(217, 92%, 70%), hsl(217, 92%, 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(28, 95%, 70%), hsl(28, 95%, 60%));
+    --gradient-accent: linear-gradient(135deg, hsl(280, 90%, 75%), hsl(280, 90%, 65%));
+    --gradient-hero: linear-gradient(135deg, hsl(217, 92%, 70%), hsl(280, 90%, 70%));
+    --gradient-glass: linear-gradient(135deg, hsla(0, 0%, 20%, 0.8), hsla(0, 0%, 20%, 0.6));
+    
+    /* iOS-inspired shadows for dark mode */
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.25);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-glow: 0 0 15px hsl(217, 92%, 65%, 0.4);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+
+  body {
+    /* iOS-inspired styling */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    direction: rtl; /* Changed to RTL for Arabic app */
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overflow-x: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Scrollbar styling - hidden by default, visible on hover */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--primary));
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    opacity: 1;
+  }
+
+  /* Root container for React app */
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Main app container */
+  .app-container {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+
+  /* Smooth transitions for all interactive elements */
+  a, button, input, select, textarea {
+    transition: all 0.2s ease;
+  }
+
+  /* Enhanced focus styles */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 0.3rem;
+    transition: all 0.2s ease;
+  }
+
+  /* Card hover effects */
+  .card-hover-effect {
+    transition: all 0.3s ease;
+  }
+  
+  .card-hover-effect:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-elevation-2);
+  }
+
+  /* Button hover effects */
+  .btn-hover-effect {
+    transition: all 0.2s ease;
+  }
+  
+  .btn-hover-effect:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elevation-1);
+  }
+
+  /* Typography - iOS-inspired */
+  h1 {
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+  }
+
+  @media (min-width: 1024px) {
+    h1 {
+      font-size: 2.7rem;
+    }
+  }
+
+  h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  h4 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  p {
+    line-height: 1.5;
+    font-weight: 400;
+  }
+
+  /* Focus styles - iOS-inspired */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 0.3rem;
+  }
+
+  /* Disabled states */
+  :disabled {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* iOS-style animations */
+  .animate-fade-in {
+    animation: fadeIn 0.35s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.35s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.25s ease-out;
+  }
+
+  .animate-bounce-in {
+    animation: bounceIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* iOS-style spring animations */
+  .animate-spring-in {
+    animation: springIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-spring-out {
+    animation: springOut 0.3s cubic-bezier(0.34, 0.25, 0.64, 1);
+  }
+
+  /* Premium Glow Effects */
+  .glow-primary {
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.3), 0 0 30px hsl(var(--primary) / 0.2);
+  }
+
+  .glow-secondary {
+    box-shadow: 0 0 15px hsl(var(--secondary) / 0.3), 0 0 30px hsl(var(--secondary) / 0.2);
+  }
+
+  /* Custom Title Bar Styles */
+  .custom-titlebar {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  
+  .titlebar-center {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+  
+  .titlebar-right {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+  
+  .titlebar-button,
+  .window-control {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  /* iOS Fluent UI Surface */
+  .fluent-surface {
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+  }
+  
+  .fluent-surface:focus-within {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    background: hsl(var(--background) / 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes bounceIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.03);
+    }
+
+    70% {
+      transform: scale(0.98);
+    }
+
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* iOS-style spring animations */
+  @keyframes springIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.7);
+    }
+
+    80% {
+      opacity: 1;
+      transform: scale(1.03);
+    }
+
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes springOut {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    100% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+  }
+}
+
+/* Import iOS utilities */
+@import './styles/ios-utilities.css';

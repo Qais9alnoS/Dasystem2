@@ -1,0 +1,10 @@
+{
+  "identifier": "events-capability",
+  "description": "Capability for event management",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-emit",
+    "core:event:default"
+  ]
+}

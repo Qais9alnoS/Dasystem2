@@ -1,0 +1,142 @@
+#root {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.logo {
+  height: 8em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+  border-radius: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* iOS-style utility classes */
+.ios-safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.ios-safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.ios-safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.ios-safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* iOS-style list items */
+.ios-list-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  transition: background-color 0.2s ease;
+}
+
+.ios-list-item:last-child {
+  border-bottom: none;
+}
+
+.ios-list-item:hover {
+  background-color: hsl(var(--muted));
+}
+
+.ios-list-item:active {
+  background-color: hsl(var(--muted-foreground) / 0.1);
+}
+
+/* iOS-style navigation bar */
+.ios-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background-color: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* iOS-style tab bar */
+.ios-tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0.75rem 0;
+  background-color: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border));
+}
+
+.ios-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  color: hsl(var(--muted-foreground));
+  transition: color 0.2s ease;
+}
+
+.ios-tab-item.active {
+  color: hsl(var(--primary));
+}
+
+/* iOS-style form elements */
+.ios-form-group {
+  margin-bottom: 1.5rem;
+}
+
+.ios-form-label {
+  display: block;
+  text-align: left;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+/* iOS-style divider */
+.ios-divider {
+  height: 1px;
+  background-color: hsl(var(--border));
+  margin: 1rem 0;
+}

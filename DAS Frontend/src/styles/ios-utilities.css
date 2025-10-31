@@ -1,0 +1,176 @@
+/* iOS Design System Utilities */
+
+/* iOS-style shadows */
+.shadow-ios {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.shadow-ios-lg {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-ios-xl {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.09), 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* iOS-style rounded corners */
+.rounded-ios {
+  border-radius: 1.1rem;
+}
+
+.rounded-ios-sm {
+  border-radius: 0.8rem;
+}
+
+.rounded-ios-lg {
+  border-radius: 1.5rem;
+}
+
+.rounded-ios-xl {
+  border-radius: 2rem;
+}
+
+.rounded-ios-2xl {
+  border-radius: 2.5rem;
+}
+
+.rounded-ios-3xl {
+  border-radius: 3rem;
+}
+
+.rounded-ios-full {
+  border-radius: 9999px;
+}
+
+/* iOS-style transitions */
+.transition-ios {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.transition-ios-fast {
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.transition-ios-spring {
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* iOS-style scale animations */
+.scale-ios-hover:hover {
+  transform: scale(1.02);
+}
+
+.scale-ios-active:active {
+  transform: scale(0.98);
+}
+
+/* iOS-style list items */
+.ios-list-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  transition: background-color 0.2s ease;
+}
+
+.ios-list-item:last-child {
+  border-bottom: none;
+}
+
+.ios-list-item:hover {
+  background-color: hsl(var(--muted));
+}
+
+.ios-list-item:active {
+  background-color: hsl(var(--muted-foreground) / 0.1);
+}
+
+/* iOS-style form elements */
+.ios-form-input {
+  height: 3rem;
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--input));
+  padding: 0 1.5rem;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.ios-form-input:focus {
+  border-color: hsl(var(--primary));
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+/* iOS-style cards */
+.ios-card {
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.ios-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* iOS-style dividers */
+.ios-divider {
+  height: 1px;
+  background-color: hsl(var(--border));
+  margin: 1rem 0;
+}
+
+/* iOS-style safe areas */
+.ios-safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.ios-safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.ios-safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.ios-safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* iOS-style navigation */
+.ios-nav-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.ios-nav-title-large {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+/* iOS-style buttons */
+.ios-btn {
+  border-radius: 9999px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ios-btn:active {
+  transform: scale(0.98);
+}
+
+/* iOS-style status bar */
+.ios-status-bar {
+  height: env(safe-area-inset-top);
+  background-color: hsl(var(--background));
+}
