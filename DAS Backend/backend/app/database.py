@@ -46,35 +46,61 @@ def update_database_schema():
     """Update database schema to match current models"""
     import sqlite3
     
-    # Connect to the database
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    # Skip if database doesn't exist yet (will be created with correct schema)
+    if not os.path.exists(db_path):
+        print("✓ Database will be created with CASCADE DELETE constraints")
+        return
     
-    # Check if class_id column exists in students table
-    cursor.execute("PRAGMA table_info(students)")
-    columns = cursor.fetchall()
-    class_id_exists = any(col[1] == 'class_id' for col in columns)
-    
-    # Add class_id column if it doesn't exist
-    if not class_id_exists:
-        try:
-            cursor.execute("ALTER TABLE students ADD COLUMN class_id INTEGER REFERENCES classes(id)")
-            print("Added class_id column to students table")
-        except Exception as e:
-            print(f"Error adding class_id column: {e}")
-    
-    # Check if is_active column exists in subjects table
-    cursor.execute("PRAGMA table_info(subjects)")
-    columns = cursor.fetchall()
-    is_active_exists = any(col[1] == 'is_active' for col in columns)
-    
-    # Add is_active column if it doesn't exist
-    if not is_active_exists:
-        try:
-            cursor.execute("ALTER TABLE subjects ADD COLUMN is_active BOOLEAN DEFAULT 1")
-            print("Added is_active column to subjects table")
-        except Exception as e:
-            print(f"Error adding is_active column: {e}")
-    
-    conn.commit()
-    conn.close()
+    try:
+        # Connect to the database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if class_id column exists in students table
+        cursor.execute("PRAGMA table_info(students)")
+        columns = cursor.fetchall()
+        class_id_exists = any(col[1] == 'class_id' for col in columns)
+        
+        # Add class_id column if it doesn't exist
+        if not class_id_exists:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN class_id INTEGER REFERENCES classes(id)")
+                print("Added class_id column to students table")
+            except Exception as e:
+                print(f"Error adding class_id column: {e}")
+        
+        # Check if is_active column exists in subjects table
+        cursor.execute("PRAGMA table_info(subjects)")
+        columns = cursor.fetchall()
+        is_active_exists = any(col[1] == 'is_active' for col in columns)
+        
+        # Add is_active column if it doesn't exist
+        if not is_active_exists:
+            try:
+                cursor.execute("ALTER TABLE subjects ADD COLUMN is_active BOOLEAN DEFAULT 1")
+                print("Added is_active column to subjects table")
+            except Exception as e:
+                print(f"Error adding is_active column: {e}")
+        
+        # Check if foreign keys have CASCADE DELETE
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='classes'")
+        table_sql = cursor.fetchone()
+        
+        if table_sql and 'ON DELETE CASCADE' not in table_sql[0]:
+            print("\n" + "="*60)
+            print("⚠️  DATABASE MIGRATION REQUIRED")
+            print("="*60)
+            print("Your database lacks CASCADE DELETE constraints.")
+            print("To apply the fix:")
+            print("  1. Stop the backend server")
+            print("  2. Delete: school_management.db")
+            print("  3. Restart the server (database will be recreated)")
+            print("="*60 + "\n")
+        else:
+            print("✅ Database has CASCADE DELETE constraints - Ready to use!")
+        
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        print(f"⚠️  Error checking database schema: {e}")

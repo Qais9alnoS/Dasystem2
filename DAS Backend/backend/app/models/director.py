@@ -5,7 +5,7 @@ from app.models.base import BaseModel
 class DirectorNote(BaseModel):
     __tablename__ = "director_notes"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     folder_type = Column(String(20), nullable=False)  # goals, projects, blogs, notes, educational_admin
     title = Column(String(200), nullable=False)
     content = Column(Text)
@@ -17,7 +17,7 @@ class DirectorNote(BaseModel):
 class Reward(BaseModel):
     __tablename__ = "rewards"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(200), nullable=False)
     reward_date = Column(Date, nullable=False)
     recipient_name = Column(String(200), nullable=False)
@@ -31,7 +31,7 @@ class Reward(BaseModel):
 class AssistanceRecord(BaseModel):
     __tablename__ = "assistance_records"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(200), nullable=False)
     assistance_date = Column(Date, nullable=False)
     organization = Column(String(200), nullable=False)

@@ -71,67 +71,31 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
     const watchedValues = watch();
 
     const handleFormSubmit = async (data: AcademicYearFormData) => {
+        if (isSubmitting) {
+            console.log('Already submitting, ignoring duplicate submission');
+            return;
+        }
+        
         setIsSubmitting(true);
         try {
-            // Call the real API to create/update academic year
-            let resultData;
-            let responseMessage = '';
-            if (mode === 'create') {
-                // Convert the form data to the expected API format
-                const apiData: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'> = {
-                    year_name: data.year_name,
-                    description: data.description,
-                    is_active: data.is_active
-                };
-                const createResponse = await academicYearsApi.create(apiData);
-                responseMessage = createResponse.message || '';
-                
-                // Handle both response formats
-                if (createResponse.success) {
-                    resultData = createResponse.data;
-                } else {
-                    // Direct data format
-                    resultData = createResponse as unknown as AcademicYear;
-                }
-            } else {
-                // For edit mode, we need an ID
-                if (!initialData?.id) {
-                    throw new Error('معرف السنة الدراسية مطلوب للتحرير');
-                }
-                
-                const updateResponse = await academicYearsApi.update(initialData.id, data);
-                responseMessage = updateResponse.message || '';
-                
-                // Handle both response formats
-                if (updateResponse.success) {
-                    resultData = updateResponse.data;
-                } else {
-                    // Direct data format
-                    resultData = updateResponse as unknown as AcademicYear;
-                }
+            // Convert form data to API format
+            const apiData: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'> = {
+                year_name: data.year_name,
+                description: data.description,
+                is_active: data.is_active
+            };
+            
+            // Only call onSubmit - let the parent handle the API call
+            if (onSubmit) {
+                await onSubmit(apiData);
             }
             
-            if (resultData) {
-                toast({
-                    title: "نجاح",
-                    description: `تم ${mode === 'create' ? 'إنشاء' : 'تحديث'} السنة الدراسية بنجاح!`,
-                    variant: "default"
-                });
-                
-                // Reset form or redirect
-                if (onSubmit) {
-                    await onSubmit(data);
-                }
-                
-                // If this is edit mode, close the form after successful update
-                if (mode === 'edit' && onCancel) {
-                    // Small delay to allow toast to be seen
-                    setTimeout(() => {
-                        onCancel();
-                    }, 1000);
-                }
-            } else {
-                throw new Error(responseMessage || `فشل في ${mode === 'create' ? 'إنشاء' : 'تحديث'} السنة الدراسية`);
+            // If this is edit mode, close the form after successful update
+            if (mode === 'edit' && onCancel) {
+                // Small delay to allow toast to be seen
+                setTimeout(() => {
+                    onCancel();
+                }, 1000);
             }
         } catch (error: any) {
             // Check if this is a duplicate year error

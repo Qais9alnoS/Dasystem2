@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -10,7 +10,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { FirstRunSetup } from '@/components/FirstRunSetup';
-import { AcademicYearManagementPage, DashboardPage } from '@/pages';
+import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, StudentAcademicInfoPage, SchoolInfoManagementPage } from '@/pages';
 import LoginPage from '@/pages/LoginPage';
 import NotFound from '@/pages/NotFound';
 
@@ -19,9 +19,9 @@ const queryClient = new QueryClient();
 // Protected Route Wrapper
 const ProtectedApp = () => {
   const { state } = useAuth();
+  const navigate = useNavigate();
   const [needsFirstRunSetup, setNeedsFirstRunSetup] = useState(false);
   const [checkingFirstRun, setCheckingFirstRun] = useState(true);
-  const [needsYearSelection, setNeedsYearSelection] = useState(false);
 
   // Check if first run setup is needed
   useEffect(() => {
@@ -29,22 +29,6 @@ const ProtectedApp = () => {
       // Skip first run check if already completed in this session
       const firstRunCompleted = localStorage.getItem('first_run_completed');
       if (firstRunCompleted === 'true') {
-        // Check if year selection is needed
-        const autoOpenSetting = localStorage.getItem('auto_open_academic_year');
-        const selectedYearId = localStorage.getItem('selected_academic_year_id');
-        
-        // If we have a selected year, check if it's set as active/default
-        if (selectedYearId) {
-          // If auto_open_academic_year is true or not set (default behavior), go directly to dashboard
-          if (autoOpenSetting !== 'false') {
-            // Don't show year selection, let the router handle navigation
-          } else {
-            setNeedsYearSelection(true);
-          }
-        } else {
-          // No selected year, need to select one
-          setNeedsYearSelection(true);
-        }
         setCheckingFirstRun(false);
         return;
       }
@@ -59,28 +43,12 @@ const ProtectedApp = () => {
           // If not first run, mark it as completed
           if (!response.data.is_first_run) {
             localStorage.setItem('first_run_completed', 'true');
-            
-            // Check if year selection is needed
-            const autoOpenSetting = localStorage.getItem('auto_open_academic_year');
-            const selectedYearId = localStorage.getItem('selected_academic_year_id');
-            
-            // If we have a selected year, check if it's set as active/default
-            if (selectedYearId) {
-              // If auto_open_academic_year is true or not set (default behavior), go directly to dashboard
-              if (autoOpenSetting !== 'false') {
-                // Don't show year selection, let the router handle navigation
-              } else {
-                setNeedsYearSelection(true);
-              }
-            } else {
-              // No selected year, need to select one
-              setNeedsYearSelection(true);
-            }
           }
         }
       } catch (error) {
         console.error('Error checking first run status:', error);
         // Continue with normal flow if check fails
+        localStorage.setItem('first_run_completed', 'true');
       } finally {
         setCheckingFirstRun(false);
       }
@@ -91,8 +59,17 @@ const ProtectedApp = () => {
     }
   }, [state.isAuthenticated]);
 
+  // Show loading while auth is initializing (prevents login flash)
+  if (state.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   if (!state.isAuthenticated) {
-    return <LoginPage />;
+    return <Navigate to="/login" replace />;
   }
 
   // Show loading state while checking
@@ -111,48 +88,98 @@ const ProtectedApp = () => {
         onComplete={() => {
           setNeedsFirstRunSetup(false);
           localStorage.setItem('first_run_completed', 'true');
+          // After first run, navigate to year management
+          navigate('/academic-years');
         }} 
       />
     );
   }
 
-  // Show year selection if needed
-  if (needsYearSelection) {
-    return <AcademicYearManagementPage onYearSelected={() => setNeedsYearSelection(false)} />;
-  }
-  
-  // Check if we have a selected year and should navigate to dashboard
-  const storedSelectedYearId = localStorage.getItem('selected_academic_year_id');
-  if (storedSelectedYearId && !needsYearSelection) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // Check if we should auto-navigate to dashboard
-  const autoOpenSetting = localStorage.getItem('auto_open_academic_year');
-  const selectedYearId = localStorage.getItem('selected_academic_year_id');
-  
-  if (autoOpenSetting === 'true' && selectedYearId) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  // If we have a selected year but auto-open is disabled, still allow navigation to dashboard
-  if (selectedYearId) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
+  // Routes for authenticated users
   return (
     <Routes>
       <Route path="/*" element={<DesktopLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        {/* Default route - check year selection and redirect accordingly */}
+        <Route index element={<YearSelectionCheck />} />
         {/* Dashboard route - show the main dashboard */}
         <Route path="dashboard" element={<DashboardPage />} />
         {/* Academic Year Management */}
         <Route path="academic-years" element={<AcademicYearManagementPage />} />
+        {/* School Info Management */}
+        <Route path="school-info" element={<SchoolInfoManagementPage />} />
+        {/* Student Management */}
+        <Route path="students/personal-info" element={<StudentPersonalInfoPage />} />
+        <Route path="students/academic-info" element={<StudentAcademicInfoPage />} />
         {/* Catch-all for undefined routes */}
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );
+};
+
+// Component to check year selection and redirect
+const YearSelectionCheck = () => {
+  const [loading, setLoading] = useState(true);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  
+  useEffect(() => {
+    const checkAndSetDefaultYear = async () => {
+      const selectedYearId = localStorage.getItem('selected_academic_year_id');
+      
+      if (selectedYearId) {
+        // Year already selected
+        setShouldRedirect(true);
+        setLoading(false);
+        return;
+      }
+      
+      // Check for active/default year from backend
+      try {
+        const { academicYearsApi } = await import('@/services/api');
+        const response = await academicYearsApi.getAll();
+        
+        let years = [];
+        if (response.success && response.data) {
+          years = response.data;
+        } else if (Array.isArray(response)) {
+          years = response;
+        }
+        
+        // Find the active year
+        const activeYear = years.find((year: any) => year.is_active);
+        
+        if (activeYear) {
+          // Set the active year as selected
+          localStorage.setItem('selected_academic_year_id', activeYear.id?.toString() || '');
+          localStorage.setItem('selected_academic_year_name', activeYear.year_name || '');
+          localStorage.setItem('auto_open_academic_year', 'true');
+          setShouldRedirect(true);
+        }
+      } catch (error) {
+        console.error('Error fetching default year:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkAndSetDefaultYear();
+  }, []);
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (shouldRedirect) {
+    // If year is selected, go to dashboard
+    return <Navigate to="/dashboard" replace />;
+  } else {
+    // If no year selected, go to year management
+    return <Navigate to="/academic-years" replace />;
+  }
 };
 
 const App = () => {

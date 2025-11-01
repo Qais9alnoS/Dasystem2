@@ -236,12 +236,16 @@ export const classesApi = {
     return apiClient.get<Class>(`/academic/classes/${id}`);
   },
 
-  create: async (cls: Omit<Class, 'id' | 'created_at'>) => {
+  create: async (cls: Omit<Class, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<Class>('/academic/classes', cls);
   },
 
   update: async (id: number, cls: Partial<Class>) => {
     return apiClient.put<Class>(`/academic/classes/${id}`, cls);
+  },
+
+  delete: async (id: number) => {
+    return apiClient.delete<{ message: string }>(`/academic/classes/${id}`);
   },
 };
 
@@ -974,6 +978,58 @@ export const filesApi = {
   getStorageStats: async () => {
     return apiClient.get<StorageStats>('/files/stats');
   },
+};
+
+// Unified API object for easier imports
+export const api = {
+  auth: authApi,
+  academic: {
+    getAllAcademicYears: academicYearsApi.getAll,
+    getAcademicYear: academicYearsApi.getById,
+    createAcademicYear: academicYearsApi.create,
+    updateAcademicYear: academicYearsApi.update,
+    deleteAcademicYear: academicYearsApi.delete,
+    checkFirstRun: academicYearsApi.checkFirstRun,
+    initializeFirstYear: academicYearsApi.initializeFirstYear,
+    getClasses: classesApi.getAll,
+    getSubjects: subjectsApi.getAll,
+  },
+  students: {
+    getAll: studentsApi.getAll,
+    getById: studentsApi.getById,
+    create: studentsApi.create,
+    update: studentsApi.update,
+    deactivate: studentsApi.deactivate,
+    getFinances: studentsApi.getFinances,
+    createFinance: studentsApi.createFinance,
+    getPayments: studentsApi.getPayments,
+    recordPayment: studentsApi.recordPayment,
+    getAcademics: studentsApi.getAcademics,
+    createAcademics: studentsApi.createAcademic,
+    updateAcademics: studentsApi.updateAcademic,
+    search: studentsApi.search,
+  },
+  teachers: teachersApi,
+  classes: {
+    getAll: classesApi.getAll,
+    getById: classesApi.getById,
+    create: classesApi.create,
+    update: classesApi.update,
+    delete: classesApi.delete,
+  },
+  subjects: {
+    getAll: subjectsApi.getAll,
+    getById: subjectsApi.getById,
+    create: subjectsApi.create,
+    update: subjectsApi.update,
+    delete: subjectsApi.delete,
+  },
+  activities: activitiesApi,
+  schedules: schedulesApi,
+  finance: financeApi,
+  monitoring: monitoringApi,
+  director: directorApi,
+  files: filesApi,
 };
 
 // Export API client and error class

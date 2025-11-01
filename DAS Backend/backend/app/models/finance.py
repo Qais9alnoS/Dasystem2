@@ -13,7 +13,7 @@ class FinanceCategory(BaseModel):
 class FinanceTransaction(BaseModel):
     __tablename__ = "finance_transactions"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     category_id = Column(Integer, ForeignKey("finance_categories.id"), nullable=False)
     transaction_type = Column(String(10), nullable=False)  # income, expense
     amount = Column(Numeric(10,2), nullable=False)
@@ -32,7 +32,7 @@ class FinanceTransaction(BaseModel):
 class Budget(BaseModel):
     __tablename__ = "budgets"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     category = Column(String(100), nullable=False)
     budgeted_amount = Column(Numeric(10,2), nullable=False)
     period_type = Column(String(20), nullable=False)  # annual, monthly, quarterly

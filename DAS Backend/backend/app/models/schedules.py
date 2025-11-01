@@ -6,7 +6,7 @@ class TimeSlot(BaseModel):
     __tablename__ = "time_slots"
     
     # Time slot attributes
-    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=False)
+    schedule_id = Column(Integer, ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False)
     period_number = Column(Integer, nullable=False)
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
@@ -21,11 +21,11 @@ class ScheduleAssignment(BaseModel):
     __tablename__ = "schedule_assignments"
     
     # Schedule assignment attributes
-    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=False)
+    schedule_id = Column(Integer, ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False)
     time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=False)
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
     room = Column(String(50))
     notes = Column(Text)
     
@@ -40,7 +40,7 @@ class ScheduleConflict(BaseModel):
     __tablename__ = "schedule_conflicts"
     
     # Schedule conflict attributes
-    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=False)
+    schedule_id = Column(Integer, ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False)
     conflict_type = Column(String(50), nullable=False)  # teacher_overlap, room_overlap, etc.
     description = Column(Text)
     severity = Column(String(20), default="medium")  # low, medium, high, critical
@@ -56,13 +56,13 @@ class Schedule(BaseModel):
     __tablename__ = "schedules"
     
     # Schedule attributes
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     session_type = Column(String(10), nullable=False)  # morning, evening
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
     section = Column(String(10))
     day_of_week = Column(Integer)  # 1-7 (Monday-Sunday)
     period_number = Column(Integer)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
     name = Column(String(100))
     start_date = Column(Date)
@@ -81,12 +81,12 @@ class ScheduleConstraint(BaseModel):
     __tablename__ = "schedule_constraints"
     
     # Schedule constraint attributes
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     constraint_type = Column(String(20), nullable=False)  # forbidden, required, no_consecutive, max_consecutive, min_consecutive
     
     # Target Specification
-    class_id = Column(Integer, ForeignKey("classes.id"))
-    subject_id = Column(Integer, ForeignKey("subjects.id"))
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"))
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"))
     teacher_id = Column(Integer, ForeignKey("teachers.id"))
     
     # Time Specification
@@ -127,7 +127,7 @@ class ScheduleGenerationHistory(BaseModel):
     __tablename__ = "schedule_generation_history"
     
     # Schedule generation history attributes
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     session_type = Column(String(10), nullable=False)  # morning, evening
     generation_algorithm = Column(String(50))  # 'genetic', 'backtrack', 'greedy'
     generation_parameters = Column(JSON)

@@ -24,7 +24,7 @@ const LoginPage = () => {
     });
     const [showPassword, setShowPassword] = useState(false);
 
-    const from = location.state?.from?.pathname || '/academic-years';
+    const from = location.state?.from?.pathname || '/';
 
     // Redirect if already authenticated
     useEffect(() => {

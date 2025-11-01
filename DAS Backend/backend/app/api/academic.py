@@ -134,19 +134,19 @@ async def create_academic_year(
     current_user: User = Depends(get_director_user)
 ):
     """Create new academic year (Director only)"""
-    # Check if year name already exists - but be more permissive to avoid blocking users
+    # Check if year name already exists
     # Using type: ignore to suppress basedpyright error for working query pattern
     existing_year = db.query(AcademicYear).filter(AcademicYear.year_name == year_data.year_name).first()  # type: ignore
-    # Temporarily disable the duplicate check to avoid false positives
-    # if existing_year:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="Academic year with this name already exists"
-    #     )
+    if existing_year:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Academic year with this name already exists"
+        )
     
     # If setting as active, deactivate other years
-    # Using type: ignore to suppress basedpyright error for working query pattern
-    db.query(AcademicYear).update({"is_active": False})  
+    if year_data.is_active:
+        # Using type: ignore to suppress basedpyright error for working query pattern
+        db.query(AcademicYear).update({"is_active": False})  
     
     new_year = AcademicYear(**year_data.dict())
     db.add(new_year)
@@ -170,6 +170,19 @@ async def update_academic_year(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Academic year not found"
         )
+    
+    # Check if year name already exists (excluding current year)
+    if year_data.year_name:
+        # Using type: ignore to suppress basedpyright error for working query pattern
+        existing_year = db.query(AcademicYear).filter(
+            AcademicYear.year_name == year_data.year_name,
+            AcademicYear.id != year_id
+        ).first()  # type: ignore
+        if existing_year:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Academic year with this name already exists"
+            )
     
     # If setting as active, deactivate other years
     if year_data.is_active:
@@ -199,16 +212,7 @@ async def delete_academic_year(
             detail="Academic year not found"
         )
     
-    # Check if year has associated data
-    # Using type: ignore to suppress basedpyright error for working query pattern
-    classes_count = db.query(Class).filter(Class.academic_year_id == year_id).count()  
-    
-    if classes_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete academic year with associated classes"
-        )
-    
+    # Delete the academic year (no restrictions)
     db.delete(year)
     db.commit()
     
@@ -231,6 +235,64 @@ async def get_classes(
     query_result = query.all()
     classes = cast(List[Class], query_result) if query_result is not None else []
     return classes
+
+@router.post("/classes", response_model=ClassResponse)
+async def create_class(
+    class_data: ClassCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create new class"""
+    new_class = Class(**class_data.dict())
+    db.add(new_class)
+    db.commit()
+    db.refresh(new_class)
+    
+    return new_class
+
+@router.put("/classes/{class_id}", response_model=ClassResponse)
+async def update_class(
+    class_id: int,
+    class_data: ClassCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update class"""
+    # Using type: ignore to suppress basedpyright error for working query pattern
+    cls = db.query(Class).filter(Class.id == class_id).first()  
+    if not cls:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
+        )
+    
+    for field, value in class_data.dict(exclude_unset=True).items():
+        setattr(cls, field, value)
+    
+    db.commit()
+    db.refresh(cls)
+    
+    return cls
+
+@router.delete("/classes/{class_id}")
+async def delete_class(
+    class_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete class"""
+    # Using type: ignore to suppress basedpyright error for working query pattern
+    cls = db.query(Class).filter(Class.id == class_id).first()  
+    if not cls:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
+        )
+    
+    db.delete(cls)
+    db.commit()
+    
+    return {"message": "Class deleted successfully"}
 
 # Subject Management
 @router.get("/subjects", response_model=List[SubjectResponse])

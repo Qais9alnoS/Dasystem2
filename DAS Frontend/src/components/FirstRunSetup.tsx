@@ -85,17 +85,9 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
       }
 
       if (resultData) {
-        // Save the auto-open setting
-        try {
-          await academicYearsApi.updateConfiguration(
-            'auto_open_academic_year',
-            autoOpenYear ? 'true' : 'false',
-            'boolean',
-            'Automatically open the last active academic year on startup',
-            'academic'
-          );
-        } catch (configError) {
-          console.warn('Failed to save auto-open setting:', configError);
+        // Save the auto-open preference to localStorage instead
+        if (autoOpenYear) {
+          localStorage.setItem('auto_open_academic_year', 'true');
         }
 
         toast({

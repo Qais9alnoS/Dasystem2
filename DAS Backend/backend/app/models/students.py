@@ -5,8 +5,8 @@ from app.models.base import BaseModel
 class Student(BaseModel):
     __tablename__ = "students"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="SET NULL"), nullable=True)
     
     # Personal Information
     full_name = Column(String(200), nullable=False)
@@ -56,7 +56,7 @@ class StudentFinance(BaseModel):
     __tablename__ = "student_finances"
     
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     
     # Fees Structure
     school_fee = Column(Numeric(10,2), default=0)
@@ -81,7 +81,7 @@ class StudentPayment(BaseModel):
     __tablename__ = "student_payments"
     
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     payment_amount = Column(Numeric(10,2), nullable=False)
     payment_date = Column(Date, nullable=False)
     receipt_number = Column(String(50))
@@ -97,8 +97,8 @@ class StudentAcademic(BaseModel):
     __tablename__ = "student_academics"
     
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     
     # Grades
     board_grades = Column(Numeric(5,2))

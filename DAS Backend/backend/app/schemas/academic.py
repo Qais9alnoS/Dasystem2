@@ -45,6 +45,7 @@ class SubjectBase(BaseModel):
     class_id: int
     subject_name: str
     weekly_hours: int
+    is_active: bool = True
 
 class SubjectCreate(SubjectBase):
     pass

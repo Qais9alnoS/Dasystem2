@@ -5,7 +5,7 @@ from app.models.base import BaseModel
 class Activity(BaseModel):
     __tablename__ = "activities"
     
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
     activity_type = Column(String(20), nullable=False)  # academic, sports, cultural, social, trip
@@ -35,7 +35,7 @@ class ActivityRegistration(BaseModel):
     __tablename__ = "activity_registrations"
     
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)
     registration_date = Column(Date, nullable=False)
     payment_status = Column(String(20), default="pending")  # pending, paid, cancelled
     payment_amount = Column(Numeric(10,2))
@@ -49,7 +49,7 @@ class ActivityRegistration(BaseModel):
 class ActivitySchedule(BaseModel):
     __tablename__ = "activity_schedules"
     
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)
     day_of_week = Column(Integer, nullable=False)  # 0=Monday, 1=Tuesday, ..., 6=Sunday
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
@@ -64,7 +64,7 @@ class ActivityAttendance(BaseModel):
     __tablename__ = "activity_attendances"
     
     registration_id = Column(Integer, ForeignKey("activity_registrations.id"), nullable=False)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)  # Added missing foreign key
+    activity_id = Column(Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)  # Added missing foreign key
     attendance_date = Column(Date, nullable=False)
     status = Column(String(20), default="absent")  # present, absent, excused
     notes = Column(Text)
@@ -76,8 +76,8 @@ class ActivityAttendance(BaseModel):
 class ActivityParticipant(BaseModel):
     __tablename__ = "activity_participants"
     
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
     section = Column(String(10))
     is_participating = Column(Boolean, default=False)
     
@@ -89,7 +89,7 @@ class StudentActivityParticipation(BaseModel):
     __tablename__ = "student_activity_participations"
     
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)
     is_participating = Column(Boolean, default=False)
     
     # Relationships

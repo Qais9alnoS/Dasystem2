@@ -6,7 +6,7 @@ class Teacher(BaseModel):
     __tablename__ = "teachers"
     
     # Teacher attributes
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     
     # Personal Information
     full_name = Column(String(200), nullable=False)
@@ -37,8 +37,8 @@ class TeacherAssignment(BaseModel):
     
     # Teacher assignment attributes
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     section = Column(String(10))
     
     # Relationships
@@ -64,7 +64,7 @@ class TeacherFinance(BaseModel):
     
     # Teacher finance attributes
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
-    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
     month = Column(Integer)  # Add missing month column
     year = Column(Integer)   # Add missing year column
     base_salary = Column(Numeric(10,2), default=0)

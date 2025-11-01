@@ -62,7 +62,10 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   // Mutation for creating academic years
   const createMutation = useMutation({
     mutationFn: async (data: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>) => {
+      console.log('=== Create Mutation Called ===');
+      console.log('Data:', data);
       const response = await academicYearsApi.create(data);
+      console.log('API Response:', response);
       // Handle both response formats
       if (response.success) {
         return response.data;
@@ -71,13 +74,17 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
         return response as unknown as AcademicYear;
       }
     },
-    onSuccess: (newYear, variables, context) => {
-      queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+    onSuccess: async (newYear, variables, context) => {
+      console.log('=== Create Year Success ===');
+      console.log('New Year:', newYear);
+      console.log('Variables:', variables);
+      
+      // Invalidate and wait for refetch to complete
+      await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+      await queryClient.refetchQueries({ queryKey: ['academicYears'] });
+      
       setShowForm(false);
       setEditingYear(null);
-      
-      // Always refresh the academic years data to get the latest count
-      queryClient.refetchQueries({ queryKey: ['academicYears'] });
       
       toast({
         title: "نجاح",
@@ -106,8 +113,16 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
         return response as unknown as AcademicYear;
       }
     },
-    onSuccess: (updatedYear, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+    onSuccess: async (updatedYear, variables) => {
+      console.log('=== Update Success ===');
+      console.log('Updated Year:', updatedYear);
+      console.log('Variables:', variables);
+      
+      // Invalidate and refetch to ensure UI updates immediately
+      await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+      await queryClient.refetchQueries({ queryKey: ['academicYears'] });
+      
+      console.log('Queries invalidated and refetched');
       
       // Only show toast when changing year properties (not when just selecting)
       if (editingYear) {
@@ -122,9 +137,13 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
         setEditingYear(null);
       } else {
         // This is a default toggle operation
+        console.log('Default toggle operation - is_active:', updatedYear?.is_active);
+        
         // Update localStorage to reflect the default year setting
-        if (updatedYear.is_active) {
+        if (updatedYear?.is_active) {
           localStorage.setItem('auto_open_academic_year', 'true');
+          localStorage.setItem('selected_academic_year_id', updatedYear.id?.toString() || '');
+          localStorage.setItem('selected_academic_year_name', updatedYear.year_name || '');
         } else {
           localStorage.setItem('auto_open_academic_year', 'false');
         }
@@ -134,9 +153,13 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
       // The user can click on the year to enter it
     },
     onError: (error: Error) => {
+      console.error('=== Update Error ===');
+      console.error('Error:', error);
+      console.error('Error message:', error.message);
+      
       toast({
         title: "خطأ",
-        description: error.message,
+        description: error.message || 'فشل في تحديث السنة الدراسية',
         variant: "destructive",
       });
     },
@@ -149,19 +172,50 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['academicYears'] });
-      setDeleteYearId(null);
-      
-      toast({
-        title: "نجاح",
-        description: "تم حذف السنة الدراسية بنجاح!",
-        variant: "default",
-      });
+      // Check if we deleted the current year
+      if (deleteYearId === currentYearId) {
+        // Clear the selected year from localStorage
+        localStorage.removeItem('selected_academic_year_id');
+        localStorage.removeItem('selected_academic_year_name');
+        localStorage.removeItem('auto_open_academic_year');
+        
+        toast({
+          title: "تم الحذف",
+          description: "تم حذف السنة الدراسية الحالية. سيتم إعادة تحميل الصفحة...",
+          variant: "default",
+        });
+        
+        // Reload the page after a short delay to show the toast
+        setTimeout(() => {
+          window.location.href = '/academic-years';
+        }, 1500);
+      } else {
+        // Invalidate queries to refresh the list
+        queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+        setDeleteYearId(null);
+        
+        toast({
+          title: "نجاح",
+          description: "تم حذف السنة الدراسية بنجاح!",
+          variant: "default",
+        });
+      }
     },
     onError: (error: Error) => {
+      console.error('=== Delete Year Error ===');
+      console.error('Error:', error);
+      console.error('Error message:', error.message);
+      
+      // Close delete dialog
+      setDeleteYearId(null);
+      
+      const errorMessage = error.message || '';
+      const apiError = error as any;
+      const errorDetail = apiError?.details?.detail || apiError?.details?.message || errorMessage;
+      
       toast({
         title: "خطأ",
-        description: error.message,
+        description: errorDetail || errorMessage || 'فشل في حذف السنة الدراسية',
         variant: "destructive",
       });
     },
@@ -169,6 +223,14 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
 
   // Handle form submission for create
   const handleCreateSubmit = async (data: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>) => {
+    // Prevent double submission
+    if (createMutation.isPending) {
+      console.log('Create mutation already in progress, ignoring duplicate submission');
+      return;
+    }
+    
+    console.log('=== Creating Academic Year ===');
+    console.log('Data:', data);
     createMutation.mutate(data);
   };
 
@@ -192,17 +254,30 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
       localStorage.setItem('auto_open_academic_year', 'false');
     }
     
+    // Show success toast
+    toast({
+      title: "تم اختيار السنة الدراسية",
+      description: `تم اختيار السنة الدراسية: ${year.year_name}`,
+      variant: "default",
+    });
+    
     // Notify parent component that a year has been selected
     if (onYearSelected) {
       onYearSelected();
     }
     
     // Navigate to main dashboard
-    // The parent component will handle navigation, so we don't need to navigate here
+    navigate('/dashboard');
   };
 
   // Handle setting as default (active) - toggle functionality
   const handleSetAsDefault = (year: AcademicYear) => {
+    console.log('=== Setting year as default ===');
+    console.log('Year ID:', year.id);
+    console.log('Year Name:', year.year_name);
+    console.log('Current is_active:', year.is_active);
+    console.log('New is_active:', !year.is_active);
+    
     // If the year is already active, deactivate it
     // Otherwise, activate it (which will deactivate others)
     updateMutation.mutate({ 
@@ -221,16 +296,6 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
 
   // Handle delete year - show confirmation dialog
   const handleDeleteYear = (year: AcademicYear) => {
-    // Check if this is the current year
-    if (currentYearId === year.id) {
-      toast({
-        title: "تحذير",
-        description: "لا يمكنك حذف السنة الدراسية الحالية. يرجى تغيير السنة أولاً.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     setDeleteYearId(year.id!);
     setDeleteYearName(year.year_name);
   };
@@ -378,6 +443,7 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
                               <IOSSwitch 
                                 checked={year.is_active}
                                 onCheckedChange={() => handleSetAsDefault(year)}
+                                disabled={updateMutation.isPending}
                               />
                             </div>
                             <Button
@@ -418,7 +484,16 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف السنة الدراسية "{deleteYearName}"؟ هذا الإجراء لا يمكن التراجع عنه.
+              {deleteYearId === currentYearId ? (
+                <div className="space-y-2">
+                  <p className="text-destructive font-semibold">⚠️ تحذير: أنت على وشك حذف السنة الدراسية الحالية!</p>
+                  <p>هل أنت متأكد من حذف السنة الدراسية "{deleteYearName}"؟</p>
+                  <p>سيتم إخراجك من النظام وسيتعين عليك اختيار سنة دراسية جديدة.</p>
+                  <p className="text-muted-foreground text-sm">هذا الإجراء لا يمكن التراجع عنه.</p>
+                </div>
+              ) : (
+                <p>هل أنت متأكد من حذف السنة الدراسية "{deleteYearName}"؟ هذا الإجراء لا يمكن التراجع عنه.</p>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

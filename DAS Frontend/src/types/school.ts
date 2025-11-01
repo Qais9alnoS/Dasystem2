@@ -56,6 +56,7 @@ export interface Subject {
     class_id: number;
     subject_name: string;
     weekly_hours: number;
+    is_active?: boolean;
     created_at?: string;
 }
 
