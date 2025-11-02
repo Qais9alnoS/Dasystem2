@@ -10,7 +10,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { FirstRunSetup } from '@/components/FirstRunSetup';
-import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, StudentAcademicInfoPage, SchoolInfoManagementPage } from '@/pages';
+import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, StudentAcademicInfoPage, SchoolInfoManagementPage, AddEditGradePage, TeacherManagementPage } from '@/pages';
 import LoginPage from '@/pages/LoginPage';
 import NotFound from '@/pages/NotFound';
 
@@ -107,9 +107,13 @@ const ProtectedApp = () => {
         <Route path="academic-years" element={<AcademicYearManagementPage />} />
         {/* School Info Management */}
         <Route path="school-info" element={<SchoolInfoManagementPage />} />
+        <Route path="school-info/add-grade" element={<AddEditGradePage />} />
+        <Route path="school-info/edit-grade/:gradeId" element={<AddEditGradePage />} />
         {/* Student Management */}
         <Route path="students/personal-info" element={<StudentPersonalInfoPage />} />
         <Route path="students/academic-info" element={<StudentAcademicInfoPage />} />
+        {/* Teacher Management */}
+        <Route path="teachers" element={<TeacherManagementPage />} />
         {/* Catch-all for undefined routes */}
         <Route path="*" element={<NotFound />} />
       </Route>

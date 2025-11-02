@@ -125,6 +125,11 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
         },
       ],
     },
+    {
+      name: 'الأساتذة',
+      href: '/teachers',
+      icon: Users,
+    },
     // Add more navigation items here as needed
   ];
 

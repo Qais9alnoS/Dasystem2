@@ -187,9 +187,11 @@ export interface StudentAcademic {
 export interface Teacher {
     id?: number;
     academic_year_id: number;
+    session_type: SessionType; // صباحي أو مسائي - for data separation
 
     // المعلومات العامة - General Information
-    full_name: string; // الاسم
+    full_name: string; // الاسم الكامل
+    father_name?: string; // اسم الأب
     gender: 'male' | 'female'; // الجنس
     birth_date?: string; // تاريخ الميلاد
     phone?: string; // رقم تواصل
@@ -198,25 +200,50 @@ export interface Teacher {
 
     // المواصلات - Transportation (like students)
     transportation_type?: TransportationType;
+    bus_number?: string; // رقم الباص
 
-    // الصفوف التي يدرسها - Classes they teach
-    classes_taught?: number[]; // Array of class IDs
-    sections_taught?: string[]; // الشعب التي يدرسها
-    subjects_taught?: number[]; // Array of subject IDs - المواد التي يدرسها
+    // الشهادات - Qualifications (stored as JSON array)
+    qualifications?: Qualification[]; // Array of qualifications
 
-    // اوقات فراغه - Free time slots
-    free_time_slots?: string; // JSON format for scheduling
+    // الخبرات - Experience (stored as JSON array)
+    experience?: Experience[]; // Array of experiences
 
-    // الشهادات - Qualifications
-    qualifications?: string;
-
-    // الخبرات - Experience
-    experience?: string;
+    // اوقات فراغه - Free time slots (5 days x 6 periods flat array)
+    free_time_slots?: FreeTimeSlot[]; // Flat array of free time slots
 
     notes?: string; // الملاحظات
     is_active: boolean;
     created_at?: string;
     updated_at?: string;
+}
+
+// Qualification Interface
+export interface Qualification {
+    id?: string; // Unique ID for each qualification
+    degree: string; // الشهادة (e.g., "بكالوريوس", "ماجستير", "دكتوراه")
+    specialization: string; // التخصص (e.g., "رياضيات", "فيزياء")
+    institution: string; // المؤسسة/الجامعة
+    graduation_year?: string; // سنة التخرج
+    grade?: string; // التقدير (e.g., "امتياز", "جيد جداً")
+    notes?: string; // ملاحظات
+}
+
+// Experience Interface
+export interface Experience {
+    id?: string; // Unique ID for each experience
+    job_title: string; // المسمى الوظيفي
+    institution: string; // المؤسسة/المدرسة
+    start_date: string; // تاريخ البداية
+    end_date?: string; // تاريخ النهاية (اختياري if still working)
+    description?: string; // وصف العمل
+    responsibilities?: string; // المسؤوليات
+}
+
+// Free Time Slot Interface
+export interface FreeTimeSlot {
+    day: number; // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
+    period: number; // 1-6 for periods
+    is_free: boolean; // true = free/available (blue), false = busy (gray)
 }
 
 export interface TeacherAssignment {

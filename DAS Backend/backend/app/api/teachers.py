@@ -14,7 +14,7 @@ from ..schemas.teachers import (
     TeacherFinanceCreate, TeacherFinanceUpdate, TeacherFinanceResponse,
     TeacherAttendanceCreate, TeacherAttendanceUpdate, TeacherAttendanceResponse
 )
-from ..core.dependencies import get_current_user, get_school_user, get_director_user, get_finance_user
+from ..core.dependencies import get_current_user, get_school_user, get_director_user, get_finance_user, require_roles
 
 router = APIRouter(tags=["teachers"])
 
@@ -22,14 +22,24 @@ router = APIRouter(tags=["teachers"])
 @router.get("/", response_model=List[TeacherResponse])
 async def get_teachers(
     academic_year_id: Optional[int] = Query(None),
+    session_type: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(True),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_school_user)
 ):
-    """Get all teachers with optional filtering"""
+    """Get all teachers with optional filtering - filtered by session_type based on user role"""
     query = db.query(Teacher)
+    
+    # Filter by session_type based on user role
+    if current_user.role == 'morning_school':
+        query = query.filter(Teacher.session_type == 'morning')
+    elif current_user.role == 'evening_school':
+        query = query.filter(Teacher.session_type == 'evening')
+    elif session_type is not None:
+        # Director can filter by session_type
+        query = query.filter(Teacher.session_type == session_type)
     
     if academic_year_id is not None:
         query = query.filter(Teacher.academic_year_id == academic_year_id)
@@ -38,33 +48,59 @@ async def get_teachers(
         query = query.filter(Teacher.is_active == is_active)
     
     teachers = query.offset(skip).limit(limit).all()
+    
+    # Convert dates to strings for response
+    for teacher in teachers:
+        if teacher.birth_date:
+            teacher.birth_date = teacher.birth_date.strftime('%Y-%m-%d')
+    
     return teachers
 
 @router.post("/", response_model=TeacherResponse)
 async def create_teacher(
     teacher: TeacherCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(get_school_user)
 ):
-    """Create a new teacher"""
-    # Check if teacher with same name already exists in the same academic year
+    """Create a new teacher - restricted by session_type based on user role"""
+    # Check session_type permissions
+    if current_user.role == 'morning_school' and teacher.session_type != 'morning':
+        raise HTTPException(status_code=403, detail="Morning school user can only create morning teachers")
+    elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
+        raise HTTPException(status_code=403, detail="Evening school user can only create evening teachers")
+    
+    # Check if teacher with same name already exists in the same academic year and session
     existing_teacher = db.query(Teacher).filter(
         and_(
-            Teacher.full_name == (teacher.first_name + " " + teacher.last_name),
-            Teacher.academic_year_id == teacher.academic_year_id
+            Teacher.full_name == teacher.full_name,
+            Teacher.academic_year_id == teacher.academic_year_id,
+            Teacher.session_type == teacher.session_type
         )
     ).first()
     
     if existing_teacher:
-        raise HTTPException(status_code=400, detail="Teacher with this name already exists in this academic year")
+        raise HTTPException(status_code=400, detail="Teacher with this name already exists in this academic year and session")
     
-    # Create full_name from first_name and last_name
+    # Convert teacher data and handle date conversion
     teacher_data = teacher.dict()
-    teacher_data['full_name'] = teacher.first_name + " " + teacher.last_name
+    
+    # Convert birth_date string to date object if present
+    if teacher_data.get('birth_date'):
+        try:
+            from datetime import datetime as dt
+            teacher_data['birth_date'] = dt.strptime(teacher_data['birth_date'], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            teacher_data['birth_date'] = None
+    
     db_teacher = Teacher(**teacher_data)
     db.add(db_teacher)
     db.commit()
     db.refresh(db_teacher)
+    
+    # Convert date back to string for response
+    if db_teacher.birth_date:
+        db_teacher.birth_date = db_teacher.birth_date.strftime('%Y-%m-%d')
+    
     return db_teacher
 
 @router.get("/{teacher_id}", response_model=TeacherResponse)
@@ -77,6 +113,11 @@ async def get_teacher(
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    # Convert date to string for response
+    if teacher.birth_date:
+        teacher.birth_date = teacher.birth_date.strftime('%Y-%m-%d')
+    
     return teacher
 
 @router.put("/{teacher_id}", response_model=TeacherResponse)
@@ -84,32 +125,58 @@ async def update_teacher(
     teacher_id: int,
     teacher_update: TeacherUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(get_school_user)
 ):
-    """Update a teacher"""
+    """Update a teacher - restricted by session_type based on user role"""
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
     
+    # Check session_type permissions
+    if current_user.role == 'morning_school' and teacher.session_type != 'morning':
+        raise HTTPException(status_code=403, detail="Morning school user can only update morning teachers")
+    elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
+        raise HTTPException(status_code=403, detail="Evening school user can only update evening teachers")
+    
     update_data = teacher_update.dict(exclude_unset=True)
+    
+    # Convert birth_date string to date object if present
+    if 'birth_date' in update_data and update_data['birth_date']:
+        try:
+            from datetime import datetime as dt
+            update_data['birth_date'] = dt.strptime(update_data['birth_date'], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            update_data['birth_date'] = None
+    
     for field, value in update_data.items():
         setattr(teacher, field, value)
     
     teacher.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(teacher)
+    
+    # Convert date to string for response
+    if teacher.birth_date:
+        teacher.birth_date = teacher.birth_date.strftime('%Y-%m-%d')
+    
     return teacher
 
 @router.delete("/{teacher_id}")
 async def delete_teacher(
     teacher_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(require_roles(['director', 'morning_school', 'evening_school']))
 ):
     """Delete a teacher (soft delete by setting is_active to False)"""
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    # Check session type permissions
+    if current_user.role == 'morning_school' and teacher.session_type != 'morning':
+        raise HTTPException(status_code=403, detail="You can only delete morning school teachers")
+    elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
+        raise HTTPException(status_code=403, detail="You can only delete evening school teachers")
     
     teacher.is_active = False
     db.commit()
@@ -169,13 +236,19 @@ async def assign_teacher_subject(
     teacher_id: int,
     assignment_data: dict,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(require_roles(['director', 'morning_school', 'evening_school']))
 ):
     """Assign a subject to a teacher"""
     # Verify teacher exists
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    # Check session type permissions
+    if current_user.role == 'morning_school' and teacher.session_type != 'morning':
+        raise HTTPException(status_code=403, detail="You can only assign subjects to morning school teachers")
+    elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
+        raise HTTPException(status_code=403, detail="You can only assign subjects to evening school teachers")
     
     # Verify class and subject exist
     class_id = assignment_data.get("class_id")
@@ -243,12 +316,20 @@ async def assign_teacher_subject(
 async def remove_teacher_assignment(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(require_roles(['director', 'morning_school', 'evening_school']))
 ):
     """Remove a teacher assignment"""
     assignment = db.query(TeacherAssignment).filter(TeacherAssignment.id == assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    # Check session type permissions
+    teacher = db.query(Teacher).filter(Teacher.id == assignment.teacher_id).first()
+    if teacher:
+        if current_user.role == 'morning_school' and teacher.session_type != 'morning':
+            raise HTTPException(status_code=403, detail="You can only remove assignments from morning school teachers")
+        elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
+            raise HTTPException(status_code=403, detail="You can only remove assignments from evening school teachers")
     
     db.delete(assignment)
     db.commit()

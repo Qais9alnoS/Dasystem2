@@ -7,9 +7,11 @@ class Teacher(BaseModel):
     
     # Teacher attributes
     academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    session_type = Column(String(10), nullable=False, default="morning")  # morning, evening - for data separation
     
     # Personal Information
     full_name = Column(String(200), nullable=False)
+    father_name = Column(String(100))  # Father's name
     gender = Column(String(10), nullable=False)  # male, female
     birth_date = Column(Date)
     phone = Column(String(20))
@@ -18,11 +20,12 @@ class Teacher(BaseModel):
     
     # Transportation
     transportation_type = Column(String(30))  # walking, full_bus, half_bus_to_school, half_bus_from_school
+    bus_number = Column(String(20))  # Bus number if applicable
     
     # Professional Information
-    qualifications = Column(Text)
-    experience = Column(Text)
-    free_time_slots = Column(Text)  # JSON format for scheduling
+    qualifications = Column(Text)  # JSON array for multiple qualifications
+    experience = Column(Text)  # JSON array for multiple experiences
+    free_time_slots = Column(Text)  # JSON format for scheduling (5 days x 6 periods grid)
     
     notes = Column(Text)
     is_active = Column(Boolean, default=True)
