@@ -68,7 +68,7 @@ export const ScheduleViewer: React.FC<{
       setLoading(true);
       try {
         // Fetch classes
-        const classesResponse = await classesApi.getAll(academicYearId);
+        const classesResponse = await classesApi.getAll({ academic_year_id: academicYearId });
         setClasses(classesResponse.data || []);
         
         // Fetch teachers

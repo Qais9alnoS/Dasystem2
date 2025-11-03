@@ -193,6 +193,18 @@ class ApiClient {
   // Input sanitization to prevent injection attacks
   private sanitizeInput(data: any): any {
     if (typeof data === 'string') {
+      // Check if it's a JSON string (starts with [ or {) - don't sanitize JSON
+      if ((data.startsWith('[') && data.endsWith(']')) || (data.startsWith('{') && data.endsWith('}'))) {
+        try {
+          // Validate it's actually valid JSON
+          JSON.parse(data);
+          // If valid JSON, return as-is without sanitization
+          return data;
+        } catch {
+          // If not valid JSON, proceed with sanitization
+        }
+      }
+      
       // Sanitize strings
       return data
         .replace(/</g, '&lt;')
@@ -207,14 +219,8 @@ class ApiClient {
       // Recursively sanitize object properties
       const sanitized: any = {};
       for (const [key, value] of Object.entries(data)) {
-        // Sanitize the key and value
-        const sanitizedKey = key
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#x27;')
-          .replace(/\//g, '&#x2F;');
-        sanitized[sanitizedKey] = this.sanitizeInput(value);
+        // Don't sanitize standard property keys, only user input
+        sanitized[key] = this.sanitizeInput(value);
       }
       return sanitized;
     }
@@ -227,9 +233,16 @@ const apiClient = new ApiClient();
 
 // Classes API
 export const classesApi = {
-  getAll: async (academic_year_id?: number) => {
-    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<Class[]>(`/academic/classes${params}`);
+  getAll: async (params?: { academic_year_id?: number; session_type?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.academic_year_id) {
+      queryParams.append('academic_year_id', params.academic_year_id.toString());
+    }
+    if (params?.session_type) {
+      queryParams.append('session_type', params.session_type);
+    }
+    const queryString = queryParams.toString();
+    return apiClient.get<Class[]>(`/academic/classes${queryString ? `?${queryString}` : ''}`);
   },
 
   getById: async (id: number) => {
@@ -251,9 +264,16 @@ export const classesApi = {
 
 // Subjects API
 export const subjectsApi = {
-  getAll: async (class_id?: number) => {
-    const params = class_id ? `?class_id=${class_id}` : '';
-    return apiClient.get<Subject[]>(`/academic/subjects${params}`);
+  getAll: async (params?: { class_id?: number; academic_year_id?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.class_id) {
+      queryParams.append('class_id', params.class_id.toString());
+    }
+    if (params?.academic_year_id) {
+      queryParams.append('academic_year_id', params.academic_year_id.toString());
+    }
+    const queryString = queryParams.toString();
+    return apiClient.get<Subject[]>(`/academic/subjects${queryString ? `?${queryString}` : ''}`);
   },
 
   getById: async (id: number) => {
@@ -382,6 +402,7 @@ export const studentsApi = {
 export const teachersApi = {
   getAll: async (params?: {
     academic_year_id?: number;
+    session_type?: string;
     is_active?: boolean;
     skip?: number;
     limit?: number;
@@ -399,11 +420,25 @@ export const teachersApi = {
   },
 
   create: async (teacher: Omit<Teacher, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<Teacher>('/teachers/', teacher);
+    // Convert arrays to JSON strings for backend
+    const teacherData = {
+      ...teacher,
+      qualifications: teacher.qualifications ? JSON.stringify(teacher.qualifications) : undefined,
+      experience: teacher.experience ? JSON.stringify(teacher.experience) : undefined,
+      free_time_slots: teacher.free_time_slots ? JSON.stringify(teacher.free_time_slots) : undefined,
+    };
+    return apiClient.post<Teacher>('/teachers/', teacherData);
   },
 
   update: async (id: number, teacher: Partial<Teacher>) => {
-    return apiClient.put<Teacher>(`/teachers/${id}`, teacher);
+    // Convert arrays to JSON strings for backend
+    const teacherData = {
+      ...teacher,
+      qualifications: teacher.qualifications ? JSON.stringify(teacher.qualifications) : undefined,
+      experience: teacher.experience ? JSON.stringify(teacher.experience) : undefined,
+      free_time_slots: teacher.free_time_slots ? JSON.stringify(teacher.free_time_slots) : undefined,
+    };
+    return apiClient.put<Teacher>(`/teachers/${id}`, teacherData);
   },
 
   delete: async (id: number) => {
@@ -415,6 +450,31 @@ export const teachersApi = {
     return apiClient.get<Teacher[]>(`/teachers/search/${params}`);
   },
 
+  // Assignments
+  getAssignments: async (teacher_id: number, params?: {
+    academic_year_id?: number;
+  }) => {
+    const queryString = params ? '?' + new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => [k, String(v)])
+    ).toString() : '';
+    return apiClient.get<any[]>(`/teachers/${teacher_id}/assignments${queryString}`);
+  },
+
+  assignSubject: async (teacher_id: number, assignment: {
+    class_id: number;
+    subject_id: number;
+    section?: string;
+  }) => {
+    return apiClient.post<any>(`/teachers/${teacher_id}/assignments`, assignment);
+  },
+
+  removeAssignment: async (assignment_id: number) => {
+    return apiClient.delete<{ message: string }>(`/teachers/assignments/${assignment_id}`);
+  },
+
+  // Attendance
   getAttendance: async (teacher_id: number, month: number, year: number) => {
     const params = '?' + new URLSearchParams({ month: month.toString(), year: year.toString() }).toString();
     return apiClient.get<TeacherAttendance[]>(`/teachers/${teacher_id}/attendance${params}`);
@@ -424,6 +484,7 @@ export const teachersApi = {
     return apiClient.post<TeacherAttendance>(`/teachers/${teacher_id}/attendance`, attendance);
   },
 
+  // Finance
   getFinanceRecords: async (teacher_id: number, params?: {
     academic_year_id?: number;
     month?: number;
@@ -435,6 +496,18 @@ export const teachersApi = {
         .map(([k, v]) => [k, String(v)])
     ).toString() : '';
     return apiClient.get<any[]>(`/teachers/${teacher_id}/finance${queryString}`);
+  },
+
+  // Schedule
+  getSchedule: async (teacher_id: number, params?: {
+    academic_year_id?: number;
+  }) => {
+    const queryString = params ? '?' + new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => [k, String(v)])
+    ).toString() : '';
+    return apiClient.get<any>(`/teachers/${teacher_id}/schedule${queryString}`);
   },
 };
 
@@ -897,32 +970,99 @@ export const monitoringApi = {
 
 // Director Tools API
 export const directorApi = {
-  getNotes: async (academic_year_id?: number, folder_type?: string) => {
+  // Dashboard
+  getDashboardStats: async (academic_year_id?: number | null) => {
+    const params = academic_year_id !== null && academic_year_id !== undefined ? `?academic_year_id=${academic_year_id}` : '';
+    return apiClient.get<any>(`/director/dashboard${params}`);
+  },
+
+  // Notes Categories
+  getNotesCategories: async (academic_year_id: number) => {
+    return apiClient.get<any>(`/director/notes/categories?academic_year_id=${academic_year_id}`);
+  },
+
+  // Folders Management
+  listFolderContents: async (academic_year_id: number, category: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = { academic_year_id: academic_year_id.toString(), category };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.get<any>(`/director/notes/folders${params}`);
+  },
+
+  createFolder: async (academic_year_id: number, category: string, folder_name: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = { academic_year_id: academic_year_id.toString(), category, folder_name };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.post<any>(`/director/notes/folders${params}`, {});
+  },
+
+  renameFolder: async (folder_id: number, new_name: string) => {
+    return apiClient.put<any>(`/director/notes/folders/${folder_id}?new_name=${encodeURIComponent(new_name)}`, {});
+  },
+
+  deleteFolder: async (folder_id: number) => {
+    return apiClient.delete<any>(`/director/notes/folders/${folder_id}`);
+  },
+
+  // Files Management
+  getFile: async (file_id: number) => {
+    return apiClient.get<any>(`/director/notes/files/${file_id}`);
+  },
+
+  createFile: async (academic_year_id: number, category: string, file_name: string, content: string, note_date: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = {
+      academic_year_id: academic_year_id.toString(),
+      category,
+      file_name,
+      content,
+      note_date
+    };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.post<any>(`/director/notes/files${params}`, {});
+  },
+
+  updateFile: async (file_id: number, title?: string, content?: string, note_date?: string) => {
     const paramsObj: any = {};
-    if (academic_year_id) paramsObj.academic_year_id = academic_year_id;
-    if (folder_type) paramsObj.folder_type = folder_type;
+    if (title !== undefined) paramsObj.title = title;
+    if (content !== undefined) paramsObj.content = content;
+    if (note_date !== undefined) paramsObj.note_date = note_date;
     const params = Object.keys(paramsObj).length > 0 ? '?' + new URLSearchParams(paramsObj).toString() : '';
-    return apiClient.get<DirectorNote[]>(`/director/notes${params}`);
+    return apiClient.put<any>(`/director/notes/files/${file_id}${params}`, {});
   },
 
-  createNote: async (note: Omit<DirectorNote, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<DirectorNote>('/director/notes', note);
+  deleteFile: async (file_id: number) => {
+    return apiClient.delete<any>(`/director/notes/files/${file_id}`);
   },
 
-  updateNote: async (id: number, note: Partial<DirectorNote>) => {
-    return apiClient.put<DirectorNote>(`/director/notes/${id}`, note);
+  // Search
+  searchNotes: async (query: string, academic_year_id?: number, category?: string) => {
+    const paramsObj: any = { query };
+    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
+    if (category) paramsObj.category = category;
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.get<any>(`/director/notes/search${params}`);
   },
 
-  deleteNote: async (id: number) => {
-    return apiClient.delete<void>(`/director/notes/${id}`);
-  },
-
-  getRewards: async (academic_year_id?: number) => {
-    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
+  // Rewards Management
+  getRewards: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
+    const paramsObj: any = { skip: skip.toString(), limit: limit.toString() };
+    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
+    const params = '?' + new URLSearchParams(paramsObj).toString();
     return apiClient.get<Reward[]>(`/director/rewards${params}`);
   },
 
-  createReward: async (reward: Omit<Reward, 'id' | 'created_at'>) => {
+  getReward: async (reward_id: number) => {
+    return apiClient.get<Reward>(`/director/rewards/${reward_id}`);
+  },
+
+  createReward: async (reward: Omit<Reward, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<Reward>('/director/rewards', reward);
   },
 
@@ -931,15 +1071,22 @@ export const directorApi = {
   },
 
   deleteReward: async (id: number) => {
-    return apiClient.delete<void>(`/director/rewards/${id}`);
+    return apiClient.delete<any>(`/director/rewards/${id}`);
   },
 
-  getAssistanceRecords: async (academic_year_id?: number) => {
-    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
+  // Assistance Records Management
+  getAssistanceRecords: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
+    const paramsObj: any = { skip: skip.toString(), limit: limit.toString() };
+    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
+    const params = '?' + new URLSearchParams(paramsObj).toString();
     return apiClient.get<AssistanceRecord[]>(`/director/assistance${params}`);
   },
 
-  createAssistanceRecord: async (record: Omit<AssistanceRecord, 'id' | 'created_at'>) => {
+  getAssistanceRecord: async (record_id: number) => {
+    return apiClient.get<AssistanceRecord>(`/director/assistance/${record_id}`);
+  },
+
+  createAssistanceRecord: async (record: Omit<AssistanceRecord, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<AssistanceRecord>('/director/assistance', record);
   },
 
@@ -948,13 +1095,8 @@ export const directorApi = {
   },
 
   deleteAssistanceRecord: async (id: number) => {
-    return apiClient.delete<void>(`/director/assistance/${id}`);
+    return apiClient.delete<any>(`/director/assistance/${id}`);
   },
-
-  getDashboardStats: async (academic_year_id?: number | null) => {
-    const params = academic_year_id !== null && academic_year_id !== undefined ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<any>(`/director/dashboard${params}`);
-  }
 };
 
 // File Management API

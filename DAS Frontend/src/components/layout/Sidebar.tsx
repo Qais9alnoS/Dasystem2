@@ -66,13 +66,24 @@ import {
   LogOut
 } from 'lucide-react';
 
+// Helper function to get role label in Arabic
+const getRoleLabel = (role: string): string => {
+  const roleLabels: Record<string, string> = {
+    director: 'مدير',
+    finance: 'مالية',
+    morning_school: 'مدرسة صباحية',
+    evening_school: 'مدرسة مسائية',
+  };
+  return roleLabels[role] || role;
+};
+
 const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   const { projectId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { state } = useProject();
   const { projects } = state;
-  const { logout } = useAuth();
+  const { logout, state: authState, hasRole, hasAnyRole } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
   // Function to toggle sidebar
@@ -92,26 +103,67 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   // Determine if we should show text based on sidebar width
   const showText = sidebarWidth > 100;
 
-  // Navigation items
-  const navItems = [
+  // Navigation items with role-based access control
+  const allNavItems = [
     {
       name: 'لوحة التحكم',
       href: '/dashboard',
       icon: LayoutDashboard,
+      allowedRoles: ['director', 'finance', 'morning_school', 'evening_school'], // All roles
     },
     {
       name: 'السنوات الدراسية',
       href: '/academic-years',
       icon: Calendar,
+      allowedRoles: ['director', 'finance', 'morning_school', 'evening_school'], // All roles
     },
     {
       name: 'معلومات المدرسة',
       href: '/school-info',
       icon: School,
+      allowedRoles: ['director', 'finance', 'morning_school', 'evening_school'], // All roles
+    },
+    {
+      name: 'ملاحظات المدير',
+      icon: StickyNote,
+      allowedRoles: ['director'], // Director only
+      subItems: [
+        {
+          name: 'الأهداف',
+          href: '/director/notes/browse/goals',
+          icon: Target,
+        },
+        {
+          name: 'المشاريع',
+          href: '/director/notes/browse/projects',
+          icon: Folder,
+        },
+        {
+          name: 'مدونات',
+          href: '/director/notes/browse/blogs',
+          icon: Book,
+        },
+        {
+          name: 'الأمور التعليمية والإدارية',
+          href: '/director/notes/browse/educational_admin',
+          icon: School,
+        },
+        {
+          name: 'المكافئات',
+          href: '/director/notes/rewards',
+          icon: Award,
+        },
+        {
+          name: 'المساعدات',
+          href: '/director/notes/assistance',
+          icon: HeartHandshake,
+        },
+      ],
     },
     {
       name: 'الطلاب',
       icon: GraduationCap,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
       subItems: [
         {
           name: 'معلومات شخصية',
@@ -125,8 +177,26 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
         },
       ],
     },
+    {
+      name: 'الأساتذة',
+      href: '/teachers',
+      icon: Users,
+      allowedRoles: ['director', 'finance', 'morning_school', 'evening_school'], // All roles
+    },
+    {
+      name: 'النشاطات',
+      href: '/activities',
+      icon: Trophy,
+      allowedRoles: ['director'], // Director only
+    },
     // Add more navigation items here as needed
   ];
+
+  // Filter navigation items based on user role
+  const navItems = allNavItems.filter(item => {
+    if (!item.allowedRoles) return true; // If no roles specified, show to all
+    return authState.user && item.allowedRoles.includes(authState.user.role);
+  });
 
   return (
     <div className={`h-full flex flex-col ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300`} dir="rtl">
@@ -256,20 +326,24 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           {isCollapsed || !showText ? (
             <div className="flex items-center justify-center">
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">م</span>
+                <span className="text-white text-sm font-medium">
+                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                </span>
               </div>
             </div>
           ) : (
             <div className="flex items-center space-x-3 rtl:space-x-reverse">
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">م</span>
+                <span className="text-white text-sm font-medium">
+                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  مدير النظام
+                  {authState.user?.username || 'مستخدم'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  نظام إدارة المدرسة
+                  {getRoleLabel(authState.user?.role || '')}
                 </p>
               </div>
             </div>

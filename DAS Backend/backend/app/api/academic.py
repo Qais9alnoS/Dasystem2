@@ -10,7 +10,7 @@ from app.schemas.academic import (
     ClassCreate, ClassResponse,
     SubjectCreate, SubjectResponse
 )
-from app.core.dependencies import get_current_user, get_director_user
+from app.core.dependencies import get_current_user, get_director_user, get_school_user
 from app.models.users import User
 from app.models.system import SystemSetting
 
@@ -68,9 +68,9 @@ async def check_first_run(
 async def initialize_first_academic_year(
     year_data: AcademicYearCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(get_school_user)
 ):
-    """Initialize the first academic year (Director only)"""
+    """Initialize the first academic year (Director, Morning School, Evening School)"""
     try:
         # Check if any academic years already exist
         academic_years_count = db.query(AcademicYear).count()
@@ -222,6 +222,7 @@ async def delete_academic_year(
 @router.get("/classes", response_model=List[ClassResponse])
 async def get_classes(
     academic_year_id: Optional[int] = None,
+    session_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -231,10 +232,29 @@ async def get_classes(
     if academic_year_id is not None:
         # Using type: ignore to suppress basedpyright error for working query pattern
         query = query.filter(Class.academic_year_id == academic_year_id)  
+    if session_type is not None:
+        # Using type: ignore to suppress basedpyright error for working query pattern
+        query = query.filter(Class.session_type == session_type)  
     
     query_result = query.all()
     classes = cast(List[Class], query_result) if query_result is not None else []
     return classes
+
+@router.get("/classes/{class_id}", response_model=ClassResponse)
+async def get_class_by_id(
+    class_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a single class by ID"""
+    cls = db.query(Class).filter(Class.id == class_id).first()
+    if not cls:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
+        )
+    
+    return cls
 
 @router.post("/classes", response_model=ClassResponse)
 async def create_class(
@@ -298,15 +318,27 @@ async def delete_class(
 @router.get("/subjects", response_model=List[SubjectResponse])
 async def get_subjects(
     class_id: Optional[int] = None,
+    academic_year_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get all subjects for class"""
     # Using type: ignore to suppress basedpyright error for working query pattern
     query = db.query(Subject)  
-    if class_id is not None:
-        # Using type: ignore to suppress basedpyright error for working query pattern
-        query = query.filter(Subject.class_id == class_id)  
+    
+    # Apply filters based on what's provided
+    if class_id is not None or academic_year_id is not None:
+        # Join with Class table if we need to filter by academic_year_id
+        if academic_year_id is not None:
+            # Using type: ignore to suppress basedpyright error for working query pattern
+            query = query.join(Class)
+            # Using type: ignore to suppress basedpyright error for working query pattern
+            query = query.filter(Class.academic_year_id == academic_year_id)
+        
+        # Filter by class_id if provided
+        if class_id is not None:
+            # Using type: ignore to suppress basedpyright error for working query pattern
+            query = query.filter(Subject.class_id == class_id)
     
     query_result = query.all()
     subjects = cast(List[Subject], query_result) if query_result is not None else []

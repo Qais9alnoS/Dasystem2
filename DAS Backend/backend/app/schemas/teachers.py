@@ -5,59 +5,84 @@ from decimal import Decimal
 
 # Teacher Base Schema
 class TeacherBase(BaseModel):
-    first_name: str
-    last_name: str
-    phone: str
-    email: Optional[str] = None
-    address: Optional[str] = None
-    national_id: str
-    hiring_date: date
-    specialization: str
-    qualification: str
-    experience_years: int
-    salary: Decimal
-    session_type: str  # "morning", "evening", "both"
-    academic_year_id: int  # Add this missing field
+    full_name: str
+    father_name: Optional[str] = None
+    gender: str  # "male", "female"
+    birth_date: Optional[str] = None  # Using string for date to avoid serialization issues
+    phone: Optional[str] = None
+    nationality: Optional[str] = None
+    detailed_address: Optional[str] = None
+    transportation_type: Optional[str] = None  # "walking", "full_bus", "half_bus_to_school", "half_bus_from_school"
+    bus_number: Optional[str] = None
+    qualifications: Optional[str] = None  # JSON string for array of qualifications
+    experience: Optional[str] = None  # JSON string for array of experiences
+    free_time_slots: Optional[str] = None  # JSON string for free time grid
+    notes: Optional[str] = None
+    session_type: str  # "morning", "evening"
+    academic_year_id: int
     is_active: bool = True
 
     @validator('session_type')
     def validate_session_type(cls, v):
-        if v not in ['morning', 'evening', 'both']:
-            raise ValueError('Session type must be morning, evening, or both')
+        if v not in ['morning', 'evening']:
+            raise ValueError('Session type must be morning or evening')
+        return v
+    
+    @validator('gender')
+    def validate_gender(cls, v):
+        if v not in ['male', 'female']:
+            raise ValueError('Gender must be male or female')
+        return v
+    
+    @validator('transportation_type')
+    def validate_transportation(cls, v):
+        if v is not None and v not in ['walking', 'full_bus', 'half_bus_to_school', 'half_bus_from_school']:
+            raise ValueError('Invalid transportation type')
         return v
 
 class TeacherCreate(TeacherBase):
     pass
 
 class TeacherUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    father_name: Optional[str] = None
+    gender: Optional[str] = None
+    birth_date: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    hiring_date: Optional[date] = None
-    specialization: Optional[str] = None
-    qualification: Optional[str] = None
-    experience_years: Optional[int] = None
-    salary: Optional[Decimal] = None
+    nationality: Optional[str] = None
+    detailed_address: Optional[str] = None
+    transportation_type: Optional[str] = None
+    bus_number: Optional[str] = None
+    qualifications: Optional[str] = None
+    experience: Optional[str] = None
+    free_time_slots: Optional[str] = None
+    notes: Optional[str] = None
     session_type: Optional[str] = None
     academic_year_id: Optional[int] = None
     is_active: Optional[bool] = None
 
     @validator('session_type')
     def validate_session_type(cls, v):
-        if v is not None and v not in ['morning', 'evening', 'both']:
-            raise ValueError('Session type must be morning, evening, or both')
+        if v is not None and v not in ['morning', 'evening']:
+            raise ValueError('Session type must be morning or evening')
+        return v
+    
+    @validator('gender')
+    def validate_gender(cls, v):
+        if v is not None and v not in ['male', 'female']:
+            raise ValueError('Gender must be male or female')
         return v
 
 class TeacherResponse(TeacherBase):
     id: int
-    full_name: str
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            date: lambda v: v.strftime('%Y-%m-%d') if v else None
+        }
 
 # Teacher Subject Assignment Schemas
 class TeacherSubjectBase(BaseModel):
