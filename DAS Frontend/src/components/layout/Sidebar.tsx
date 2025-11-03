@@ -125,6 +125,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
     },
     {
       name: 'ملاحظات المدير',
+      href: '/director/notes',
       icon: StickyNote,
       allowedRoles: ['director'], // Director only
       subItems: [
@@ -242,32 +243,66 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           );
 
           if (hasSubItems) {
+            const isParentActive = 'href' in item && location.pathname === item.href;
             return (
               <div key={item.name}>
-                <button
-                  onClick={() => toggleSection(item.name)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActiveSection
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                  } ${isCollapsed && !showText ? 'justify-center' : ''}`}
-                >
-                  <div className="flex items-center">
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    {showText && (
-                      <span className="mr-3 rtl:mr-0 rtl:ml-3">
-                        {item.name}
-                      </span>
-                    )}
-                  </div>
-                  {showText && (
-                    <ChevronRight
-                      className={`h-4 w-4 transition-transform ${
-                        isExpanded ? 'rotate-90' : ''
-                      }`}
-                    />
+                <div className="relative">
+                  {'href' in item ? (
+                    <NavLink
+                      to={item.href}
+                      className={({ isActive }) =>
+                        `w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                          isActive || isActiveSection
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                        } ${isCollapsed && !showText ? 'justify-center' : ''}`
+                      }
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {showText && (
+                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+                    </NavLink>
+                  ) : (
+                    <button
+                      onClick={() => toggleSection(item.name)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActiveSection
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                      } ${isCollapsed && !showText ? 'justify-center' : ''}`}
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {showText && (
+                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   )}
-                </button>
+                  {showText && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleSection(item.name);
+                      }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                      <ChevronRight
+                        className={`h-4 w-4 transition-transform ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                      />
+                    </button>
+                  )}
+                </div>
                 {isExpanded && showText && item.subItems && (
                   <div className="mt-1 space-y-1 pr-4 rtl:pr-0 rtl:pl-4">
                     {item.subItems.map((subItem) => {

@@ -14,6 +14,7 @@ import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, Stu
 import LoginPage from '@/pages/LoginPage';
 import NotFound from '@/pages/NotFound';
 import DirectorNotesPage from '@/pages/DirectorNotesPage';
+import DirectorNotesSearchPage from '@/pages/DirectorNotesSearchPage';
 import NoteFolderBrowser from '@/components/director-notes/NoteFolderBrowser';
 import MarkdownNoteEditor from '@/components/director-notes/MarkdownNoteEditor';
 import RewardsManager from '@/components/director-notes/RewardsManager';
@@ -210,6 +211,14 @@ const ProtectedApp = () => {
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <DirectorNotesPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="director/notes/search" 
+          element={
+            <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
+              <DirectorNotesSearchPage />
             </ProtectedRoute>
           } 
         />

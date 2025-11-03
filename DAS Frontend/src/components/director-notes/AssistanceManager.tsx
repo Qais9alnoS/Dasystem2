@@ -74,10 +74,31 @@ const AssistanceManager: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    // Validate amount is a valid number
+    const amountValue = parseFloat(formData.amount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      toast({
+        title: 'خطأ في الإدخال',
+        description: 'يرجى إدخال مبلغ صحيح (رقم موجب)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate required fields
+    if (!formData.title.trim() || !formData.organization.trim()) {
+      toast({
+        title: 'خطأ في الإدخال',
+        description: 'يرجى ملء جميع الحقول المطلوبة',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const recordData = {
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: amountValue,
         academic_year_id: academicYearId,
       };
 

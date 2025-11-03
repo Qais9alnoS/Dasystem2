@@ -1052,10 +1052,11 @@ export const directorApi = {
 
   // Rewards Management
   getRewards: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
-    const paramsObj: any = { skip: skip.toString(), limit: limit.toString() };
-    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
-    const params = '?' + new URLSearchParams(paramsObj).toString();
-    return apiClient.get<Reward[]>(`/director/rewards${params}`);
+    const params: string[] = [];
+    if (academic_year_id !== undefined) params.push(`academic_year_id=${academic_year_id}`);
+    params.push(`skip=${skip}`);
+    params.push(`limit=${limit}`);
+    return apiClient.get<Reward[]>(`/director/rewards?${params.join('&')}`);
   },
 
   getReward: async (reward_id: number) => {
@@ -1076,10 +1077,11 @@ export const directorApi = {
 
   // Assistance Records Management
   getAssistanceRecords: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
-    const paramsObj: any = { skip: skip.toString(), limit: limit.toString() };
-    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
-    const params = '?' + new URLSearchParams(paramsObj).toString();
-    return apiClient.get<AssistanceRecord[]>(`/director/assistance${params}`);
+    const params: string[] = [];
+    if (academic_year_id !== undefined) params.push(`academic_year_id=${academic_year_id}`);
+    params.push(`skip=${skip}`);
+    params.push(`limit=${limit}`);
+    return apiClient.get<AssistanceRecord[]>(`/director/assistance?${params.join('&')}`);
   },
 
   getAssistanceRecord: async (record_id: number) => {

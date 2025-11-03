@@ -503,10 +503,9 @@ class DirectorNotesService:
             if len(query) < 3:
                 return {"success": False, "error": "Search query too short (minimum 3 characters)"}
             
-            # Build search query
+            # Build search query - include both files and folders
             search_pattern = f"%{query}%"
             db_query = db.query(DirectorNote).filter(
-                DirectorNote.is_folder == False,
                 or_(
                     DirectorNote.title.ilike(search_pattern),
                     DirectorNote.content.ilike(search_pattern)

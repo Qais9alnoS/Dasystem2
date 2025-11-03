@@ -2,11 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FileText, FolderOpen, Target, Briefcase, BookOpen, 
-  GraduationCap, Award, Heart, Search, Plus, ChevronRight 
+  GraduationCap, Award, Heart, Search, Plus, ChevronRight, SlidersHorizontal, X 
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { directorApi } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -20,39 +31,25 @@ interface CategoryInfo {
 const DirectorNotesPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [categories, setCategories] = useState<CategoryInfo[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [searchFilters, setSearchFilters] = useState<{
+    notes: boolean;
+    rewards: boolean;
+    assistance: boolean;
+  }>({
+    notes: true,
+    rewards: true,
+    assistance: true,
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  // Get current academic year from localStorage
-  const academicYearId = parseInt(localStorage.getItem('selected_academic_year_id') || '0');
-
-  useEffect(() => {
-    if (academicYearId) {
-      fetchCategories();
-    }
-  }, [academicYearId]);
-
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
-      const response = await directorApi.getNotesCategories(academicYearId);
-      if (response.success && response.data) {
-        const responseData = response.data as any;
-        setCategories(responseData.categories || []);
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      toast({
-        title: 'خطأ',
-        description: 'فشل في تحميل الفئات',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Static categories - no backend API calls, just display
+  const categories = [
+    { category: 'goals', display_name: 'الأهداف', description: 'إدارة الأهداف والخطط' },
+    { category: 'projects', display_name: 'المشاريع', description: 'تتبع المشاريع والمبادرات' },
+    { category: 'blogs', display_name: 'مدونات', description: 'كتابة المدونات والمقالات' },
+    { category: 'educational_admin', display_name: 'الأمور التعليمية والإدارية', description: 'الشؤون التعليمية والإدارية' },
+  ];
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -83,7 +80,28 @@ const DirectorNotesPage: React.FC = () => {
 
   const handleSearch = async () => {
     if (searchQuery.trim().length >= 3) {
-      navigate(`/director/notes/search?q=${encodeURIComponent(searchQuery)}`);
+      const params = new URLSearchParams({ q: searchQuery });
+      
+      // Add type filter based on selected filters
+      if (!searchFilters.notes && !searchFilters.rewards && !searchFilters.assistance) {
+        toast({
+          title: 'تنبيه',
+          description: 'يجب اختيار نوع واحد على الأقل للبحث',
+          variant: 'default',
+        });
+        return;
+      }
+      
+      // Determine search type
+      if (searchFilters.notes && !searchFilters.rewards && !searchFilters.assistance) {
+        params.append('type', 'note');
+      } else if (!searchFilters.notes && searchFilters.rewards && !searchFilters.assistance) {
+        params.append('type', 'reward');
+      } else if (!searchFilters.notes && !searchFilters.rewards && searchFilters.assistance) {
+        params.append('type', 'assistance');
+      }
+      
+      navigate(`/director/notes/search?${params.toString()}`);
     } else {
       toast({
         title: 'تنبيه',
@@ -93,13 +111,8 @@ const DirectorNotesPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const activeFiltersCount = Object.values(searchFilters).filter(Boolean).length;
+  const allFiltersActive = activeFiltersCount === 3;
 
   return (
     <div className="container mx-auto p-6 max-w-7xl" dir="rtl">
@@ -120,6 +133,101 @@ const DirectorNotesPage: React.FC = () => {
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               className="flex-1"
             />
+            <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="relative">
+                  <SlidersHorizontal className="h-4 w-4 ml-2" />
+                  تصفية
+                  {!allFiltersActive && activeFiltersCount > 0 && (
+                    <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" dir="rtl">
+                <SheetHeader>
+                  <SheetTitle>تصفية البحث</SheetTitle>
+                  <SheetDescription>
+                    اختر أنواع المحتوى للبحث فيها
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="space-y-6 mt-6">
+                  {/* Filter Checkboxes */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">البحث في</Label>
+                    
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <Checkbox
+                        id="filter-notes"
+                        checked={searchFilters.notes}
+                        onCheckedChange={(checked) => 
+                          setSearchFilters(prev => ({ ...prev, notes: !!checked }))
+                        }
+                      />
+                      <label
+                        htmlFor="filter-notes"
+                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        <FileText className="h-4 w-4 text-blue-500" />
+                        الملاحظات
+                      </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <Checkbox
+                        id="filter-rewards"
+                        checked={searchFilters.rewards}
+                        onCheckedChange={(checked) => 
+                          setSearchFilters(prev => ({ ...prev, rewards: !!checked }))
+                        }
+                      />
+                      <label
+                        htmlFor="filter-rewards"
+                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        <Award className="h-4 w-4 text-yellow-500" />
+                        المكافآت
+                      </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <Checkbox
+                        id="filter-assistance"
+                        checked={searchFilters.assistance}
+                        onCheckedChange={(checked) => 
+                          setSearchFilters(prev => ({ ...prev, assistance: !!checked }))
+                        }
+                      />
+                      <label
+                        htmlFor="filter-assistance"
+                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        <Heart className="h-4 w-4 text-red-500" />
+                        المساعدات
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-4">
+                    <Button onClick={() => setFilterOpen(false)} className="flex-1">
+                      تطبيق
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setSearchFilters({ notes: true, rewards: true, assistance: true });
+                      }} 
+                      className="flex-1"
+                    >
+                      <X className="h-4 w-4 ml-2" />
+                      إعادة تعيين
+                    </Button>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
             <Button onClick={handleSearch}>
               <Search className="h-4 w-4 ml-2" />
               بحث
@@ -128,7 +236,7 @@ const DirectorNotesPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Categories Grid */}
+      {/* Categories Grid - 2 Column Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {categories.map((cat) => (
           <Card 
@@ -143,7 +251,7 @@ const DirectorNotesPage: React.FC = () => {
                   <div>
                     <CardTitle className="text-xl">{cat.display_name}</CardTitle>
                     <CardDescription className="mt-1">
-                      {cat.total_files} ملف • {cat.total_folders} مجلد
+                      {cat.description}
                     </CardDescription>
                   </div>
                 </div>
@@ -168,7 +276,7 @@ const DirectorNotesPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Rewards and Assistance Section */}
+      {/* Rewards and Assistance Section - 2 Column Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Rewards Card */}
         <Card 

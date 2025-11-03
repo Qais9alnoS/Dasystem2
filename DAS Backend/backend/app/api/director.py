@@ -157,7 +157,7 @@ async def get_categories_summary(
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["error"])
     
-    return result["categories"]
+    return result["data"]["categories"]
 
 
 @router.get("/notes/folders", response_model=Dict[str, Any])

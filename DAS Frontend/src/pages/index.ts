@@ -6,3 +6,5 @@ export { default as SchoolInfoManagementPage } from './SchoolInfoManagementPage'
 export { default as ActivitiesManagementPage } from './ActivitiesManagementPage';
 export { default as AddEditGradePage } from './AddEditGradePage';
 export { default as TeacherManagementPage } from './TeacherManagementPage';
+export { default as DirectorNotesPage } from './DirectorNotesPage';
+export { default as DirectorNotesSearchPage } from './DirectorNotesSearchPage';
