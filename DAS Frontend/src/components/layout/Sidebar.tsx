@@ -66,13 +66,24 @@ import {
   LogOut
 } from 'lucide-react';
 
+// Helper function to get role label in Arabic
+const getRoleLabel = (role: string): string => {
+  const roleLabels: Record<string, string> = {
+    director: 'مدير',
+    finance: 'مالية',
+    morning_school: 'مدرسة صباحية',
+    evening_school: 'مدرسة مسائية',
+  };
+  return roleLabels[role] || role;
+};
+
 const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   const { projectId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { state } = useProject();
   const { projects } = state;
-  const { logout } = useAuth();
+  const { logout, state: authState, hasRole, hasAnyRole } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
   // Function to toggle sidebar
@@ -92,26 +103,68 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   // Determine if we should show text based on sidebar width
   const showText = sidebarWidth > 100;
 
-  // Navigation items
-  const navItems = [
+  // Navigation items with role-based access control
+  const allNavItems = [
     {
       name: 'لوحة التحكم',
       href: '/dashboard',
       icon: LayoutDashboard,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
     },
     {
       name: 'السنوات الدراسية',
       href: '/academic-years',
       icon: Calendar,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
     },
     {
       name: 'معلومات المدرسة',
       href: '/school-info',
       icon: School,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+    },
+    {
+      name: 'ملاحظات المدير',
+      href: '/director/notes',
+      icon: StickyNote,
+      allowedRoles: ['director'], // Director only
+      subItems: [
+        {
+          name: 'الأهداف',
+          href: '/director/notes/browse/goals',
+          icon: Target,
+        },
+        {
+          name: 'المشاريع',
+          href: '/director/notes/browse/projects',
+          icon: Folder,
+        },
+        {
+          name: 'مدونات',
+          href: '/director/notes/browse/blogs',
+          icon: Book,
+        },
+        {
+          name: 'الأمور التعليمية والإدارية',
+          href: '/director/notes/browse/educational_admin',
+          icon: School,
+        },
+        {
+          name: 'المكافئات',
+          href: '/director/notes/rewards',
+          icon: Award,
+        },
+        {
+          name: 'المساعدات',
+          href: '/director/notes/assistance',
+          icon: HeartHandshake,
+        },
+      ],
     },
     {
       name: 'الطلاب',
       icon: GraduationCap,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
       subItems: [
         {
           name: 'معلومات شخصية',
@@ -129,9 +182,41 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       name: 'الأساتذة',
       href: '/teachers',
       icon: Users,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+    },
+    {
+      name: 'النشاطات',
+      href: '/activities',
+      icon: Trophy,
+      allowedRoles: ['director'], // Director only
+    },
+    // Finance Manager specific sections
+    {
+      name: 'الصندوق',
+      href: '/finance?tab=treasury',
+      icon: Wallet,
+      allowedRoles: ['finance'], // Finance only
+    },
+    {
+      name: 'الطلاب',
+      href: '/finance?tab=students',
+      icon: Users,
+      allowedRoles: ['finance'], // Finance only
+    },
+    {
+      name: 'السنة الدراسية',
+      href: '/finance?tab=year',
+      icon: Calendar,
+      allowedRoles: ['finance'], // Finance only
     },
     // Add more navigation items here as needed
   ];
+
+  // Filter navigation items based on user role
+  const navItems = allNavItems.filter(item => {
+    if (!item.allowedRoles) return true; // If no roles specified, show to all
+    return authState.user && item.allowedRoles.includes(authState.user.role);
+  });
 
   return (
     <div className={`h-full flex flex-col ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300`} dir="rtl">
@@ -177,32 +262,66 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           );
 
           if (hasSubItems) {
+            const isParentActive = 'href' in item && location.pathname === item.href;
             return (
               <div key={item.name}>
-                <button
-                  onClick={() => toggleSection(item.name)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActiveSection
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                  } ${isCollapsed && !showText ? 'justify-center' : ''}`}
-                >
-                  <div className="flex items-center">
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    {showText && (
-                      <span className="mr-3 rtl:mr-0 rtl:ml-3">
-                        {item.name}
-                      </span>
-                    )}
-                  </div>
-                  {showText && (
-                    <ChevronRight
-                      className={`h-4 w-4 transition-transform ${
-                        isExpanded ? 'rotate-90' : ''
-                      }`}
-                    />
+                <div className="relative">
+                  {'href' in item ? (
+                    <NavLink
+                      to={item.href}
+                      className={({ isActive }) =>
+                        `w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                          isActive || isActiveSection
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                        } ${isCollapsed && !showText ? 'justify-center' : ''}`
+                      }
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {showText && (
+                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+                    </NavLink>
+                  ) : (
+                    <button
+                      onClick={() => toggleSection(item.name)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActiveSection
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                      } ${isCollapsed && !showText ? 'justify-center' : ''}`}
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {showText && (
+                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   )}
-                </button>
+                  {showText && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleSection(item.name);
+                      }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                      <ChevronRight
+                        className={`h-4 w-4 transition-transform ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                      />
+                    </button>
+                  )}
+                </div>
                 {isExpanded && showText && item.subItems && (
                   <div className="mt-1 space-y-1 pr-4 rtl:pr-0 rtl:pl-4">
                     {item.subItems.map((subItem) => {
@@ -261,20 +380,24 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           {isCollapsed || !showText ? (
             <div className="flex items-center justify-center">
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">م</span>
+                <span className="text-white text-sm font-medium">
+                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                </span>
               </div>
             </div>
           ) : (
             <div className="flex items-center space-x-3 rtl:space-x-reverse">
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">م</span>
+                <span className="text-white text-sm font-medium">
+                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  مدير النظام
+                  {authState.user?.username || 'مستخدم'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  نظام إدارة المدرسة
+                  {getRoleLabel(authState.user?.role || '')}
                 </p>
               </div>
             </div>

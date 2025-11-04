@@ -7,18 +7,24 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from ..database import get_db
-from ..models.finance import FinanceTransaction, FinanceCategory, Budget, ExpenseCategory, IncomeCategory, PaymentMethod
-from ..models.students import StudentPayment
+from ..models.finance import FinanceTransaction, FinanceCategory, Budget, ExpenseCategory, IncomeCategory, PaymentMethod, FinanceCard, FinanceCardTransaction
+from ..models.students import StudentPayment, Student, StudentFinance
 from ..models.teachers import TeacherFinance
 from ..models.users import User
+from ..models.activities import Activity
+from ..models.students import HistoricalBalance
+from ..services.balance_transfer_service import BalanceTransferService
 from ..schemas.finance import (
     FinanceTransactionCreate, FinanceTransactionUpdate, FinanceTransactionResponse,
     BudgetCreate, BudgetUpdate, BudgetResponse,
     ExpenseCategoryCreate, ExpenseCategoryUpdate, ExpenseCategoryResponse,
     IncomeCategoryCreate, IncomeCategoryUpdate, IncomeCategoryResponse,
     PaymentMethodCreate, PaymentMethodUpdate, PaymentMethodResponse,
-    FinancialSummary, MonthlyFinancialReport, AnnualFinancialReport
+    FinancialSummary, MonthlyFinancialReport, AnnualFinancialReport,
+    FinanceCardCreate, FinanceCardUpdate, FinanceCardResponse, FinanceCardSummary,
+    FinanceCardTransactionCreate, FinanceCardTransactionUpdate, FinanceCardTransactionResponse
 )
+from ..schemas.students import StudentFinanceSummary, StudentFinanceDetailedResponse, StudentFinanceUpdate, StudentPaymentCreate
 from ..core.dependencies import get_current_user, get_director_user, get_finance_user
 
 router = APIRouter(tags=["finance"])
@@ -729,3 +735,863 @@ async def create_payment_method(
     db.commit()
     db.refresh(db_method)
     return db_method
+
+# ===================== FINANCE MANAGER ENDPOINTS =====================
+
+# Finance Manager Dashboard
+@router.get("/manager/dashboard")
+async def get_finance_manager_dashboard(
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get comprehensive dashboard for finance manager"""
+    try:
+        # Calculate net profit (total income - total expenses)
+        total_income = db.query(func.sum(FinanceTransaction.amount)).filter(
+            and_(
+                FinanceTransaction.academic_year_id == academic_year_id,
+                FinanceTransaction.transaction_type == "income"
+            )
+        ).scalar() or Decimal('0.00')
+        
+        total_expenses = db.query(func.sum(FinanceTransaction.amount)).filter(
+            and_(
+                FinanceTransaction.academic_year_id == academic_year_id,
+                FinanceTransaction.transaction_type == "expense"
+            )
+        ).scalar() or Decimal('0.00')
+        
+        net_profit = total_income - total_expenses
+        
+        # Calculate outstanding debts (receivables - what students owe)
+        # Using old schema (school_fee_discount, bus_fee_discount, other_revenues)
+        try:
+            students_with_finance = db.query(StudentFinance).filter(
+                StudentFinance.academic_year_id == academic_year_id
+            ).all()
+            
+            total_receivables = Decimal('0.00')
+            for finance in students_with_finance:
+                try:
+                    # Use existing fields
+                    school_fee = Decimal(str(finance.school_fee or 0))
+                    school_discount = Decimal(str(finance.school_fee_discount or 0))
+                    bus_fee = Decimal(str(finance.bus_fee or 0))
+                    bus_discount = Decimal(str(finance.bus_fee_discount or 0))
+                    other_revenues = Decimal(str(finance.other_revenues or 0))
+                    
+                    total_owed = (school_fee - school_discount) + (bus_fee - bus_discount) + other_revenues
+                    
+                    total_paid = db.query(func.sum(StudentPayment.payment_amount)).filter(
+                        StudentPayment.student_id == finance.student_id,
+                        StudentPayment.academic_year_id == academic_year_id,
+                        StudentPayment.payment_status == "completed"
+                    ).scalar() or Decimal('0.00')
+                    
+                    balance = total_owed - total_paid
+                    if balance > 0:
+                        total_receivables += balance
+                except Exception as e:
+                    # Skip problematic student finance records
+                    continue
+        except Exception as e:
+            total_receivables = Decimal('0.00')
+        
+        # Calculate payables (what school owes - unpaid teacher salaries, etc.)
+        try:
+            total_payables = db.query(func.sum(TeacherFinance.total_amount)).filter(
+                and_(
+                    TeacherFinance.academic_year_id == academic_year_id,
+                    TeacherFinance.payment_status == "pending"
+                )
+            ).scalar() or Decimal('0.00')
+        except:
+            # If TeacherFinance table doesn't exist or has issues, set to 0
+            total_payables = Decimal('0.00')
+        
+        # Get finance cards
+        finance_cards = db.query(FinanceCard).filter(
+            FinanceCard.academic_year_id == academic_year_id
+        ).all()
+        
+        cards_summary = []
+        for card in finance_cards:
+            try:
+                card_income = sum(
+                    t.amount for t in card.transactions if t.transaction_type == "income"
+                )
+                card_expenses = sum(
+                    t.amount for t in card.transactions if t.transaction_type == "expense"
+                )
+                incomplete_count = sum(
+                    1 for t in card.transactions if not t.is_completed
+                )
+                
+                cards_summary.append({
+                    "card_id": card.id,
+                    "card_name": card.card_name,
+                    "card_type": card.card_type,
+                    "category": card.category,
+                    "total_income": float(card_income),
+                    "total_expenses": float(card_expenses),
+                    "net_amount": float(card_income - card_expenses),
+                    "incomplete_transactions_count": incomplete_count,
+                    "status": card.status
+                })
+            except Exception as card_error:
+                # Skip problematic cards
+                continue
+        
+        return {
+            "net_profit": float(net_profit),
+            "total_receivables": float(total_receivables),
+            "total_payables": float(total_payables),
+            "finance_cards": cards_summary,
+            "summary": {
+                "total_income": float(total_income),
+                "total_expenses": float(total_expenses)
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch finance manager dashboard: {str(e)}"
+        )
+
+# Student Finance Management for Finance Manager
+@router.get("/manager/students", response_model=List[StudentFinanceSummary])
+async def get_students_finance(
+    academic_year_id: int = Query(...),
+    grade_level: Optional[str] = Query(None),
+    grade_number: Optional[int] = Query(None),
+    section: Optional[str] = Query(None),
+    session_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get students with their financial information for finance manager"""
+    try:
+        query = db.query(Student).filter(
+            Student.academic_year_id == academic_year_id,
+            Student.is_active == True
+        )
+        
+        # Apply filters only if they are not "all" or empty
+        if grade_level and grade_level != "all":
+            query = query.filter(Student.grade_level == grade_level)
+        if grade_number is not None and grade_number > 0:
+            query = query.filter(Student.grade_number == grade_number)
+        if section and section != "all":
+            query = query.filter(Student.section == section)
+        if session_type and session_type != "all":
+            query = query.filter(Student.session_type == session_type)
+        
+        students = query.order_by(Student.full_name).all()
+        
+        result = []
+        for student in students:
+            try:
+                finance = db.query(StudentFinance).filter(
+                    StudentFinance.student_id == student.id,
+                    StudentFinance.academic_year_id == academic_year_id
+                ).first()
+                
+                if finance:
+                    try:
+                        # Safely calculate total_amount, handling None values
+                        # Calculate manually to avoid property calculation errors
+                        school_fee = Decimal(str(finance.school_fee or 0))
+                        bus_fee = Decimal(str(finance.bus_fee or 0))
+                        
+                        # Calculate school discount manually
+                        school_discount = Decimal('0.00')
+                        try:
+                            if finance.school_discount_type == "percentage":
+                                school_discount_value = Decimal(str(finance.school_discount_value or 0))
+                                school_discount = (school_fee * school_discount_value) / 100
+                            else:
+                                school_discount = Decimal(str(finance.school_discount_value or 0))
+                        except (AttributeError, TypeError, ValueError):
+                            school_discount = Decimal('0.00')
+                        
+                        # Calculate bus discount manually
+                        bus_discount = Decimal('0.00')
+                        try:
+                            if finance.bus_discount_type == "percentage":
+                                bus_discount_value = Decimal(str(finance.bus_discount_value or 0))
+                                bus_discount = (bus_fee * bus_discount_value) / 100
+                            else:
+                                bus_discount = Decimal(str(finance.bus_discount_value or 0))
+                        except (AttributeError, TypeError, ValueError):
+                            bus_discount = Decimal('0.00')
+                        
+                        # Calculate other revenues manually
+                        other_revenues = Decimal('0.00')
+                        try:
+                            uniform_amount = Decimal(str(finance.uniform_amount or 0))
+                            course_amount = Decimal(str(finance.course_amount or 0))
+                            other_revenues = uniform_amount + course_amount
+                            
+                            if finance.other_revenue_items:
+                                for item in finance.other_revenue_items:
+                                    if isinstance(item, dict):
+                                        item_amount = Decimal(str(item.get('amount', 0) or 0))
+                                        other_revenues += item_amount
+                        except (AttributeError, TypeError, ValueError):
+                            other_revenues = Decimal('0.00')
+                        
+                        total_owed = (school_fee - school_discount) + (bus_fee - bus_discount) + other_revenues
+                    except Exception as calc_error:
+                        # If all calculations fail, default to 0
+                        total_owed = Decimal('0.00')
+                else:
+                    total_owed = Decimal('0.00')
+                
+                total_paid = db.query(func.sum(StudentPayment.payment_amount)).filter(
+                    StudentPayment.student_id == student.id,
+                    StudentPayment.academic_year_id == academic_year_id,
+                    StudentPayment.payment_status == "completed"
+                ).scalar()
+                
+                if total_paid is None:
+                    total_paid = Decimal('0.00')
+                else:
+                    total_paid = Decimal(str(total_paid))
+                
+                balance = total_owed - total_paid
+                
+                result.append(StudentFinanceSummary(
+                    student_id=student.id,
+                    full_name=student.full_name or "",
+                    father_name=student.father_name or "",
+                    father_phone=student.father_phone,
+                    mother_phone=student.mother_phone,
+                    grade_level=student.grade_level or "",
+                    grade_number=student.grade_number or 0,
+                    section=student.section,
+                    session_type=student.session_type or "",
+                    total_owed=total_owed,
+                    total_paid=total_paid,
+                    balance=balance,
+                    has_outstanding_balance=(balance > 0)
+                ))
+            except Exception as student_error:
+                # Skip problematic students and continue
+                continue
+        
+        return result
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch students finance data: {str(e)}"
+        )
+
+@router.get("/manager/students/{student_id}/detailed")
+async def get_student_finance_detailed(
+    student_id: int,
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get detailed financial information for a specific student"""
+    from decimal import Decimal
+    
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    finance = db.query(StudentFinance).filter(
+        StudentFinance.student_id == student_id,
+        StudentFinance.academic_year_id == academic_year_id
+    ).first()
+    
+    # If finance record doesn't exist, create one with default values
+    if not finance:
+        finance = StudentFinance(
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            school_fee=Decimal('0.00'),
+            school_fee_discount=Decimal('0.00'),
+            bus_fee=Decimal('0.00'),
+            bus_fee_discount=Decimal('0.00'),
+            other_revenues=Decimal('0.00'),
+            school_discount_type="fixed",
+            school_discount_value=Decimal('0.00'),
+            school_discount_reason=None,
+            bus_discount_type="fixed",
+            bus_discount_value=Decimal('0.00'),
+            bus_discount_reason=None,
+            uniform_type=None,
+            uniform_amount=Decimal('0.00'),
+            course_type=None,
+            course_amount=Decimal('0.00'),
+            other_revenue_items=None,
+            previous_years_balance=Decimal('0.00'),
+            payment_notes=None
+        )
+        db.add(finance)
+        db.commit()
+        db.refresh(finance)
+    
+    payments = db.query(StudentPayment).filter(
+        StudentPayment.student_id == student_id,
+        StudentPayment.academic_year_id == academic_year_id
+    ).order_by(StudentPayment.payment_date.desc()).all()
+    
+    total_paid = sum(Decimal(str(p.payment_amount)) for p in payments if p.payment_status == "completed")
+    
+    # Safely calculate totals
+    try:
+        calculated_school_discount = finance.calculated_school_discount or Decimal('0.00')
+        calculated_bus_discount = finance.calculated_bus_discount or Decimal('0.00')
+        total_other_revenues = finance.total_other_revenues or Decimal('0.00')
+        total_amount = finance.total_amount or Decimal('0.00')
+    except:
+        calculated_school_discount = Decimal('0.00')
+        calculated_bus_discount = Decimal('0.00')
+        total_other_revenues = Decimal('0.00')
+        total_amount = Decimal('0.00')
+    
+    partial_balance = total_amount - total_paid
+    total_balance = partial_balance + (finance.previous_years_balance or Decimal('0.00'))
+    
+    return {
+        "id": finance.id,
+        "student_id": student.id,
+        "student_name": student.full_name,
+        "academic_year_id": academic_year_id,
+        "school_fee": finance.school_fee or Decimal('0.00'),
+        "school_discount_type": finance.school_discount_type or "fixed",
+        "school_discount_value": finance.school_discount_value or Decimal('0.00'),
+        "calculated_school_discount": calculated_school_discount,
+        "school_fee_after_discount": (finance.school_fee or Decimal('0.00')) - calculated_school_discount,
+        "bus_fee": finance.bus_fee or Decimal('0.00'),
+        "bus_discount_type": finance.bus_discount_type or "fixed",
+        "bus_discount_value": finance.bus_discount_value or Decimal('0.00'),
+        "calculated_bus_discount": calculated_bus_discount,
+        "bus_fee_after_discount": (finance.bus_fee or Decimal('0.00')) - calculated_bus_discount,
+        "uniform_type": finance.uniform_type,
+        "uniform_amount": finance.uniform_amount or Decimal('0.00'),
+        "course_type": finance.course_type,
+        "course_amount": finance.course_amount or Decimal('0.00'),
+        "other_revenue_items": finance.other_revenue_items,
+        "total_other_revenues": total_other_revenues,
+        "total_amount": total_amount,
+        "total_paid": total_paid,
+        "partial_balance": partial_balance,
+        "previous_years_balance": finance.previous_years_balance or Decimal('0.00'),
+        "total_balance": total_balance,
+        "payment_notes": finance.payment_notes,
+        "payments": payments
+    }
+
+@router.put("/manager/students/{student_id}/finances")
+async def update_student_finances(
+    student_id: int,
+    academic_year_id: int,
+    finance_data: StudentFinanceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Update student financial information"""
+    from decimal import Decimal
+    
+    finance = db.query(StudentFinance).filter(
+        StudentFinance.student_id == student_id,
+        StudentFinance.academic_year_id == academic_year_id
+    ).first()
+    
+    # If finance record doesn't exist, create one
+    if not finance:
+        finance = StudentFinance(
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            school_fee=Decimal('0.00'),
+            school_fee_discount=Decimal('0.00'),
+            bus_fee=Decimal('0.00'),
+            bus_fee_discount=Decimal('0.00'),
+            other_revenues=Decimal('0.00'),
+            school_discount_type="fixed",
+            school_discount_value=Decimal('0.00'),
+            bus_discount_type="fixed",
+            bus_discount_value=Decimal('0.00'),
+            uniform_amount=Decimal('0.00'),
+            course_amount=Decimal('0.00'),
+            previous_years_balance=Decimal('0.00')
+        )
+        db.add(finance)
+    
+    update_data = finance_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(finance, field, value)
+    
+    db.commit()
+    db.refresh(finance)
+    
+    return {"message": "Student finances updated successfully", "finance": finance}
+
+@router.post("/manager/students/{student_id}/payment")
+async def add_student_payment(
+    student_id: int,
+    payment_data: StudentPaymentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Add a new payment for a student"""
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    payment_data.student_id = student_id
+    new_payment = StudentPayment(**payment_data.dict())
+    db.add(new_payment)
+    db.commit()
+    db.refresh(new_payment)
+    
+    return {"message": "Payment recorded successfully", "payment": new_payment}
+
+# Finance Cards Management
+@router.get("/cards", response_model=List[FinanceCardResponse])
+async def get_finance_cards(
+    academic_year_id: int = Query(...),
+    card_type: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all finance cards with optional filtering"""
+    query = db.query(FinanceCard).filter(
+        FinanceCard.academic_year_id == academic_year_id
+    )
+    
+    if card_type:
+        query = query.filter(FinanceCard.card_type == card_type)
+    if category:
+        query = query.filter(FinanceCard.category == category)
+    if status:
+        query = query.filter(FinanceCard.status == status)
+    
+    cards = query.order_by(FinanceCard.created_date.desc()).all()
+    return cards
+
+@router.post("/cards", response_model=FinanceCardResponse)
+async def create_finance_card(
+    card_data: FinanceCardCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Create a new finance card"""
+    new_card = FinanceCard(**card_data.dict())
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    
+    return new_card
+
+@router.get("/cards/{card_id}", response_model=FinanceCardResponse)
+async def get_finance_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get a specific finance card"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    return card
+
+@router.put("/cards/{card_id}", response_model=FinanceCardResponse)
+async def update_finance_card(
+    card_id: int,
+    card_data: FinanceCardUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Update a finance card"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    update_data = card_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(card, field, value)
+    
+    db.commit()
+    db.refresh(card)
+    
+    return card
+
+@router.delete("/cards/{card_id}")
+async def delete_finance_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """Delete a finance card (director only)"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    if card.is_default:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete default finance cards"
+        )
+    
+    db.delete(card)
+    db.commit()
+    
+    return {"message": "Finance card deleted successfully"}
+
+@router.get("/cards/{card_id}/detailed")
+async def get_finance_card_detailed(
+    card_id: int,
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get detailed information for a finance card including transactions"""
+    card = db.query(FinanceCard).filter(
+        FinanceCard.id == card_id,
+        FinanceCard.academic_year_id == academic_year_id
+    ).first()
+    
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    # Get all transactions
+    transactions = db.query(FinanceCardTransaction).filter(
+        FinanceCardTransaction.card_id == card_id
+    ).order_by(FinanceCardTransaction.transaction_date.desc()).all()
+    
+    return {
+        "id": card.id,
+        "card_name": card.card_name,
+        "card_type": card.card_type,
+        "category": card.category,
+        "description": card.description,
+        "status": card.status,
+        "academic_year_id": card.academic_year_id,
+        "created_at": card.created_at,
+        "updated_at": card.updated_at,
+        "transactions": transactions
+    }
+
+@router.get("/cards/{card_id}/summary", response_model=FinanceCardSummary)
+async def get_finance_card_summary(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get financial summary for a specific card"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    total_income = sum(
+        t.amount for t in card.transactions if t.transaction_type == "income"
+    )
+    total_expenses = sum(
+        t.amount for t in card.transactions if t.transaction_type == "expense"
+    )
+    incomplete_count = sum(
+        1 for t in card.transactions if not t.is_completed
+    )
+    
+    return FinanceCardSummary(
+        card_id=card.id,
+        card_name=card.card_name,
+        card_type=card.card_type,
+        total_income=total_income,
+        total_expenses=total_expenses,
+        net_amount=total_income - total_expenses,
+        incomplete_transactions_count=incomplete_count,
+        status=card.status
+    )
+
+# Finance Card Transactions
+@router.get("/cards/{card_id}/transactions", response_model=List[FinanceCardTransactionResponse])
+async def get_card_transactions(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all transactions for a specific card"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    transactions = db.query(FinanceCardTransaction).filter(
+        FinanceCardTransaction.card_id == card_id
+    ).order_by(FinanceCardTransaction.transaction_date.desc()).all()
+    
+    return transactions
+
+@router.post("/cards/{card_id}/transactions", response_model=FinanceCardTransactionResponse)
+async def add_card_transaction(
+    card_id: int,
+    transaction_data: FinanceCardTransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Add a new transaction to a finance card"""
+    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    transaction_data.card_id = card_id
+    new_transaction = FinanceCardTransaction(**transaction_data.dict())
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+    
+    return new_transaction
+
+@router.put("/cards/transactions/{transaction_id}", response_model=FinanceCardTransactionResponse)
+async def update_card_transaction(
+    transaction_id: int,
+    transaction_data: FinanceCardTransactionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Update a card transaction"""
+    transaction = db.query(FinanceCardTransaction).filter(
+        FinanceCardTransaction.id == transaction_id
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    update_data = transaction_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(transaction, field, value)
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    return transaction
+
+@router.delete("/cards/transactions/{transaction_id}")
+async def delete_card_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Delete a card transaction"""
+    transaction = db.query(FinanceCardTransaction).filter(
+        FinanceCardTransaction.id == transaction_id
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    db.delete(transaction)
+    db.commit()
+    
+    return {"message": "Transaction deleted successfully"}
+
+# Activity Finance Management
+@router.get("/manager/activities")
+async def get_activities_with_finances(
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all activities with their financial information"""
+    activities = db.query(Activity).filter(
+        Activity.academic_year_id == academic_year_id
+    ).all()
+    
+    result = []
+    for activity in activities:
+        result.append({
+            "id": activity.id,
+            "name": activity.name,
+            "description": activity.description,
+            "activity_type": activity.activity_type,
+            "total_cost": float(activity.total_cost),
+            "total_revenue": float(activity.total_revenue),
+            "additional_expenses": activity.additional_expenses,
+            "additional_revenues": activity.additional_revenues,
+            "financial_status": activity.financial_status,
+            "net_profit": float(activity.net_profit),
+            "start_date": activity.start_date,
+            "end_date": activity.end_date
+        })
+    
+    return result
+
+@router.put("/manager/activities/{activity_id}/finances")
+async def update_activity_finances(
+    activity_id: int,
+    total_cost: Optional[Decimal] = None,
+    total_revenue: Optional[Decimal] = None,
+    additional_expenses: Optional[List[dict]] = None,
+    additional_revenues: Optional[List[dict]] = None,
+    financial_status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Update financial information for an activity"""
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    if total_cost is not None:
+        activity.total_cost = total_cost
+    if total_revenue is not None:
+        activity.total_revenue = total_revenue
+    if additional_expenses is not None:
+        activity.additional_expenses = additional_expenses
+    if additional_revenues is not None:
+        activity.additional_revenues = additional_revenues
+    if financial_status is not None:
+        activity.financial_status = financial_status
+    
+    db.commit()
+    db.refresh(activity)
+    
+    return {"message": "Activity finances updated successfully", "activity": activity}
+
+# Historical Balance & Transfer Management
+@router.post("/manager/transfer-balances")
+async def transfer_student_balances(
+    source_year_id: int,
+    target_year_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)  # Only director can transfer balances
+):
+    """Transfer outstanding student balances from one academic year to another"""
+    transfer_service = BalanceTransferService(db)
+    result = transfer_service.transfer_student_balances(source_year_id, target_year_id)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Balance transfer failed: {result.get('error')}"
+        )
+    
+    return result
+
+@router.get("/manager/historical-balances/{academic_year_id}")
+async def get_historical_balances_for_year(
+    academic_year_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all historical balances for a specific academic year"""
+    balances = db.query(HistoricalBalance, Student).join(
+        Student, HistoricalBalance.student_id == Student.id
+    ).filter(
+        HistoricalBalance.academic_year_id == academic_year_id
+    ).all()
+    
+    result = []
+    for balance, student in balances:
+        result.append({
+            "id": balance.id,
+            "student_id": student.id,
+            "student_name": student.full_name,
+            "father_name": student.father_name,
+            "balance_amount": float(balance.balance_amount),
+            "balance_type": balance.balance_type,
+            "is_transferred": balance.is_transferred,
+            "transfer_date": balance.transfer_date.isoformat() if balance.transfer_date else None,
+            "notes": balance.notes,
+            "created_at": balance.created_at.isoformat()
+        })
+    
+    return result
+
+@router.get("/manager/students/{student_id}/balance-history")
+async def get_student_balance_history(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get complete balance history for a specific student across all years"""
+    transfer_service = BalanceTransferService(db)
+    history = transfer_service.get_historical_balances(student_id)
+    total_historical = transfer_service.get_total_historical_balance(student_id)
+    
+    return {
+        "student_id": student_id,
+        "balance_history": history,
+        "total_historical_balance": float(total_historical)
+    }
+
+@router.get("/manager/outstanding-balances/{academic_year_id}")
+async def get_outstanding_balances(
+    academic_year_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all students with outstanding balances for a specific year"""
+    transfer_service = BalanceTransferService(db)
+    students = transfer_service.get_students_with_outstanding_balances(academic_year_id)
+    
+    total_outstanding = sum(s["outstanding_balance"] for s in students)
+    
+    return {
+        "academic_year_id": academic_year_id,
+        "students_count": len(students),
+        "total_outstanding": total_outstanding,
+        "students": students
+    }
+
+@router.get("/manager/filter-options")
+async def get_filter_options(
+    academic_year_id: int = Query(...),
+    grade_level: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get filter options (grade numbers and sections) from database"""
+    try:
+        # Base query for active students
+        base_query = db.query(Student).filter(
+            Student.academic_year_id == academic_year_id,
+            Student.is_active == True
+        )
+        
+        # Apply grade level filter if provided
+        if grade_level and grade_level != "all":
+            base_query = base_query.filter(Student.grade_level == grade_level)
+        
+        # Get unique grade numbers
+        grade_numbers = db.query(Student.grade_number).filter(
+            Student.academic_year_id == academic_year_id,
+            Student.is_active == True
+        )
+        if grade_level and grade_level != "all":
+            grade_numbers = grade_numbers.filter(Student.grade_level == grade_level)
+        
+        grade_numbers = grade_numbers.distinct().order_by(Student.grade_number).all()
+        unique_grade_numbers = sorted([g[0] for g in grade_numbers if g[0] is not None])
+        
+        # Get unique sections
+        sections_query = db.query(Student.section).filter(
+            Student.academic_year_id == academic_year_id,
+            Student.is_active == True,
+            Student.section.isnot(None)
+        )
+        if grade_level and grade_level != "all":
+            sections_query = sections_query.filter(Student.grade_level == grade_level)
+        
+        sections = sections_query.distinct().order_by(Student.section).all()
+        unique_sections = sorted([s[0] for s in sections if s[0] is not None])
+        
+        return {
+            "grade_numbers": unique_grade_numbers,
+            "sections": unique_sections
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch filter options: {str(e)}"
+        )

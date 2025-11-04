@@ -23,6 +23,13 @@ class Activity(BaseModel):
     participant_count = Column(Integer, default=0)
     images = Column(Text)  # JSON array of image paths
     
+    # Financial Fields
+    total_cost = Column(Numeric(10,2), default=0)  # التكلفة الإجمالية للنشاط
+    total_revenue = Column(Numeric(10,2), default=0)  # المدخولات الإجمالية
+    additional_expenses = Column(JSON)  # مصاريف إضافية بصيغة JSON
+    additional_revenues = Column(JSON)  # مدخولات إضافية بصيغة JSON
+    financial_status = Column(String(20), default="pending")  # profitable, loss, pending
+    
     # Relationships
     academic_year = relationship("AcademicYear")
     participants = relationship("ActivityParticipant", back_populates="activity")
@@ -30,6 +37,21 @@ class Activity(BaseModel):
     registrations = relationship("ActivityRegistration", back_populates="activity")
     schedules = relationship("ActivitySchedule", back_populates="activity")
     attendance_records = relationship("ActivityAttendance", back_populates="activity")
+    
+    @property
+    def net_profit(self):
+        """Calculate net profit/loss"""
+        expenses = self.total_cost
+        if self.additional_expenses:
+            for expense in self.additional_expenses:
+                expenses += expense.get('amount', 0)
+        
+        revenues = self.total_revenue
+        if self.additional_revenues:
+            for revenue in self.additional_revenues:
+                revenues += revenue.get('amount', 0)
+        
+        return revenues - expenses
 
 class ActivityRegistration(BaseModel):
     __tablename__ = "activity_registrations"

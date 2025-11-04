@@ -51,6 +51,7 @@ class Student(BaseModel):
     finances = relationship("StudentFinance", back_populates="student")
     payments = relationship("StudentPayment", back_populates="student")
     academics = relationship("StudentAcademic", back_populates="student")
+    historical_balances = relationship("HistoricalBalance", back_populates="student")
 
 class StudentFinance(BaseModel):
     __tablename__ = "student_finances"
@@ -65,6 +66,26 @@ class StudentFinance(BaseModel):
     bus_fee_discount = Column(Numeric(10,2), default=0)
     other_revenues = Column(Numeric(10,2), default=0)  # courses, uniforms, etc.
     
+    # Enhanced Discount Fields for School Fee
+    school_discount_type = Column(String(20), default="fixed")  # percentage, fixed
+    school_discount_value = Column(Numeric(10,2), default=0)
+    school_discount_reason = Column(Text)
+    
+    # Enhanced Discount Fields for Bus Fee
+    bus_discount_type = Column(String(20), default="fixed")  # percentage, fixed
+    bus_discount_value = Column(Numeric(10,2), default=0)
+    bus_discount_reason = Column(Text)
+    
+    # Detailed Other Revenues
+    uniform_type = Column(String(200))  # نوع اللباس
+    uniform_amount = Column(Numeric(10,2), default=0)
+    course_type = Column(String(200))  # نوع الدورة
+    course_amount = Column(Numeric(10,2), default=0)
+    other_revenue_items = Column(JSON)  # إضافات أخرى بصيغة JSON
+    
+    # Historical Balance
+    previous_years_balance = Column(Numeric(10,2), default=0)  # الرصيد من السنوات السابقة
+    
     payment_notes = Column(Text)
     
     # Relationships
@@ -72,10 +93,34 @@ class StudentFinance(BaseModel):
     academic_year = relationship("AcademicYear")
     
     @property
+    def calculated_school_discount(self):
+        """Calculate the actual school discount amount"""
+        if self.school_discount_type == "percentage":
+            return (self.school_fee * self.school_discount_value) / 100
+        return self.school_discount_value
+    
+    @property
+    def calculated_bus_discount(self):
+        """Calculate the actual bus discount amount"""
+        if self.bus_discount_type == "percentage":
+            return (self.bus_fee * self.bus_discount_value) / 100
+        return self.bus_discount_value
+    
+    @property
+    def total_other_revenues(self):
+        """Calculate total other revenues including uniform, courses, and other items"""
+        total = self.uniform_amount + self.course_amount
+        if self.other_revenue_items:
+            for item in self.other_revenue_items:
+                total += item.get('amount', 0)
+        return total
+    
+    @property
     def total_amount(self):
-        return (self.school_fee - self.school_fee_discount + 
-                self.bus_fee - self.bus_fee_discount + 
-                self.other_revenues)
+        """Calculate total amount owed (after discounts + other revenues)"""
+        school_after_discount = self.school_fee - self.calculated_school_discount
+        bus_after_discount = self.bus_fee - self.calculated_bus_discount
+        return school_after_discount + bus_after_discount + self.total_other_revenues
 
 class StudentPayment(BaseModel):
     __tablename__ = "student_payments"
@@ -118,3 +163,18 @@ class StudentAcademic(BaseModel):
     student = relationship("Student", back_populates="academics")
     academic_year = relationship("AcademicYear")
     subject = relationship("Subject")
+
+class HistoricalBalance(BaseModel):
+    __tablename__ = "historical_balances"
+    
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    balance_amount = Column(Numeric(10,2), nullable=False)
+    balance_type = Column(String(20), nullable=False)  # receivable (دين للمدرسة), payable (دين على المدرسة)
+    is_transferred = Column(Boolean, default=False)
+    transfer_date = Column(Date)
+    notes = Column(Text)
+    
+    # Relationships
+    student = relationship("Student", back_populates="historical_balances")
+    academic_year = relationship("AcademicYear")

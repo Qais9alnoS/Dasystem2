@@ -11,6 +11,7 @@ interface TabItem {
 interface IOSTabBarProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  tabs?: TabItem[];
   className?: string;
 }
 
@@ -22,7 +23,7 @@ const defaultTabs: TabItem[] = [
 ];
 
 const IOSTabBar = React.forwardRef<HTMLDivElement, IOSTabBarProps>(
-  ({ activeTab, onTabChange, className }, ref) => {
+  ({ activeTab, onTabChange, tabs = defaultTabs, className }, ref) => {
     return (
       <div 
         ref={ref}
@@ -32,7 +33,7 @@ const IOSTabBar = React.forwardRef<HTMLDivElement, IOSTabBarProps>(
         )}
       >
         <div className="flex items-center justify-around px-2 py-2">
-          {defaultTabs.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"

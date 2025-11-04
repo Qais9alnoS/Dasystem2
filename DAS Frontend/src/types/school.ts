@@ -124,21 +124,95 @@ export interface StudentFinance {
 
     // Fee Structure - هيكل الرسوم
     school_fee: number; // القسط المدرسي
-    school_fee_discount: number; // حسم القسط المدرسي
+    school_fee_discount: number; // حسم القسط المدرسي (backward compatibility)
     bus_fee: number; // قسط الباص
-    bus_fee_discount: number; // حسم الباص
-    other_revenues: number; // ايرادات اخرى (دورات، لباس، اخرى)
+    bus_fee_discount: number; // حسم الباص (backward compatibility)
+    other_revenues: number; // ايرادات اخرى (backward compatibility)
+
+    // Enhanced Discount Fields - حقول الحسم المحسنة
+    school_discount_type: 'percentage' | 'fixed'; // نوع الحسم (نسبة مئوية/مبلغ ثابت)
+    school_discount_value: number; // قيمة الحسم
+    school_discount_reason?: string; // سبب الحسم (اختياري)
+    bus_discount_type: 'percentage' | 'fixed'; // نوع الحسم للباص
+    bus_discount_value: number; // قيمة الحسم للباص
+    bus_discount_reason?: string; // سبب الحسم للباص
+
+    // Detailed Other Revenues - إيرادات أخرى تفصيلية
+    uniform_type?: string; // نوع اللباس
+    uniform_amount: number; // مبلغ اللباس
+    course_type?: string; // نوع الدورة
+    course_amount: number; // مبلغ الدورة
+    other_revenue_items?: Array<{ name: string; amount: number; description?: string }>; // إضافات أخرى
 
     // Calculated Fields - الحقول المحسوبة
+    calculated_school_discount?: number; // الحسم المحسوب للقسط المدرسي
+    calculated_bus_discount?: number; // الحسم المحسوب للباص
+    total_other_revenues?: number; // مجموع الإيرادات الأخرى
     total_amount: number; // الإجمالي: جمع الكل - المخصوم (المبلغ المطلوب من الطالب)
-    total_paid: number; // الاجمالي المسدد: مجموعة الدفعات المسددة
-    partial_balance: number; // الرصيد الجزئي: ما تبقى على الطالب من القسط
-    total_balance: number; // الرصيد الكلي: مجموع رصيد السنة الحالية مع السنوات السابقة
+    total_paid?: number; // الاجمالي المسدد: مجموعة الدفعات المسددة
+    partial_balance?: number; // الرصيد الجزئي: ما تبقى على الطالب من القسط
+    total_balance?: number; // الرصيد الكلي: مجموع رصيد السنة الحالية مع السنوات السابقة
     previous_years_balance: number; // رصيد السنوات السابقة
 
     payment_notes?: string; // ملاحظات الدفع
     created_at?: string;
     updated_at?: string;
+}
+
+// Student Finance Detailed - معلومات مالية تفصيلية للطالب
+export interface StudentFinanceDetailed {
+    id: number;
+    student_id: number;
+    student_name: string;
+    academic_year_id: number;
+
+    // Fee Structure with discounts
+    school_fee: number;
+    school_discount_type: 'percentage' | 'fixed';
+    school_discount_value: number;
+    calculated_school_discount: number;
+    school_fee_after_discount: number;
+
+    bus_fee: number;
+    bus_discount_type: 'percentage' | 'fixed';
+    bus_discount_value: number;
+    calculated_bus_discount: number;
+    bus_fee_after_discount: number;
+
+    // Other Revenues
+    uniform_type?: string;
+    uniform_amount: number;
+    course_type?: string;
+    course_amount: number;
+    other_revenue_items?: Array<{ name: string; amount: number; description?: string }>;
+    total_other_revenues: number;
+
+    // Totals
+    total_amount: number;
+    total_paid: number;
+    partial_balance: number;
+    previous_years_balance: number;
+    total_balance: number;
+
+    payment_notes?: string;
+    payments: StudentPayment[];
+}
+
+// Student Finance Summary - ملخص مالي للطالب (للمسؤول المالي)
+export interface StudentFinanceSummary {
+    student_id: number;
+    full_name: string;
+    father_name: string;
+    father_phone?: string;
+    mother_phone?: string;
+    grade_level: GradeLevel;
+    grade_number: number;
+    section?: string;
+    session_type: SessionType;
+    total_owed: number;
+    total_paid: number;
+    balance: number;
+    has_outstanding_balance: boolean;
 }
 
 export interface StudentPayment {
@@ -310,6 +384,77 @@ export interface Budget {
     updated_at?: string;
 }
 
+// ===== Finance Cards - الكاردات المالية =====
+export interface FinanceCard {
+    id?: number;
+    academic_year_id: number;
+    card_name: string; // اسم الكارد
+    card_type: 'income' | 'expense' | 'both'; // دخل / خرج / دخل وخرج
+    category: 'activity' | 'student' | 'custom'; // نشاط / طلاب / مخصص
+    reference_id?: number; // ID of activity or other reference
+    reference_type?: string; // 'activity', 'custom', etc.
+    is_default: boolean; // افتراضي (نشاطات/طلاب) أم مخصص
+    created_date: string; // تاريخ الإنشاء
+    description?: string; // تفاصيل
+    status: 'open' | 'closed' | 'partial'; // مفتوح / مغلق / جزئي
+    created_at?: string;
+    updated_at?: string;
+}
+
+// Finance Card Transaction - معاملات الكارد المالي
+export interface FinanceCardTransaction {
+    id?: number;
+    card_id: number;
+    transaction_type: 'income' | 'expense'; // مدخول / مصروف
+    amount: number; // المبلغ
+    payer_name?: string; // اسم الدافع/المستلم
+    responsible_person?: string; // المسؤول عن العملية
+    transaction_date: string; // تاريخ العملية
+    is_completed: boolean; // هل اكتملت الدفعة 100%
+    completion_percentage: number; // نسبة الإنجاز (0-100)
+    notes?: string; // معلومات إضافية
+    created_at?: string;
+    updated_at?: string;
+}
+
+// Finance Card Summary - ملخص الكارد المالي
+export interface FinanceCardSummary {
+    card_id: number;
+    card_name: string;
+    card_type: 'income' | 'expense' | 'both';
+    total_income: number; // إجمالي المدخولات
+    total_expenses: number; // إجمالي المصروفات
+    net_amount: number; // الصافي (المدخولات - المصروفات)
+    incomplete_transactions_count: number; // عدد المعاملات غير المكتملة
+    status: 'open' | 'closed' | 'partial';
+}
+
+// Historical Balance - الرصيد التاريخي
+export interface HistoricalBalance {
+    id?: number;
+    student_id: number;
+    academic_year_id: number;
+    balance_amount: number; // المبلغ المتبقي
+    balance_type: 'receivable' | 'payable'; // receivable: دين للمدرسة, payable: دين على المدرسة
+    is_transferred: boolean; // هل تم نقله للسنة الجديدة
+    transfer_date?: string; // تاريخ النقل
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// Finance Manager Dashboard Data - بيانات لوحة المسؤول المالي
+export interface FinanceManagerDashboard {
+    net_profit: number; // صافي الربح
+    total_receivables: number; // إجمالي المستحقات (الديون للمدرسة)
+    total_payables: number; // إجمالي المستحقات على المدرسة (الديون)
+    finance_cards: FinanceCardSummary[]; // الكاردات المالية
+    summary: {
+        total_income: number;
+        total_expenses: number;
+    };
+}
+
 // ===== Activities Management =====
 export interface Activity {
     id?: number;
@@ -329,6 +474,15 @@ export interface Activity {
     requirements?: string;
     is_active: boolean;
     current_participants?: number;
+
+    // Financial Fields - الحقول المالية
+    total_cost: number; // التكلفة الإجمالية للنشاط
+    total_revenue: number; // المدخولات الإجمالية
+    additional_expenses?: Array<{ name: string; amount: number; description?: string }>; // مصاريف إضافية
+    additional_revenues?: Array<{ name: string; amount: number; description?: string }>; // مدخولات إضافية
+    financial_status: 'profitable' | 'loss' | 'pending'; // مربح / خسارة / معلق
+    net_profit?: number; // الربح الصافي (محسوب)
+
     created_at?: string;
     updated_at?: string;
 }

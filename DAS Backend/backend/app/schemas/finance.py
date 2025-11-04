@@ -225,3 +225,144 @@ class PaymentMethodResponse(PaymentMethodBase):
 
     class Config:
         from_attributes = True
+
+# Finance Card Schemas
+class FinanceCardBase(BaseModel):
+    academic_year_id: int
+    card_name: str
+    card_type: str  # "income", "expense", "both"
+    category: str  # "activity", "student", "custom"
+    reference_id: Optional[int] = None
+    reference_type: Optional[str] = None
+    is_default: bool = False
+    created_date: date
+    description: Optional[str] = None
+    status: str = "open"  # "open", "closed", "partial"
+
+    @validator('card_type')
+    def validate_card_type(cls, v):
+        if v not in ['income', 'expense', 'both']:
+            raise ValueError('Card type must be income, expense, or both')
+        return v
+
+    @validator('category')
+    def validate_category(cls, v):
+        if v not in ['activity', 'student', 'custom']:
+            raise ValueError('Category must be activity, student, or custom')
+        return v
+
+    @validator('status')
+    def validate_status(cls, v):
+        if v not in ['open', 'closed', 'partial']:
+            raise ValueError('Status must be open, closed, or partial')
+        return v
+
+class FinanceCardCreate(FinanceCardBase):
+    pass
+
+class FinanceCardUpdate(BaseModel):
+    card_name: Optional[str] = None
+    card_type: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+    @validator('card_type')
+    def validate_card_type(cls, v):
+        if v is not None and v not in ['income', 'expense', 'both']:
+            raise ValueError('Card type must be income, expense, or both')
+        return v
+
+    @validator('status')
+    def validate_status(cls, v):
+        if v is not None and v not in ['open', 'closed', 'partial']:
+            raise ValueError('Status must be open, closed, or partial')
+        return v
+
+class FinanceCardResponse(FinanceCardBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Finance Card Transaction Schemas
+class FinanceCardTransactionBase(BaseModel):
+    card_id: int
+    transaction_type: str  # "income", "expense"
+    amount: Decimal
+    payer_name: Optional[str] = None
+    responsible_person: Optional[str] = None
+    transaction_date: date
+    is_completed: bool = False
+    completion_percentage: Decimal = 100
+    notes: Optional[str] = None
+
+    @validator('transaction_type')
+    def validate_transaction_type(cls, v):
+        if v not in ['income', 'expense']:
+            raise ValueError('Transaction type must be income or expense')
+        return v
+
+    @validator('amount')
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return v
+
+    @validator('completion_percentage')
+    def validate_completion_percentage(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError('Completion percentage must be between 0 and 100')
+        return v
+
+class FinanceCardTransactionCreate(FinanceCardTransactionBase):
+    pass
+
+class FinanceCardTransactionUpdate(BaseModel):
+    transaction_type: Optional[str] = None
+    amount: Optional[Decimal] = None
+    payer_name: Optional[str] = None
+    responsible_person: Optional[str] = None
+    transaction_date: Optional[date] = None
+    is_completed: Optional[bool] = None
+    completion_percentage: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+    @validator('transaction_type')
+    def validate_transaction_type(cls, v):
+        if v is not None and v not in ['income', 'expense']:
+            raise ValueError('Transaction type must be income or expense')
+        return v
+
+    @validator('amount')
+    def validate_amount(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return v
+
+    @validator('completion_percentage')
+    def validate_completion_percentage(cls, v):
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError('Completion percentage must be between 0 and 100')
+        return v
+
+class FinanceCardTransactionResponse(FinanceCardTransactionBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Finance Card Summary Schema
+class FinanceCardSummary(BaseModel):
+    card_id: int
+    card_name: str
+    card_type: str
+    total_income: Decimal
+    total_expenses: Decimal
+    net_amount: Decimal
+    incomplete_transactions_count: int
+    status: str

@@ -62,3 +62,37 @@ class PaymentMethod(BaseModel):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     is_active = Column(Boolean, default=True)
+
+class FinanceCard(BaseModel):
+    __tablename__ = "finance_cards"
+    
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    card_name = Column(String(200), nullable=False)
+    card_type = Column(String(20), nullable=False)  # income, expense, both
+    category = Column(String(50), nullable=False)  # activity, student, custom
+    reference_id = Column(Integer)  # ID of activity or other reference
+    reference_type = Column(String(50))  # 'activity', 'custom', etc.
+    is_default = Column(Boolean, default=False)  # افتراضي (نشاطات/طلاب) أم مخصص
+    created_date = Column(Date, nullable=False)
+    description = Column(Text)
+    status = Column(String(20), default="open")  # open, closed, partial
+    
+    # Relationships
+    academic_year = relationship("AcademicYear")
+    transactions = relationship("FinanceCardTransaction", back_populates="card", cascade="all, delete-orphan")
+
+class FinanceCardTransaction(BaseModel):
+    __tablename__ = "finance_card_transactions"
+    
+    card_id = Column(Integer, ForeignKey("finance_cards.id", ondelete="CASCADE"), nullable=False)
+    transaction_type = Column(String(20), nullable=False)  # income, expense
+    amount = Column(Numeric(10,2), nullable=False)
+    payer_name = Column(String(200))  # اسم الدافع/المستلم
+    responsible_person = Column(String(200))  # المسؤول عن العملية
+    transaction_date = Column(Date, nullable=False)
+    is_completed = Column(Boolean, default=False)  # هل اكتملت الدفعة 100%
+    completion_percentage = Column(Numeric(5,2), default=100)  # نسبة الإنجاز
+    notes = Column(Text)
+    
+    # Relationships
+    card = relationship("FinanceCard", back_populates="transactions")

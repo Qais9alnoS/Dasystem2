@@ -47,6 +47,23 @@ const AddEditGradePage = () => {
     }
   }, []);
 
+  // Reset subjects and form data when gradeId changes to prevent sharing between grades
+  useEffect(() => {
+    if (gradeId) {
+      // Clear subjects when navigating to a different grade
+      setSubjects([]);
+    } else {
+      // If no gradeId (creating new), reset to default form
+      setFormData({
+        session_type: 'morning' as SessionType,
+        grade_level: 'primary' as GradeLevel,
+        grade_number: 1,
+        section_count: 1,
+      });
+      setSubjects([]);
+    }
+  }, [gradeId]);
+
   useEffect(() => {
     if (selectedAcademicYear) {
       loadExistingClasses();
@@ -54,7 +71,7 @@ const AddEditGradePage = () => {
         loadGradeData(parseInt(gradeId));
       }
     }
-  }, [selectedAcademicYear, gradeId]);
+  }, [selectedAcademicYear, gradeId, isEditMode]);
 
   useEffect(() => {
     if (selectedAcademicYear && formData.grade_level && formData.grade_number) {
@@ -66,7 +83,7 @@ const AddEditGradePage = () => {
     if (!selectedAcademicYear) return;
     
     try {
-      const response = await api.academic.getClasses(selectedAcademicYear);
+      const response = await api.academic.getClasses({ academic_year_id: selectedAcademicYear });
       const allClasses = Array.isArray(response) ? response : (response?.data || []);
       setExistingClasses(allClasses);
     } catch (error) {
@@ -80,7 +97,11 @@ const AddEditGradePage = () => {
       
       // Load class data
       const classResponse = await api.classes.getById(id);
-      const classData = classResponse.data || classResponse;
+      const classData = classResponse.data;
+      
+      if (!classData) {
+        throw new Error('Class data not found');
+      }
       
       setFormData({
         session_type: classData.session_type,
@@ -90,7 +111,7 @@ const AddEditGradePage = () => {
       });
 
       // Load subjects for this class
-      const subjectsResponse = await api.academic.getSubjects(id);
+      const subjectsResponse = await api.academic.getSubjects({ class_id: id });
       const classSubjects = Array.isArray(subjectsResponse) ? subjectsResponse : (subjectsResponse?.data || []);
       setSubjects(classSubjects);
     } catch (error) {
@@ -242,7 +263,7 @@ const AddEditGradePage = () => {
         classId = parseInt(gradeId!);
 
         // Delete existing subjects
-        const existingSubjects = await api.academic.getSubjects(classId);
+        const existingSubjects = await api.academic.getSubjects({ class_id: classId });
         const subjectsList = Array.isArray(existingSubjects) ? existingSubjects : (existingSubjects?.data || []);
         for (const subject of subjectsList) {
           if (subject.id) {
@@ -260,7 +281,11 @@ const AddEditGradePage = () => {
           academic_year_id: selectedAcademicYear,
           ...formData,
         });
-        classId = response.data?.id || response.id;
+        classId = response.data?.id;
+
+        if (!classId) {
+          throw new Error('Failed to create class: No ID returned');
+        }
 
         toast({
           title: 'نجح',
@@ -590,4 +615,3 @@ const AddEditGradePage = () => {
 };
 
 export default AddEditGradePage;
-

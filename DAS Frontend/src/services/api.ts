@@ -749,6 +749,164 @@ export const financeApi = {
   },
 };
 
+// Finance Manager API - نظام المسؤول المالي
+export const financeManagerApi = {
+  // Dashboard
+  getDashboard: async (academic_year_id: number) => {
+    return apiClient.get<FinanceManagerDashboard>(`/finance/manager/dashboard?academic_year_id=${academic_year_id}`);
+  },
+
+  // Students Finance
+  getStudentsFinance: async (params: {
+    academic_year_id: number;
+    grade_level?: string;
+    grade_number?: number;
+    section?: string;
+    session_type?: string;
+  }) => {
+    console.log('API getStudentsFinance - Raw params:', params);
+    
+    const filteredParams = Object.entries(params)
+      .filter(([key, v]) => {
+        // Filter out undefined, null, "all", empty string, and NaN values
+        if (v === undefined || v === null || v === "all" || v === "") return false;
+        if (key === "grade_number" && (isNaN(Number(v)) || Number(v) <= 0)) return false;
+        return true;
+      })
+      .map(([k, v]) => [k, String(v)]);
+    
+    console.log('API getStudentsFinance - Filtered params:', filteredParams);
+    
+    const queryString = '?' + new URLSearchParams(filteredParams).toString();
+    console.log('API getStudentsFinance - Query string:', queryString);
+    
+    return apiClient.get<StudentFinanceSummary[]>(`/finance/manager/students${queryString}`);
+  },
+
+  getStudentFinanceDetailed: async (student_id: number, academic_year_id: number) => {
+    return apiClient.get<StudentFinanceDetailed>(`/finance/manager/students/${student_id}/detailed?academic_year_id=${academic_year_id}`);
+  },
+
+  updateStudentFinances: async (student_id: number, academic_year_id: number, data: Partial<StudentFinance>) => {
+    return apiClient.put<any>(`/finance/manager/students/${student_id}/finances?academic_year_id=${academic_year_id}`, data);
+  },
+
+  addStudentPayment: async (student_id: number, payment: Omit<StudentPayment, 'id' | 'created_at'>) => {
+    return apiClient.post<StudentPayment>(`/finance/manager/students/${student_id}/payment`, payment);
+  },
+
+  // Finance Cards
+  getFinanceCards: async (params: {
+    academic_year_id: number;
+    card_type?: string;
+    category?: string;
+    status?: string;
+  }) => {
+    const queryString = '?' + new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return apiClient.get<FinanceCard[]>(`/finance/cards${queryString}`);
+  },
+
+  createFinanceCard: async (card: Omit<FinanceCard, 'id' | 'created_at' | 'updated_at'>) => {
+    return apiClient.post<FinanceCard>('/finance/cards', card);
+  },
+
+  getFinanceCard: async (card_id: number) => {
+    return apiClient.get<FinanceCard>(`/finance/cards/${card_id}`);
+  },
+
+  updateFinanceCard: async (card_id: number, data: Partial<FinanceCard>) => {
+    return apiClient.put<FinanceCard>(`/finance/cards/${card_id}`, data);
+  },
+
+  deleteFinanceCard: async (card_id: number) => {
+    return apiClient.delete<void>(`/finance/cards/${card_id}`);
+  },
+
+  getFinanceCardSummary: async (card_id: number) => {
+    return apiClient.get<FinanceCardSummary>(`/finance/cards/${card_id}/summary`);
+  },
+
+  getFinanceCardDetailed: async (card_id: number, academic_year_id: number) => {
+    return apiClient.get<FinanceCardDetailed>(`/finance/cards/${card_id}/detailed?academic_year_id=${academic_year_id}`);
+  },
+
+  // Card Transactions
+  getCardTransactions: async (card_id: number) => {
+    return apiClient.get<FinanceCardTransaction[]>(`/finance/cards/${card_id}/transactions`);
+  },
+
+  addCardTransaction: async (card_id: number, transaction: Omit<FinanceCardTransaction, 'id' | 'card_id' | 'created_at' | 'updated_at'>) => {
+    return apiClient.post<FinanceCardTransaction>(`/finance/cards/${card_id}/transactions`, transaction);
+  },
+
+  updateCardTransaction: async (transaction_id: number, data: Partial<FinanceCardTransaction>) => {
+    return apiClient.put<FinanceCardTransaction>(`/finance/cards/transactions/${transaction_id}`, data);
+  },
+
+  deleteCardTransaction: async (transaction_id: number) => {
+    return apiClient.delete<void>(`/finance/cards/transactions/${transaction_id}`);
+  },
+
+  // Activities Finance
+  getActivitiesWithFinances: async (academic_year_id: number) => {
+    return apiClient.get<Activity[]>(`/finance/manager/activities?academic_year_id=${academic_year_id}`);
+  },
+
+  updateActivityFinances: async (activity_id: number, data: {
+    total_cost?: number;
+    total_revenue?: number;
+    additional_expenses?: Array<{ name: string; amount: number; description?: string }>;
+    additional_revenues?: Array<{ name: string; amount: number; description?: string }>;
+    financial_status?: string;
+  }) => {
+    return apiClient.put<any>(`/finance/manager/activities/${activity_id}/finances`, data);
+  },
+
+  // Historical Balance & Transfer
+  transferBalances: async (source_year_id: number, target_year_id: number) => {
+    return apiClient.post<any>('/finance/manager/transfer-balances', {
+      source_year_id,
+      target_year_id
+    });
+  },
+
+  getHistoricalBalances: async (academic_year_id: number) => {
+    return apiClient.get<HistoricalBalance[]>(`/finance/manager/historical-balances/${academic_year_id}`);
+  },
+
+  getStudentBalanceHistory: async (student_id: number) => {
+    return apiClient.get<{
+      student_id: number;
+      balance_history: HistoricalBalance[];
+      total_historical_balance: number;
+    }>(`/finance/manager/students/${student_id}/balance-history`);
+  },
+
+  getOutstandingBalances: async (academic_year_id: number) => {
+    return apiClient.get<{
+      academic_year_id: number;
+      students_count: number;
+      total_outstanding: number;
+      students: StudentFinanceSummary[];
+    }>(`/finance/manager/outstanding-balances/${academic_year_id}`);
+  },
+
+  getFilterOptions: async (academic_year_id: number, grade_level?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString() });
+    if (grade_level && grade_level !== "all") {
+      params.append('grade_level', grade_level);
+    }
+    return apiClient.get<{
+      grade_numbers: number[];
+      sections: string[];
+    }>(`/finance/manager/filter-options?${params.toString()}`);
+  },
+};
+
 // Schedule API
 export const schedulesApi = {
   getAll: async (params?: {
@@ -970,32 +1128,100 @@ export const monitoringApi = {
 
 // Director Tools API
 export const directorApi = {
-  getNotes: async (academic_year_id?: number, folder_type?: string) => {
+  // Dashboard
+  getDashboardStats: async (academic_year_id?: number | null) => {
+    const params = academic_year_id !== null && academic_year_id !== undefined ? `?academic_year_id=${academic_year_id}` : '';
+    return apiClient.get<any>(`/director/dashboard${params}`);
+  },
+
+  // Notes Categories
+  getNotesCategories: async (academic_year_id: number) => {
+    return apiClient.get<any>(`/director/notes/categories?academic_year_id=${academic_year_id}`);
+  },
+
+  // Folders Management
+  listFolderContents: async (academic_year_id: number, category: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = { academic_year_id: academic_year_id.toString(), category };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.get<any>(`/director/notes/folders${params}`);
+  },
+
+  createFolder: async (academic_year_id: number, category: string, folder_name: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = { academic_year_id: academic_year_id.toString(), category, folder_name };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.post<any>(`/director/notes/folders${params}`, {});
+  },
+
+  renameFolder: async (folder_id: number, new_name: string) => {
+    return apiClient.put<any>(`/director/notes/folders/${folder_id}?new_name=${encodeURIComponent(new_name)}`, {});
+  },
+
+  deleteFolder: async (folder_id: number) => {
+    return apiClient.delete<any>(`/director/notes/folders/${folder_id}`);
+  },
+
+  // Files Management
+  getFile: async (file_id: number) => {
+    return apiClient.get<any>(`/director/notes/files/${file_id}`);
+  },
+
+  createFile: async (academic_year_id: number, category: string, file_name: string, content: string, note_date: string, parent_folder_id?: number | null) => {
+    const paramsObj: any = {
+      academic_year_id: academic_year_id.toString(),
+      category,
+      file_name,
+      content,
+      note_date
+    };
+    if (parent_folder_id !== null && parent_folder_id !== undefined) {
+      paramsObj.parent_folder_id = parent_folder_id.toString();
+    }
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.post<any>(`/director/notes/files${params}`, {});
+  },
+
+  updateFile: async (file_id: number, title?: string, content?: string, note_date?: string) => {
     const paramsObj: any = {};
-    if (academic_year_id) paramsObj.academic_year_id = academic_year_id;
-    if (folder_type) paramsObj.folder_type = folder_type;
+    if (title !== undefined) paramsObj.title = title;
+    if (content !== undefined) paramsObj.content = content;
+    if (note_date !== undefined) paramsObj.note_date = note_date;
     const params = Object.keys(paramsObj).length > 0 ? '?' + new URLSearchParams(paramsObj).toString() : '';
-    return apiClient.get<DirectorNote[]>(`/director/notes${params}`);
+    return apiClient.put<any>(`/director/notes/files/${file_id}${params}`, {});
   },
 
-  createNote: async (note: Omit<DirectorNote, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<DirectorNote>('/director/notes', note);
+  deleteFile: async (file_id: number) => {
+    return apiClient.delete<any>(`/director/notes/files/${file_id}`);
   },
 
-  updateNote: async (id: number, note: Partial<DirectorNote>) => {
-    return apiClient.put<DirectorNote>(`/director/notes/${id}`, note);
+  // Search
+  searchNotes: async (query: string, academic_year_id?: number, category?: string) => {
+    const paramsObj: any = { query };
+    if (academic_year_id) paramsObj.academic_year_id = academic_year_id.toString();
+    if (category) paramsObj.category = category;
+    const params = '?' + new URLSearchParams(paramsObj).toString();
+    return apiClient.get<any>(`/director/notes/search${params}`);
   },
 
-  deleteNote: async (id: number) => {
-    return apiClient.delete<void>(`/director/notes/${id}`);
+  // Rewards Management
+  getRewards: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
+    const params: string[] = [];
+    if (academic_year_id !== undefined) params.push(`academic_year_id=${academic_year_id}`);
+    params.push(`skip=${skip}`);
+    params.push(`limit=${limit}`);
+    return apiClient.get<Reward[]>(`/director/rewards?${params.join('&')}`);
   },
 
-  getRewards: async (academic_year_id?: number) => {
-    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<Reward[]>(`/director/rewards${params}`);
+  getReward: async (reward_id: number) => {
+    return apiClient.get<Reward>(`/director/rewards/${reward_id}`);
   },
 
-  createReward: async (reward: Omit<Reward, 'id' | 'created_at'>) => {
+  createReward: async (reward: Omit<Reward, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<Reward>('/director/rewards', reward);
   },
 
@@ -1004,15 +1230,23 @@ export const directorApi = {
   },
 
   deleteReward: async (id: number) => {
-    return apiClient.delete<void>(`/director/rewards/${id}`);
+    return apiClient.delete<any>(`/director/rewards/${id}`);
   },
 
-  getAssistanceRecords: async (academic_year_id?: number) => {
-    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<AssistanceRecord[]>(`/director/assistance${params}`);
+  // Assistance Records Management
+  getAssistanceRecords: async (academic_year_id?: number, skip: number = 0, limit: number = 100) => {
+    const params: string[] = [];
+    if (academic_year_id !== undefined) params.push(`academic_year_id=${academic_year_id}`);
+    params.push(`skip=${skip}`);
+    params.push(`limit=${limit}`);
+    return apiClient.get<AssistanceRecord[]>(`/director/assistance?${params.join('&')}`);
   },
 
-  createAssistanceRecord: async (record: Omit<AssistanceRecord, 'id' | 'created_at'>) => {
+  getAssistanceRecord: async (record_id: number) => {
+    return apiClient.get<AssistanceRecord>(`/director/assistance/${record_id}`);
+  },
+
+  createAssistanceRecord: async (record: Omit<AssistanceRecord, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<AssistanceRecord>('/director/assistance', record);
   },
 
@@ -1021,13 +1255,8 @@ export const directorApi = {
   },
 
   deleteAssistanceRecord: async (id: number) => {
-    return apiClient.delete<void>(`/director/assistance/${id}`);
+    return apiClient.delete<any>(`/director/assistance/${id}`);
   },
-
-  getDashboardStats: async (academic_year_id?: number | null) => {
-    const params = academic_year_id !== null && academic_year_id !== undefined ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<any>(`/director/dashboard${params}`);
-  }
 };
 
 // File Management API
@@ -1100,6 +1329,7 @@ export const api = {
   activities: activitiesApi,
   schedules: schedulesApi,
   finance: financeApi,
+  financeManager: financeManagerApi,
   monitoring: monitoringApi,
   director: directorApi,
   files: filesApi,

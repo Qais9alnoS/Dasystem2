@@ -237,7 +237,7 @@ const StudentAcademicInfoPage = () => {
     if (!selectedClass) return;
 
     try {
-      const response = await api.academic.getSubjects(selectedClass);
+      const response = await api.academic.getSubjects({ class_id: selectedClass });
       // Handle both direct array and wrapped response
       const classSubjects = Array.isArray(response) ? response : (response?.data || []);
       setSubjects(classSubjects);

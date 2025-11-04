@@ -81,18 +81,102 @@ class StudentFinanceBase(BaseModel):
     bus_fee: Decimal = Decimal('0')
     bus_fee_discount: Decimal = Decimal('0')
     other_revenues: Decimal = Decimal('0')
+    
+    # Enhanced Discount Fields
+    school_discount_type: str = "fixed"  # percentage, fixed
+    school_discount_value: Decimal = Decimal('0')
+    school_discount_reason: Optional[str] = None
+    bus_discount_type: str = "fixed"  # percentage, fixed
+    bus_discount_value: Decimal = Decimal('0')
+    bus_discount_reason: Optional[str] = None
+    
+    # Detailed Other Revenues
+    uniform_type: Optional[str] = None
+    uniform_amount: Decimal = Decimal('0')
+    course_type: Optional[str] = None
+    course_amount: Decimal = Decimal('0')
+    other_revenue_items: Optional[List[dict]] = None
+    
+    # Historical Balance
+    previous_years_balance: Decimal = Decimal('0')
+    
     payment_notes: Optional[str] = None
 
 class StudentFinanceCreate(StudentFinanceBase):
     student_id: int
     academic_year_id: int
 
+class StudentFinanceUpdate(BaseModel):
+    school_fee: Optional[Decimal] = None
+    school_fee_discount: Optional[Decimal] = None
+    bus_fee: Optional[Decimal] = None
+    bus_fee_discount: Optional[Decimal] = None
+    other_revenues: Optional[Decimal] = None
+    school_discount_type: Optional[str] = None
+    school_discount_value: Optional[Decimal] = None
+    school_discount_reason: Optional[str] = None
+    bus_discount_type: Optional[str] = None
+    bus_discount_value: Optional[Decimal] = None
+    bus_discount_reason: Optional[str] = None
+    uniform_type: Optional[str] = None
+    uniform_amount: Optional[Decimal] = None
+    course_type: Optional[str] = None
+    course_amount: Optional[Decimal] = None
+    other_revenue_items: Optional[List[dict]] = None
+    previous_years_balance: Optional[Decimal] = None
+    payment_notes: Optional[str] = None
+
 class StudentFinanceResponse(StudentFinanceBase):
     id: int
     student_id: int
     academic_year_id: int
+    calculated_school_discount: Decimal
+    calculated_bus_discount: Decimal
+    total_other_revenues: Decimal
     total_amount: Decimal
     created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class StudentFinanceDetailedResponse(BaseModel):
+    """Detailed financial response with calculated fields"""
+    id: int
+    student_id: int
+    student_name: str
+    academic_year_id: int
+    
+    # Fee Structure
+    school_fee: Decimal
+    school_discount_type: str
+    school_discount_value: Decimal
+    calculated_school_discount: Decimal
+    school_fee_after_discount: Decimal
+    
+    bus_fee: Decimal
+    bus_discount_type: str
+    bus_discount_value: Decimal
+    calculated_bus_discount: Decimal
+    bus_fee_after_discount: Decimal
+    
+    # Other Revenues
+    uniform_type: Optional[str]
+    uniform_amount: Decimal
+    course_type: Optional[str]
+    course_amount: Decimal
+    other_revenue_items: Optional[List[dict]]
+    total_other_revenues: Decimal
+    
+    # Totals
+    total_amount: Decimal  # Total owed
+    total_paid: Decimal  # Total payments made
+    partial_balance: Decimal  # Current year balance
+    previous_years_balance: Decimal
+    total_balance: Decimal  # Total balance including previous years
+    
+    payment_notes: Optional[str]
+    payments: List['StudentPaymentResponse']
     
     class Config:
         from_attributes = True
@@ -144,6 +228,48 @@ class StudentAcademicResponse(StudentAcademicBase):
     academic_year_id: int
     subject_id: int
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Historical Balance Schemas
+class HistoricalBalanceBase(BaseModel):
+    balance_amount: Decimal
+    balance_type: str  # receivable, payable
+    notes: Optional[str] = None
+
+class HistoricalBalanceCreate(HistoricalBalanceBase):
+    student_id: int
+    academic_year_id: int
+
+class HistoricalBalanceResponse(HistoricalBalanceBase):
+    id: int
+    student_id: int
+    academic_year_id: int
+    is_transferred: bool
+    transfer_date: Optional[date]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Student Finance Summary for Manager
+class StudentFinanceSummary(BaseModel):
+    """Summary view for finance manager"""
+    student_id: int
+    full_name: str
+    father_name: str
+    father_phone: Optional[str]
+    mother_phone: Optional[str]
+    grade_level: str
+    grade_number: int
+    section: Optional[str]
+    session_type: str
+    total_owed: Decimal
+    total_paid: Decimal
+    balance: Decimal
+    has_outstanding_balance: bool
     
     class Config:
         from_attributes = True

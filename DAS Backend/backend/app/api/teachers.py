@@ -69,6 +69,15 @@ async def create_teacher(
     elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
         raise HTTPException(status_code=403, detail="Evening school user can only create evening teachers")
     
+    # Validate that academic_year_id exists
+    from app.models.academic import AcademicYear
+    academic_year = db.query(AcademicYear).filter(AcademicYear.id == teacher.academic_year_id).first()
+    if not academic_year:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Academic year with ID {teacher.academic_year_id} does not exist. Please select a valid academic year."
+        )
+    
     # Check if teacher with same name already exists in the same academic year and session
     existing_teacher = db.query(Teacher).filter(
         and_(

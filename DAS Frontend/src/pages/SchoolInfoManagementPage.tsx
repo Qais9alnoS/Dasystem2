@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, BookOpen, GraduationCap, Layers, AlertTriangle, Edit } from 'lucide-react';
+import { Plus, Users, BookOpen, GraduationCap, Layers, AlertTriangle, Edit, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -135,6 +135,36 @@ const SchoolInfoManagementPage = () => {
       toast({
         title: 'خطأ',
         description: error.response?.data?.detail || error.message || 'فشل في إنشاء الصفوف الافتراضية',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClass = async (classId: number, className: string) => {
+    // Confirm deletion
+    if (!confirm(`هل أنت متأكد من حذف الصف "${className}"؟\n\nتحذير: سيتم حذف جميع المواد والمعلومات المرتبطة بهذا الصف.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      await api.classes.delete(classId);
+      
+      toast({
+        title: 'نجح',
+        description: 'تم حذف الصف بنجاح',
+      });
+
+      // Reload data
+      loadData();
+    } catch (error: any) {
+      console.error('Failed to delete class:', error);
+      toast({
+        title: 'خطأ',
+        description: error.response?.data?.detail || error.message || 'فشل في حذف الصف',
         variant: 'destructive',
       });
     } finally {
@@ -322,15 +352,29 @@ const SchoolInfoManagementPage = () => {
                                 <span className="font-medium">{studentsInClass.length}</span>
                               </div>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full mt-4"
-                              onClick={() => navigate(`/school-info/edit-grade/${cls.id}`)}
-                            >
-                              <Edit className="ml-2 h-4 w-4" />
-                              تعديل الصف
-                            </Button>
+                            <div className="flex gap-2 mt-4">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => navigate(`/school-info/edit-grade/${cls.id}`)}
+                              >
+                                <Edit className="ml-2 h-4 w-4" />
+                                تعديل
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="flex-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteClass(cls.id!, getGradeLabel(cls.grade_level, cls.grade_number));
+                                }}
+                              >
+                                <Trash2 className="ml-2 h-4 w-4" />
+                                حذف
+                              </Button>
+                            </div>
                           </CardContent>
                         </Card>
                       );
