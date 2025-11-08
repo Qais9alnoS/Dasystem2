@@ -11,7 +11,7 @@ from ..models.finance import FinanceTransaction, FinanceCategory, Budget, Expens
 from ..models.students import StudentPayment, Student, StudentFinance
 from ..models.teachers import TeacherFinance
 from ..models.users import User
-from ..models.activities import Activity
+from ..models.activities import Activity, ActivityRegistration
 from ..models.students import HistoricalBalance
 from ..services.balance_transfer_service import BalanceTransferService
 from ..schemas.finance import (
@@ -747,25 +747,175 @@ async def get_finance_manager_dashboard(
 ):
     """Get comprehensive dashboard for finance manager"""
     try:
-        # Calculate net profit (total income - total expenses)
-        total_income = db.query(func.sum(FinanceTransaction.amount)).filter(
-            and_(
-                FinanceTransaction.academic_year_id == academic_year_id,
-                FinanceTransaction.transaction_type == "income"
-            )
-        ).scalar() or Decimal('0.00')
+        # Create/Update default students card
+        students_card = db.query(FinanceCard).filter(
+            FinanceCard.academic_year_id == academic_year_id,
+            FinanceCard.category == "student",
+            FinanceCard.is_default == True
+        ).first()
         
-        total_expenses = db.query(func.sum(FinanceTransaction.amount)).filter(
-            and_(
-                FinanceTransaction.academic_year_id == academic_year_id,
-                FinanceTransaction.transaction_type == "expense"
+        if not students_card:
+            students_card = FinanceCard(
+                academic_year_id=academic_year_id,
+                card_name="رسوم الطلاب",
+                card_type="income",
+                category="student",
+                is_default=True,
+                created_date=date.today(),
+                description="كارد تلقائي لمدخولات رسوم الطلاب",
+                status="open"
             )
-        ).scalar() or Decimal('0.00')
+            db.add(students_card)
+            db.commit()
+            db.refresh(students_card)
+        
+        # Sync student payments as transactions for the students card
+        # Get all completed student payments for this academic year
+        student_payments = db.query(StudentPayment).filter(
+            StudentPayment.academic_year_id == academic_year_id,
+            StudentPayment.payment_status == "completed"
+        ).all()
+        
+        # Track existing transactions by payment_id (stored in notes)
+        existing_transaction_refs = set()
+        for transaction in students_card.transactions:
+            if transaction.notes and transaction.notes.startswith("payment_id:"):
+                payment_id = transaction.notes.split(":")[1]
+                existing_transaction_refs.add(int(payment_id))
+        
+        # Create transactions for new payments
+        for payment in student_payments:
+            if payment.id not in existing_transaction_refs:
+                student = db.query(Student).filter(Student.id == payment.student_id).first()
+                student_name = student.full_name if student else "طالب غير معروف"
+                
+                new_transaction = FinanceCardTransaction(
+                    card_id=students_card.id,
+                    transaction_type="income",
+                    amount=payment.payment_amount,
+                    payer_name=student_name,
+                    responsible_person=None,
+                    transaction_date=payment.payment_date,
+                    is_completed=True,
+                    completion_percentage=Decimal('100.00'),
+                    notes=f"payment_id:{payment.id}"
+                )
+                db.add(new_transaction)
+        
+        db.commit()
+        
+        # Create/Update default activity cards for each activity
+        activities = db.query(Activity).filter(
+            Activity.academic_year_id == academic_year_id,
+            Activity.is_active == True
+        ).all()
+        
+        for activity in activities:
+            activity_card = db.query(FinanceCard).filter(
+                FinanceCard.academic_year_id == academic_year_id,
+                FinanceCard.category == "activity",
+                FinanceCard.reference_id == activity.id,
+                FinanceCard.is_default == True
+            ).first()
+            
+            if not activity_card:
+                activity_card = FinanceCard(
+                    academic_year_id=academic_year_id,
+                    card_name=f"نشاط: {activity.name}",
+                    card_type="both",
+                    category="activity",
+                    reference_id=activity.id,
+                    reference_type="activity",
+                    is_default=True,
+                    created_date=date.today(),
+                    description=f"كارد تلقائي لنشاط {activity.name}",
+                    status="open"
+                )
+                db.add(activity_card)
+                db.commit()
+                db.refresh(activity_card)
+            
+            # Activity revenue is now managed through aggregated transactions
+            
+            # Clean up old transactions (both default and individual)
+            old_transactions = [t for t in activity_card.transactions 
+                               if t.notes and (t.notes.startswith("activity_default_income") 
+                                             or "registration_id:" in t.notes
+                                             or t.notes.startswith("activity_aggregated"))]
+            for old_trans in old_transactions:
+                db.delete(old_trans)
+            
+            if old_transactions:
+                db.commit()
+                db.refresh(activity_card)
+            
+            # Get registrations for this activity
+            registrations = db.query(ActivityRegistration).filter(
+                ActivityRegistration.activity_id == activity.id,
+                ActivityRegistration.payment_status != "cancelled"
+            ).all()
+            
+            if registrations and activity.cost_per_student and activity.cost_per_student > 0:
+                # Count paid and pending registrations
+                paid_count = sum(1 for r in registrations if r.payment_status == "paid")
+                pending_count = sum(1 for r in registrations if r.payment_status == "pending")
+                
+                # Create aggregated transaction for paid students
+                if paid_count > 0:
+                    paid_amount = Decimal(str(activity.cost_per_student)) * paid_count
+                    paid_transaction = FinanceCardTransaction(
+                        card_id=activity_card.id,
+                        transaction_type="income",
+                        amount=paid_amount,
+                        transaction_date=activity.start_date or date.today(),
+                        notes=f"activity_aggregated:paid - {paid_count} طالب دفع",
+                        is_completed=True,
+                        responsible_person=f"{paid_count} طالب",
+                        payer_name=f"{paid_count} طالب"
+                    )
+                    db.add(paid_transaction)
+                
+                # Create aggregated transaction for pending students
+                if pending_count > 0:
+                    pending_amount = Decimal(str(activity.cost_per_student)) * pending_count
+                    pending_transaction = FinanceCardTransaction(
+                        card_id=activity_card.id,
+                        transaction_type="income",
+                        amount=pending_amount,
+                        transaction_date=activity.start_date or date.today(),
+                        notes=f"activity_aggregated:pending - {pending_count} طالب لم يدفع",
+                        is_completed=False,
+                        responsible_person=f"{pending_count} طالب",
+                        payer_name=f"{pending_count} طالب"
+                    )
+                    db.add(pending_transaction)
+            
+            db.commit()
+        
+        db.commit()
+        
+        # Calculate net profit from Finance Cards (not FinanceTransaction)
+        # Get all finance cards for this academic year
+        finance_cards = db.query(FinanceCard).filter(
+            FinanceCard.academic_year_id == academic_year_id
+        ).all()
+        
+        total_income = Decimal('0.00')
+        total_expenses = Decimal('0.00')
+        
+        # Sum up income and expenses from all card transactions
+        for card in finance_cards:
+            for transaction in card.transactions:
+                if transaction.is_completed:  # Only count completed transactions
+                    amount = Decimal(str(transaction.amount or 0))
+                    if transaction.transaction_type == "income":
+                        total_income += amount
+                    elif transaction.transaction_type == "expense":
+                        total_expenses += amount
         
         net_profit = total_income - total_expenses
         
         # Calculate outstanding debts (receivables - what students owe)
-        # Using old schema (school_fee_discount, bus_fee_discount, other_revenues)
         try:
             students_with_finance = db.query(StudentFinance).filter(
                 StudentFinance.academic_year_id == academic_year_id
@@ -774,12 +924,35 @@ async def get_finance_manager_dashboard(
             total_receivables = Decimal('0.00')
             for finance in students_with_finance:
                 try:
-                    # Use existing fields
+                    # Calculate school fee after discount
                     school_fee = Decimal(str(finance.school_fee or 0))
-                    school_discount = Decimal(str(finance.school_fee_discount or 0))
+                    school_discount = Decimal('0.00')
+                    if finance.school_discount_type == "percentage":
+                        school_discount_value = Decimal(str(finance.school_discount_value or 0))
+                        school_discount = (school_fee * school_discount_value) / 100
+                    else:
+                        school_discount = Decimal(str(finance.school_discount_value or 0))
+                    
+                    # Calculate bus fee after discount
                     bus_fee = Decimal(str(finance.bus_fee or 0))
-                    bus_discount = Decimal(str(finance.bus_fee_discount or 0))
-                    other_revenues = Decimal(str(finance.other_revenues or 0))
+                    bus_discount = Decimal('0.00')
+                    if finance.bus_discount_type == "percentage":
+                        bus_discount_value = Decimal(str(finance.bus_discount_value or 0))
+                        bus_discount = (bus_fee * bus_discount_value) / 100
+                    else:
+                        bus_discount = Decimal(str(finance.bus_discount_value or 0))
+                    
+                    # Calculate other revenues
+                    other_revenues = Decimal('0.00')
+                    uniform_amount = Decimal(str(finance.uniform_amount or 0))
+                    course_amount = Decimal(str(finance.course_amount or 0))
+                    other_revenues = uniform_amount + course_amount
+                    
+                    if finance.other_revenue_items:
+                        for item in finance.other_revenue_items:
+                            if isinstance(item, dict):
+                                item_amount = Decimal(str(item.get('amount', 0) or 0))
+                                other_revenues += item_amount
                     
                     total_owed = (school_fee - school_discount) + (bus_fee - bus_discount) + other_revenues
                     
@@ -798,23 +971,44 @@ async def get_finance_manager_dashboard(
         except Exception as e:
             total_receivables = Decimal('0.00')
         
-        # Calculate payables (what school owes - unpaid teacher salaries, etc.)
+        # Add pending income from finance cards transactions
         try:
-            total_payables = db.query(func.sum(TeacherFinance.total_amount)).filter(
+            for card in finance_cards:
+                for transaction in card.transactions:
+                    if not transaction.is_completed and transaction.transaction_type == "income":
+                        amount = Decimal(str(transaction.amount or 0))
+                        total_receivables += amount
+        except:
+            pass
+        
+        # Calculate payables (what school owes)
+        # Include: unpaid teacher salaries + pending expense transactions from cards
+        total_payables = Decimal('0.00')
+        
+        try:
+            # Teacher salaries
+            teacher_payables = db.query(func.sum(TeacherFinance.total_amount)).filter(
                 and_(
                     TeacherFinance.academic_year_id == academic_year_id,
                     TeacherFinance.payment_status == "pending"
                 )
             ).scalar() or Decimal('0.00')
+            total_payables += teacher_payables
         except:
-            # If TeacherFinance table doesn't exist or has issues, set to 0
-            total_payables = Decimal('0.00')
+            # If TeacherFinance table doesn't exist or has issues, skip
+            pass
         
-        # Get finance cards
-        finance_cards = db.query(FinanceCard).filter(
-            FinanceCard.academic_year_id == academic_year_id
-        ).all()
+        # Pending expenses from finance cards
+        try:
+            for card in finance_cards:
+                for transaction in card.transactions:
+                    if not transaction.is_completed and transaction.transaction_type == "expense":
+                        amount = Decimal(str(transaction.amount or 0))
+                        total_payables += amount
+        except:
+            pass
         
+        # Prepare cards summary
         cards_summary = []
         for card in finance_cards:
             try:
@@ -833,6 +1027,7 @@ async def get_finance_manager_dashboard(
                     "card_name": card.card_name,
                     "card_type": card.card_type,
                     "category": card.category,
+                    "is_default": card.is_default,
                     "total_income": float(card_income),
                     "total_expenses": float(card_expenses),
                     "net_amount": float(card_income - card_expenses),
@@ -1043,20 +1238,45 @@ async def get_student_finance_detailed(
     
     total_paid = sum(Decimal(str(p.payment_amount)) for p in payments if p.payment_status == "completed")
     
-    # Safely calculate totals
-    try:
-        calculated_school_discount = finance.calculated_school_discount or Decimal('0.00')
-        calculated_bus_discount = finance.calculated_bus_discount or Decimal('0.00')
-        total_other_revenues = finance.total_other_revenues or Decimal('0.00')
-        total_amount = finance.total_amount or Decimal('0.00')
-    except:
-        calculated_school_discount = Decimal('0.00')
-        calculated_bus_discount = Decimal('0.00')
-        total_other_revenues = Decimal('0.00')
-        total_amount = Decimal('0.00')
+    # Calculate discounts and totals manually
+    school_fee = Decimal(str(finance.school_fee or 0))
+    
+    # Calculate school discount
+    calculated_school_discount = Decimal('0.00')
+    if finance.school_discount_type == "percentage":
+        school_discount_value = Decimal(str(finance.school_discount_value or 0))
+        calculated_school_discount = (school_fee * school_discount_value) / 100
+    else:
+        calculated_school_discount = Decimal(str(finance.school_discount_value or 0))
+    
+    bus_fee = Decimal(str(finance.bus_fee or 0))
+    
+    # Calculate bus discount
+    calculated_bus_discount = Decimal('0.00')
+    if finance.bus_discount_type == "percentage":
+        bus_discount_value = Decimal(str(finance.bus_discount_value or 0))
+        calculated_bus_discount = (bus_fee * bus_discount_value) / 100
+    else:
+        calculated_bus_discount = Decimal(str(finance.bus_discount_value or 0))
+    
+    # Calculate other revenues
+    uniform_amount = Decimal(str(finance.uniform_amount or 0))
+    course_amount = Decimal(str(finance.course_amount or 0))
+    total_other_revenues = uniform_amount + course_amount
+    
+    if finance.other_revenue_items:
+        for item in finance.other_revenue_items:
+            if isinstance(item, dict):
+                item_amount = Decimal(str(item.get('amount', 0) or 0))
+                total_other_revenues += item_amount
+    
+    # Calculate total amount
+    school_after_discount = school_fee - calculated_school_discount
+    bus_after_discount = bus_fee - calculated_bus_discount
+    total_amount = school_after_discount + bus_after_discount + total_other_revenues
     
     partial_balance = total_amount - total_paid
-    total_balance = partial_balance + (finance.previous_years_balance or Decimal('0.00'))
+    total_balance = partial_balance + (Decimal(str(finance.previous_years_balance or 0)))
     
     return {
         "id": finance.id,
@@ -1067,12 +1287,12 @@ async def get_student_finance_detailed(
         "school_discount_type": finance.school_discount_type or "fixed",
         "school_discount_value": finance.school_discount_value or Decimal('0.00'),
         "calculated_school_discount": calculated_school_discount,
-        "school_fee_after_discount": (finance.school_fee or Decimal('0.00')) - calculated_school_discount,
-        "bus_fee": finance.bus_fee or Decimal('0.00'),
+        "school_fee_after_discount": school_after_discount,
+        "bus_fee": bus_fee,
         "bus_discount_type": finance.bus_discount_type or "fixed",
         "bus_discount_value": finance.bus_discount_value or Decimal('0.00'),
         "calculated_bus_discount": calculated_bus_discount,
-        "bus_fee_after_discount": (finance.bus_fee or Decimal('0.00')) - calculated_bus_discount,
+        "bus_fee_after_discount": bus_after_discount,
         "uniform_type": finance.uniform_type,
         "uniform_amount": finance.uniform_amount or Decimal('0.00'),
         "course_type": finance.course_type,
@@ -1144,6 +1364,78 @@ async def add_student_payment(
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Get finance record
+    finance = db.query(StudentFinance).filter(
+        StudentFinance.student_id == student_id,
+        StudentFinance.academic_year_id == payment_data.academic_year_id
+    ).first()
+    
+    # Validate payment amount
+    if finance:
+        try:
+            # Calculate total owed (same logic as get_student_finance_detailed)
+            school_fee = Decimal(str(finance.school_fee or 0))
+            
+            # Calculate school discount
+            school_discount = Decimal('0.00')
+            if finance.school_discount_type == "percentage":
+                school_discount_value = Decimal(str(finance.school_discount_value or 0))
+                school_discount = (school_fee * school_discount_value) / 100
+            else:
+                school_discount = Decimal(str(finance.school_discount_value or 0))
+            
+            bus_fee = Decimal(str(finance.bus_fee or 0))
+            
+            # Calculate bus discount
+            bus_discount = Decimal('0.00')
+            if finance.bus_discount_type == "percentage":
+                bus_discount_value = Decimal(str(finance.bus_discount_value or 0))
+                bus_discount = (bus_fee * bus_discount_value) / 100
+            else:
+                bus_discount = Decimal(str(finance.bus_discount_value or 0))
+            
+            # Calculate other revenues
+            uniform_amount = Decimal(str(finance.uniform_amount or 0))
+            course_amount = Decimal(str(finance.course_amount or 0))
+            other_revenues = uniform_amount + course_amount
+            
+            if finance.other_revenue_items:
+                for item in finance.other_revenue_items:
+                    if isinstance(item, dict):
+                        item_amount = Decimal(str(item.get('amount', 0) or 0))
+                        other_revenues += item_amount
+            
+            # Calculate total amount (current year + previous years balance)
+            school_after_discount = school_fee - school_discount
+            bus_after_discount = bus_fee - bus_discount
+            partial_amount = school_after_discount + bus_after_discount + other_revenues
+            
+            # Add previous years balance to get total owed
+            previous_balance = Decimal(str(finance.previous_years_balance or 0))
+            total_owed = partial_amount + previous_balance
+            
+            # Calculate total paid
+            total_paid = db.query(func.sum(StudentPayment.payment_amount)).filter(
+                StudentPayment.student_id == student_id,
+                StudentPayment.academic_year_id == payment_data.academic_year_id,
+                StudentPayment.payment_status == "completed"
+            ).scalar() or Decimal('0.00')
+            
+            payment_amount = Decimal(str(payment_data.payment_amount))
+            
+            # Validate: total paid + new payment should not exceed total owed
+            if total_owed > 0 and (total_paid + payment_amount) > total_owed:
+                remaining = total_owed - total_paid
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"المبلغ المدخل ({float(payment_amount)} ل.س) يتجاوز الرصيد المتبقي ({float(remaining)} ل.س). الإجمالي الكلي: {float(total_owed)} ل.س"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Log error but allow payment (fail-safe for calculation errors)
+            print(f"Warning: Could not validate payment for student {student_id}: {str(e)}")
     
     payment_data.student_id = student_id
     new_payment = StudentPayment(**payment_data.dict())
@@ -1230,9 +1522,9 @@ async def update_finance_card(
 async def delete_finance_card(
     card_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_director_user)
+    current_user: User = Depends(get_finance_user)
 ):
-    """Delete a finance card (director only)"""
+    """Delete a finance card (finance manager can delete non-default cards)"""
     card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Finance card not found")
@@ -1367,6 +1659,13 @@ async def update_card_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
+    # Prevent editing system-generated aggregated activity transactions
+    if transaction.notes and transaction.notes.startswith("activity_aggregated"):
+        raise HTTPException(
+            status_code=403, 
+            detail="لا يمكن تعديل المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين."
+        )
+    
     update_data = transaction_data.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(transaction, field, value)
@@ -1389,6 +1688,13 @@ async def delete_card_transaction(
     
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Prevent deleting system-generated aggregated activity transactions
+    if transaction.notes and transaction.notes.startswith("activity_aggregated"):
+        raise HTTPException(
+            status_code=403, 
+            detail="لا يمكن حذف المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين."
+        )
     
     db.delete(transaction)
     db.commit()

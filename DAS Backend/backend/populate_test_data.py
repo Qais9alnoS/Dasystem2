@@ -377,8 +377,8 @@ def populate_students(db: Session, classes, academic_year_id, students_per_secti
             
         print(f"\nالصف: {class_obj.grade_level} - المستوى {class_obj.grade_number}")
         
-        # Generate sections (A, B, C, etc.)
-        sections = [chr(65 + i) for i in range(class_obj.section_count)]  # A, B, C...
+        # Generate sections (1, 2, 3, etc.)
+        sections = [str(i + 1) for i in range(class_obj.section_count)]  # 1, 2, 3...
         
         for section in sections:
             print(f"  الشعبة {section}: ", end="")
@@ -464,7 +464,7 @@ def populate_teachers(db: Session, classes, subjects_map, academic_year_id, tota
             continue
             
         class_subjects = subjects_map.get(class_obj.id, [])
-        sections = [chr(65 + i) for i in range(class_obj.section_count)]
+        sections = [str(i + 1) for i in range(class_obj.section_count)]  # 1, 2, 3...
         
         for section in sections:
             for subject in class_subjects:

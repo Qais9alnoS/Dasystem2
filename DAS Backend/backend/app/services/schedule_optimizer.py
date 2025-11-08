@@ -11,10 +11,11 @@ from datetime import time, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from ..models.schedules import ScheduleAssignment, TimeSlot
+from ..models.schedules import ScheduleAssignment, TimeSlot, ScheduleConstraint
 from ..models.academic import Class, Subject
 from ..models.teachers import Teacher, TeacherAssignment
 from ..schemas.schedules import DayOfWeek, ScheduleGenerationRequest
+from .constraint_solver import ConstraintSolver
 
 @dataclass
 class OptimizationConstraint:
@@ -32,9 +33,14 @@ class ScheduleScore:
     teacher_balance_score: float
     continuity_score: float
     conflict_penalty: float
+    # Multi-objective components
+    quality_score: float = 0.0
+    feasibility_score: float = 0.0
+    balance_score: float = 0.0
+    preference_score: float = 0.0
 
 class GeneticScheduleOptimizer:
-    """Genetic Algorithm for schedule optimization"""
+    """Genetic Algorithm for schedule optimization with multi-objective fitness"""
     
     def __init__(self, db: Session):
         self.db = db
@@ -44,19 +50,36 @@ class GeneticScheduleOptimizer:
         self.mutation_rate = 0.1
         self.crossover_rate = 0.8
         self.elite_size = 5
+        self.constraint_solver = ConstraintSolver(db)
+        
+        # Multi-objective weights
+        self.weights = {
+            'quality': 0.3,      # Overall quality (constraint satisfaction)
+            'feasibility': 0.4,  # Hard constraints (critical)
+            'balance': 0.2,      # Load balancing
+            'preference': 0.1    # Soft preferences
+        }
+        
+        # Adaptive parameters
+        self.current_generation = 0
+        self.diversity_threshold = 0.3
+        self.stagnation_counter = 0
         
     def optimize_schedule(self, assignments: List[ScheduleAssignment], 
                          constraints: List[OptimizationConstraint],
                          time_slots: List[TimeSlot]) -> List[ScheduleAssignment]:
-        """Main optimization method using genetic algorithm"""
+        """Main optimization method using genetic algorithm with adaptive parameters"""
         
         # Initialize population
         population = self._create_initial_population(assignments, time_slots)
         
         best_score = float('-inf')
         best_solution = assignments
+        best_score_history = []
         
         for generation in range(self.generations):
+            self.current_generation = generation
+            
             # Evaluate population
             scored_population = [(individual, self._evaluate_schedule(individual, constraints)) 
                                for individual in population]
@@ -69,6 +92,14 @@ class GeneticScheduleOptimizer:
             if current_best[1].total_score > best_score:
                 best_score = current_best[1].total_score
                 best_solution = current_best[0]
+            
+            best_score_history.append(best_score)
+            
+            # Calculate population diversity
+            diversity = self._calculate_population_diversity(population)
+            
+            # Adapt mutation rate based on generation, diversity, and convergence
+            adaptive_mutation_rate = self._adapt_mutation_rate(generation, diversity, best_score_history)
             
             # Create next generation
             new_population = []
@@ -88,15 +119,15 @@ class GeneticScheduleOptimizer:
                 else:
                     new_population.extend([parent1, parent2])
             
-            # Mutation
+            # Mutation with adaptive rate
             for i in range(self.elite_size, len(new_population)):
-                if random.random() < self.mutation_rate:
+                if random.random() < adaptive_mutation_rate:
                     new_population[i] = self._mutate(new_population[i], time_slots)
             
             population = new_population[:self.population_size]
             
-            # Early termination if good enough solution found
-            if best_score > 0.95:  # 95% optimal
+            # Early termination if excellent solution found
+            if best_score > 0.98:  # 98% optimal
                 break
         
         return best_solution
@@ -157,12 +188,30 @@ class GeneticScheduleOptimizer:
         total_score += teacher_balance * 0.2 + continuity * 0.15
         total_score -= conflict_penalty
         
+        # Calculate multi-objective components
+        quality_score = self._calculate_quality_score(assignments, constraints)
+        feasibility_score = self._calculate_feasibility_score(assignments)
+        balance_score = teacher_balance
+        preference_score = continuity
+        
+        # Weighted multi-objective total
+        multi_objective_score = (
+            self.weights['quality'] * quality_score +
+            self.weights['feasibility'] * feasibility_score +
+            self.weights['balance'] * balance_score +
+            self.weights['preference'] * preference_score
+        )
+        
         return ScheduleScore(
-            total_score=total_score,
+            total_score=multi_objective_score,
             constraint_violations=violations,
             teacher_balance_score=teacher_balance,
             continuity_score=continuity,
-            conflict_penalty=conflict_penalty
+            conflict_penalty=conflict_penalty,
+            quality_score=quality_score,
+            feasibility_score=feasibility_score,
+            balance_score=balance_score,
+            preference_score=preference_score
         )
     
     def _check_constraint(self, assignments: List[ScheduleAssignment], 
@@ -536,6 +585,132 @@ class GeneticScheduleOptimizer:
                     room_schedule[key] = assignment
         
         return conflicts * 0.1  # Each conflict reduces score by 0.1
+    
+    def _calculate_quality_score(self, assignments: List[ScheduleAssignment], 
+                                 constraints: List[OptimizationConstraint]) -> float:
+        """Calculate overall schedule quality based on all constraints"""
+        if not constraints:
+            return 1.0
+        
+        total_weight = sum(c.weight for c in constraints)
+        if total_weight == 0:
+            return 1.0
+        
+        weighted_score = 0.0
+        for constraint in constraints:
+            violations = self._check_constraint(assignments, constraint)
+            # Score decreases with violations
+            constraint_score = max(0, 1 - (violations * constraint.violation_penalty / 10))
+            weighted_score += constraint_score * constraint.weight
+        
+        return weighted_score / total_weight
+    
+    def _calculate_feasibility_score(self, assignments: List[ScheduleAssignment]) -> float:
+        """Calculate feasibility score based on hard constraints (critical violations)"""
+        critical_violations = 0
+        
+        # Check for critical violations
+        # 1. Teacher double-booking (critical)
+        teacher_slots = set()
+        for assignment in assignments:
+            if assignment.teacher_id and assignment.time_slot_id:
+                key = (assignment.teacher_id, assignment.time_slot_id)
+                if key in teacher_slots:
+                    critical_violations += 1
+                else:
+                    teacher_slots.add(key)
+        
+        # 2. Class double-booking (critical)
+        class_slots = set()
+        for assignment in assignments:
+            if assignment.class_id and assignment.time_slot_id:
+                key = (assignment.class_id, assignment.time_slot_id)
+                if key in class_slots:
+                    critical_violations += 1
+                else:
+                    class_slots.add(key)
+        
+        # 3. Room conflicts (critical if specified)
+        room_slots = set()
+        for assignment in assignments:
+            if assignment.room and assignment.time_slot_id:
+                key = (assignment.room, assignment.time_slot_id)
+                if key in room_slots:
+                    critical_violations += 1
+                else:
+                    room_slots.add(key)
+        
+        # Feasibility score: 1.0 = fully feasible, 0.0 = many critical violations
+        max_violations = len(assignments)  # Theoretical maximum
+        if max_violations == 0:
+            return 1.0
+        
+        return max(0.0, 1.0 - (critical_violations / max_violations))
+    
+    def _adapt_mutation_rate(self, generation: int, diversity: float, best_score_history: List[float]) -> float:
+        """Adaptively adjust mutation rate based on population diversity and convergence"""
+        base_rate = 0.1
+        
+        # Increase mutation if population is converging (low diversity)
+        if diversity < self.diversity_threshold:
+            base_rate *= 1.5
+        
+        # Check for stagnation
+        if len(best_score_history) >= 10:
+            recent_scores = best_score_history[-10:]
+            score_variance = sum((s - sum(recent_scores)/10)**2 for s in recent_scores) / 10
+            
+            # If stagnation detected, increase mutation
+            if score_variance < 0.001:
+                self.stagnation_counter += 1
+                base_rate *= (1 + self.stagnation_counter * 0.1)
+            else:
+                self.stagnation_counter = 0
+        
+        # Decrease mutation rate as generations progress (exploitation phase)
+        progress_factor = generation / self.max_generations
+        adaptive_rate = base_rate * (1 - progress_factor * 0.5)
+        
+        # Keep within bounds
+        return min(0.5, max(0.01, adaptive_rate))
+    
+    def _calculate_population_diversity(self, population: List[List[ScheduleAssignment]]) -> float:
+        """Calculate diversity of current population"""
+        if len(population) < 2:
+            return 1.0
+        
+        # Calculate pairwise differences
+        total_difference = 0.0
+        comparisons = 0
+        
+        for i in range(len(population)):
+            for j in range(i + 1, len(population)):
+                diff = self._calculate_solution_difference(population[i], population[j])
+                total_difference += diff
+                comparisons += 1
+        
+        if comparisons == 0:
+            return 0.0
+        
+        return total_difference / comparisons
+    
+    def _calculate_solution_difference(self, sol1: List[ScheduleAssignment], 
+                                      sol2: List[ScheduleAssignment]) -> float:
+        """Calculate difference between two solutions"""
+        if len(sol1) != len(sol2):
+            return 1.0
+        
+        if len(sol1) == 0:
+            return 0.0
+        
+        differences = 0
+        for a1, a2 in zip(sol1, sol2):
+            if (a1.time_slot_id != a2.time_slot_id or 
+                a1.teacher_id != a2.teacher_id or
+                a1.room != a2.room):
+                differences += 1
+        
+        return differences / len(sol1)
 
     def can_solve_problem(self, problem_definition: Dict) -> bool:
         """Check if the optimizer can solve a given problem"""

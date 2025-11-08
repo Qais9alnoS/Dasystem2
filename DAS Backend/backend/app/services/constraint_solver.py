@@ -1,17 +1,57 @@
 """
 Constraint Solver for Schedule Validation
-Handles validation of scheduling constraints and conflict detection
+Handles validation of scheduling constraints and conflict detection with priority levels
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 from ..models.teachers import Teacher
+from ..models.schedules import ScheduleConstraint
+from ..models.academic import Subject, Class
+from sqlalchemy.orm import Session
+
+class ViolationReport:
+    """Detailed violation report structure"""
+    def __init__(
+        self,
+        constraint_id: Optional[int] = None,
+        constraint_type: str = "",
+        severity: str = "medium",
+        priority_level: int = 1,
+        description: str = "",
+        affected_entities: Optional[Dict[str, Any]] = None,
+        suggested_resolution: str = "",
+        can_override: bool = True
+    ):
+        self.constraint_id = constraint_id
+        self.constraint_type = constraint_type
+        self.severity = severity  # info, warning, critical
+        self.priority_level = priority_level  # 1=Low, 2=Medium, 3=High, 4=Critical
+        self.description = description
+        self.affected_entities = affected_entities or {}
+        self.suggested_resolution = suggested_resolution
+        self.can_override = can_override  # False for hard constraints (priority 4)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert violation report to dictionary"""
+        return {
+            "constraint_id": self.constraint_id,
+            "constraint_type": self.constraint_type,
+            "severity": self.severity,
+            "priority_level": self.priority_level,
+            "description": self.description,
+            "affected_entities": self.affected_entities,
+            "suggested_resolution": self.suggested_resolution,
+            "can_override": self.can_override
+        }
 
 class ConstraintSolver:
-    """Solver for schedule constraints validation"""
+    """Enhanced solver for schedule constraints validation with priority levels"""
     
-    def __init__(self):
-        """Initialize constraint solver"""
-        pass
+    def __init__(self, db: Optional[Session] = None):
+        """Initialize constraint solver with database session"""
+        self.db = db
+        self.violations: List[ViolationReport] = []
+        self.warnings: List[ViolationReport] = []
     
     def check_forbidden_constraint(self, schedule_item: Dict[str, Any], constraint: Dict[str, Any]) -> bool:
         """Check if a schedule item violates a forbidden constraint
@@ -310,4 +350,377 @@ class ConstraintSolver:
             "compliant": True,
             "requirements_met": len(subjects),
             "requirements_total": len(subjects)
+        }
+    
+    # Enhanced methods with priority levels
+    
+    def validate_constraint_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]]
+    ) -> List[ViolationReport]:
+        """
+        Validate a constraint and return detailed violation reports
+        
+        Args:
+            constraint: The constraint to validate
+            schedule_assignments: List of schedule assignments to check against
+            
+        Returns:
+            List of violation reports
+        """
+        violations = []
+        
+        # Determine severity based on priority level
+        severity_map = {
+            1: "info",      # Soft constraint - informational
+            2: "warning",   # Soft constraint - warning only
+            3: "warning",   # Medium constraint - strong warning
+            4: "critical"   # Hard constraint - must be satisfied
+        }
+        
+        severity = severity_map.get(constraint.priority_level, "warning")
+        can_override = constraint.priority_level < 4
+        
+        # Validate based on constraint type
+        if constraint.constraint_type == "forbidden":
+            violation = self._check_forbidden_with_priority(constraint, schedule_assignments, severity, can_override)
+            if violation:
+                violations.append(violation)
+                
+        elif constraint.constraint_type == "no_consecutive":
+            violation = self._check_no_consecutive_with_priority(constraint, schedule_assignments, severity, can_override)
+            if violation:
+                violations.append(violation)
+                
+        elif constraint.constraint_type == "max_consecutive":
+            violation = self._check_max_consecutive_with_priority(constraint, schedule_assignments, severity, can_override)
+            if violation:
+                violations.append(violation)
+                
+        elif constraint.constraint_type == "required":
+            violation = self._check_required_with_priority(constraint, schedule_assignments, severity, can_override)
+            if violation:
+                violations.append(violation)
+        
+        return violations
+    
+    def _check_forbidden_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]],
+        severity: str,
+        can_override: bool
+    ) -> Optional[ViolationReport]:
+        """Check forbidden constraint with detailed reporting"""
+        
+        # Find violations
+        violated_assignments = []
+        for assignment in schedule_assignments:
+            if self._matches_constraint_criteria(assignment, constraint):
+                violated_assignments.append(assignment)
+        
+        if violated_assignments:
+            # Get subject/class names from database if available
+            subject_name = "المادة"
+            class_name = "الصف"
+            
+            if self.db and constraint.subject_id:
+                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                if subject:
+                    subject_name = subject.subject_name
+            
+            if self.db and constraint.class_id:
+                class_obj = self.db.query(Class).filter(Class.id == constraint.class_id).first()
+                if class_obj:
+                    class_name = f"الصف {class_obj.grade_number}"
+            
+            day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+            day_name = day_names[constraint.day_of_week] if constraint.day_of_week and constraint.day_of_week < len(day_names) else "اليوم المحدد"
+            
+            return ViolationReport(
+                constraint_id=constraint.id,
+                constraint_type="forbidden",
+                severity=severity,
+                priority_level=constraint.priority_level,
+                description=f"القيد الممنوع: {subject_name} في {class_name} لا يمكن أن تكون في {day_name} الحصة {constraint.period_number}",
+                affected_entities={
+                    "constraint_id": constraint.id,
+                    "subject_id": constraint.subject_id,
+                    "class_id": constraint.class_id,
+                    "day_of_week": constraint.day_of_week,
+                    "period_number": constraint.period_number,
+                    "violated_assignments": [a.get("id") for a in violated_assignments if a.get("id")]
+                },
+                suggested_resolution=f"قم بنقل حصة {subject_name} إلى يوم أو حصة أخرى",
+                can_override=can_override
+            )
+        
+        return None
+    
+    def _check_no_consecutive_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]],
+        severity: str,
+        can_override: bool
+    ) -> Optional[ViolationReport]:
+        """Check no-consecutive constraint with detailed reporting"""
+        
+        if not constraint.subject_id:
+            return None
+        
+        # Group assignments by day for this subject
+        from collections import defaultdict
+        by_day = defaultdict(list)
+        
+        for assignment in schedule_assignments:
+            if assignment.get("subject_id") == constraint.subject_id:
+                if constraint.class_id and assignment.get("class_id") != constraint.class_id:
+                    continue
+                day = assignment.get("day_of_week")
+                period = assignment.get("period_number")
+                if day and period:
+                    by_day[day].append((period, assignment))
+        
+        # Check for consecutive periods
+        violations_found = []
+        for day, periods_data in by_day.items():
+            sorted_periods = sorted(periods_data, key=lambda x: x[0])
+            for i in range(len(sorted_periods) - 1):
+                if sorted_periods[i + 1][0] == sorted_periods[i][0] + 1:
+                    violations_found.append({
+                        "day": day,
+                        "periods": [sorted_periods[i][0], sorted_periods[i + 1][0]],
+                        "assignments": [sorted_periods[i][1], sorted_periods[i + 1][1]]
+                    })
+        
+        if violations_found:
+            subject_name = "المادة"
+            if self.db and constraint.subject_id:
+                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                if subject:
+                    subject_name = subject.subject_name
+            
+            day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+            
+            violation_details = []
+            for v in violations_found:
+                day_name = day_names[v["day"]] if v["day"] < len(day_names) else f"اليوم {v['day']}"
+                violation_details.append(f"{day_name}: الحصص {v['periods'][0]} و {v['periods'][1]}")
+            
+            return ViolationReport(
+                constraint_id=constraint.id,
+                constraint_type="no_consecutive",
+                severity=severity,
+                priority_level=constraint.priority_level,
+                description=f"القيد: {subject_name} لا يجب أن تكون حصصها متتالية. تم العثور على حصص متتالية في: {', '.join(violation_details)}",
+                affected_entities={
+                    "constraint_id": constraint.id,
+                    "subject_id": constraint.subject_id,
+                    "violations": violations_found
+                },
+                suggested_resolution=f"قم بتوزيع حصص {subject_name} بحيث لا تكون متتالية",
+                can_override=can_override
+            )
+        
+        return None
+    
+    def _check_max_consecutive_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]],
+        severity: str,
+        can_override: bool
+    ) -> Optional[ViolationReport]:
+        """Check max-consecutive constraint with detailed reporting"""
+        
+        if not constraint.subject_id or not constraint.max_consecutive_periods:
+            return None
+        
+        max_allowed = constraint.max_consecutive_periods
+        
+        # Group assignments by day for this subject
+        from collections import defaultdict
+        by_day = defaultdict(list)
+        
+        for assignment in schedule_assignments:
+            if assignment.get("subject_id") == constraint.subject_id:
+                if constraint.class_id and assignment.get("class_id") != constraint.class_id:
+                    continue
+                day = assignment.get("day_of_week")
+                period = assignment.get("period_number")
+                if day and period:
+                    by_day[day].append(period)
+        
+        # Check for consecutive sequences exceeding the limit
+        violations_found = []
+        for day, periods in by_day.items():
+            sorted_periods = sorted(periods)
+            consecutive_count = 1
+            start_period = sorted_periods[0] if sorted_periods else 0
+            
+            for i in range(1, len(sorted_periods)):
+                if sorted_periods[i] == sorted_periods[i - 1] + 1:
+                    consecutive_count += 1
+                    if consecutive_count > max_allowed:
+                        violations_found.append({
+                            "day": day,
+                            "consecutive_count": consecutive_count,
+                            "periods": sorted_periods[i - consecutive_count + 1:i + 1]
+                        })
+                        break
+                else:
+                    consecutive_count = 1
+                    start_period = sorted_periods[i]
+        
+        if violations_found:
+            subject_name = "المادة"
+            if self.db and constraint.subject_id:
+                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                if subject:
+                    subject_name = subject.subject_name
+            
+            return ViolationReport(
+                constraint_id=constraint.id,
+                constraint_type="max_consecutive",
+                severity=severity,
+                priority_level=constraint.priority_level,
+                description=f"القيد: {subject_name} لا يجب أن تتجاوز {max_allowed} حصص متتالية. تم العثور على {violations_found[0]['consecutive_count']} حصص متتالية",
+                affected_entities={
+                    "constraint_id": constraint.id,
+                    "subject_id": constraint.subject_id,
+                    "max_allowed": max_allowed,
+                    "violations": violations_found
+                },
+                suggested_resolution=f"قم بتقليل عدد حصص {subject_name} المتتالية إلى {max_allowed} كحد أقصى",
+                can_override=can_override
+            )
+        
+        return None
+    
+    def _check_required_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]],
+        severity: str,
+        can_override: bool
+    ) -> Optional[ViolationReport]:
+        """Check required constraint with detailed reporting"""
+        
+        # Find if the required slot is filled
+        required_filled = False
+        for assignment in schedule_assignments:
+            if self._matches_constraint_criteria(assignment, constraint):
+                required_filled = True
+                break
+        
+        if not required_filled:
+            subject_name = "المادة"
+            if self.db and constraint.subject_id:
+                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                if subject:
+                    subject_name = subject.subject_name
+            
+            day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+            day_name = day_names[constraint.day_of_week] if constraint.day_of_week and constraint.day_of_week < len(day_names) else "اليوم المحدد"
+            
+            return ViolationReport(
+                constraint_id=constraint.id,
+                constraint_type="required",
+                severity=severity,
+                priority_level=constraint.priority_level,
+                description=f"القيد المطلوب: {subject_name} يجب أن تكون في {day_name} الحصة {constraint.period_number}",
+                affected_entities={
+                    "constraint_id": constraint.id,
+                    "subject_id": constraint.subject_id,
+                    "day_of_week": constraint.day_of_week,
+                    "period_number": constraint.period_number
+                },
+                suggested_resolution=f"قم بإضافة {subject_name} في {day_name} الحصة {constraint.period_number}",
+                can_override=can_override
+            )
+        
+        return None
+    
+    def _matches_constraint_criteria(self, assignment: Dict[str, Any], constraint: ScheduleConstraint) -> bool:
+        """Check if an assignment matches the constraint criteria"""
+        
+        # Check subject match
+        if constraint.subject_id and assignment.get("subject_id") != constraint.subject_id:
+            return False
+        
+        # Check class match
+        if constraint.class_id and assignment.get("class_id") != constraint.class_id:
+            return False
+        
+        # Check teacher match
+        if constraint.teacher_id and assignment.get("teacher_id") != constraint.teacher_id:
+            return False
+        
+        # Check day match
+        if constraint.day_of_week and assignment.get("day_of_week") != constraint.day_of_week:
+            return False
+        
+        # Check period match
+        if constraint.period_number and assignment.get("period_number") != constraint.period_number:
+            return False
+        
+        # Check time range
+        if constraint.time_range_start and constraint.time_range_end:
+            period = assignment.get("period_number")
+            if period and not (constraint.time_range_start <= period <= constraint.time_range_end):
+                return False
+        
+        return True
+    
+    def validate_all_constraints(
+        self,
+        constraints: List[ScheduleConstraint],
+        schedule_assignments: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Validate all constraints and return comprehensive report
+        
+        Args:
+            constraints: List of constraints to validate
+            schedule_assignments: List of schedule assignments
+            
+        Returns:
+            Dictionary with validation results
+        """
+        all_violations = []
+        critical_violations = []
+        warnings = []
+        info = []
+        
+        for constraint in constraints:
+            if not constraint.is_active:
+                continue
+            
+            violations = self.validate_constraint_with_priority(constraint, schedule_assignments)
+            
+            for violation in violations:
+                all_violations.append(violation.to_dict())
+                
+                if violation.severity == "critical":
+                    critical_violations.append(violation.to_dict())
+                elif violation.severity == "warning":
+                    warnings.append(violation.to_dict())
+                else:
+                    info.append(violation.to_dict())
+        
+        return {
+            "is_valid": len(critical_violations) == 0,
+            "can_publish": len(critical_violations) == 0,
+            "total_violations": len(all_violations),
+            "critical_count": len(critical_violations),
+            "warning_count": len(warnings),
+            "info_count": len(info),
+            "violations": {
+                "critical": critical_violations,
+                "warnings": warnings,
+                "info": info
+            },
+            "all_violations": all_violations
         }

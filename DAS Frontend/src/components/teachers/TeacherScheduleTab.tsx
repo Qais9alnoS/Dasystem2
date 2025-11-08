@@ -18,7 +18,8 @@ import {
     Trash2,
     Clock,
     Calendar as CalendarIcon,
-    Save
+    Save,
+    AlertCircle
 } from 'lucide-react';
 import { Teacher, Class, Subject, FreeTimeSlot } from '@/types/school';
 import { teachersApi, classesApi, subjectsApi } from '@/services/api';
@@ -71,9 +72,14 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             // Check if it's a 2D array (legacy) or 1D array (current)
             if (teacher.free_time_slots.length > 0 && Array.isArray(teacher.free_time_slots[0])) {
                 // It's a 2D array, flatten it
-                setFreeTimeSlots((teacher.free_time_slots as any).flat());
-            } else {
+                const flatSlots = (teacher.free_time_slots as any).flat();
+                setFreeTimeSlots(flatSlots);
+            } else if (teacher.free_time_slots.length === 30) {
+                // Already a proper 1D array with 30 slots (5 days x 6 periods)
                 setFreeTimeSlots(teacher.free_time_slots as FreeTimeSlot[]);
+            } else {
+                // Invalid data, reinitialize
+                initializeEmptyFreeTimeSlots();
             }
         } else {
             // Initialize empty grid (5 days x 6 periods)
@@ -88,11 +94,12 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
 
     const initializeEmptyFreeTimeSlots = () => {
         const slots: FreeTimeSlot[] = [];
-        for (let day = 0; day < 5; day++) { // Sunday to Thursday
-            for (let period = 1; period <= 6; period++) {
-                slots.push({ day, period, is_free: false }); // default to busy (gray)
+        for (let day = 0; day < 5; day++) { // Sunday to Thursday (0-4)
+            for (let period = 1; period <= 6; period++) { // Periods 1-6
+                slots.push({ day: day, period: period, is_free: false });
             }
         }
+        console.log('Initialized empty slots:', slots.length, 'slots');
         setFreeTimeSlots(slots);
     };
 
@@ -105,6 +112,32 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
 
             if (response.success && response.data) {
                 setAssignments(response.data);
+                
+                // Get unique class IDs to load subjects
+                const classIds = [...new Set(response.data.map((a: any) => a.class_id))];
+                
+                // Load subjects for all classes
+                const subjectPromises = classIds.map(classId => 
+                    subjectsApi.getAll({ class_id: classId, academic_year_id: academicYearId ? parseInt(academicYearId) : undefined })
+                );
+                
+                const subjectResponses = await Promise.all(subjectPromises);
+                const allSubjects: Subject[] = [];
+                
+                for (const subjectResponse of subjectResponses) {
+                    if (subjectResponse.success && subjectResponse.data) {
+                        allSubjects.push(...subjectResponse.data);
+                    } else if (Array.isArray(subjectResponse)) {
+                        allSubjects.push(...subjectResponse);
+                    }
+                }
+                
+                // Remove duplicates by id
+                const uniqueSubjects = Array.from(
+                    new Map(allSubjects.map(s => [s.id, s])).values()
+                );
+                
+                setSubjects(uniqueSubjects);
             }
         } catch (error) {
             console.error('Error loading assignments:', error);
@@ -209,7 +242,52 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
         }
     };
 
+    // Helper function to calculate total weekly hours
+    const calculateTotalWeeklyHours = () => {
+        let total = 0;
+        
+        for (const assignment of assignments) {
+            // Find the subject for this assignment
+            const subject = subjects.find(s => s.id === assignment.subject_id);
+            if (subject) {
+                const weeklyHours = subject.weekly_hours || 0;
+                
+                // If assignment is for "all sections" (section is null or empty)
+                // multiply by number of sections in the class
+                if (!assignment.section || assignment.section === '') {
+                    // Find the class to get section_count
+                    const classInfo = classes.find(c => c.id === assignment.class_id);
+                    const sectionCount = classInfo?.section_count || 1;
+                    
+                    // Multiply weekly hours by number of sections
+                    total += weeklyHours * sectionCount;
+                } else {
+                    // Specific section: count normally
+                    total += weeklyHours;
+                }
+            }
+        }
+        
+        return total;
+    };
+
     const handleSaveFreeTimeSlots = async (slots: FreeTimeSlot[]) => {
+        // Calculate total weekly hours from assignments
+        const totalWeeklyHours = calculateTotalWeeklyHours();
+
+        // Count free time slots
+        const freeSlotCount = slots.filter(slot => slot.is_free).length;
+
+        // Validate bottleneck: free slots must be >= total weekly hours
+        if (freeSlotCount < totalWeeklyHours) {
+            toast({
+                title: "خطأ في التحقق",
+                description: `عدد أوقات الفراغ المحددة (${freeSlotCount}) أقل من عدد الحصص الأسبوعية المطلوبة (${totalWeeklyHours}). يجب تحديد ${totalWeeklyHours} حصة على الأقل.`,
+                variant: "destructive"
+            });
+            return;
+        }
+
         setLoading(true);
         try {
             const response = await teachersApi.update(teacher.id!, {
@@ -219,9 +297,9 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             if (response.success) {
                 toast({
                     title: "نجاح",
-                    description: "تم حفظ أوقات الفراغ بنجاح",
+                    description: `تم حفظ أوقات الفراغ بنجاح (${freeSlotCount} من ${totalWeeklyHours} حصة مطلوبة)`,
                 });
-                setFreeTimeSlots([slots]);
+                setFreeTimeSlots(slots);
                 setShowFreeTimeDialog(false);
                 onUpdate();
             }
@@ -297,31 +375,55 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 </CardContent>
             </Card>
 
-            {/* Free Time Slots */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                            <Clock className="h-5 w-5" />
-                            أوقات الفراغ
-                        </CardTitle>
-                        <Button
-                            size="sm"
-                            onClick={() => setShowFreeTimeDialog(true)}
-                            className="gap-2"
-                        >
-                            <CalendarIcon className="h-4 w-4" />
-                            تعديل أوقات الفراغ
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <FreeTimeSlotsCalendar
-                        slots={freeTimeSlots}
-                        readonly={true}
-                    />
-                </CardContent>
-            </Card>
+            {/* Free Time Slots - Only show if teacher has assignments */}
+            {assignments.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <Clock className="h-5 w-5" />
+                                أوقات الفراغ
+                            </CardTitle>
+                            <Button
+                                size="sm"
+                                onClick={() => setShowFreeTimeDialog(true)}
+                                className="gap-2"
+                            >
+                                <CalendarIcon className="h-4 w-4" />
+                                تعديل أوقات الفراغ
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {freeTimeSlots.filter(s => s.is_free).length > 0 ? (
+                            <FreeTimeSlotsCalendar
+                                slots={freeTimeSlots}
+                                readonly={true}
+                            />
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <p className="mb-2">لم يتم تحديد أوقات الفراغ بعد</p>
+                                <p className="text-sm">اضغط على "تعديل أوقات الفراغ" لتحديد الأوقات المتاحة</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+            
+            {/* Message when no assignments */}
+            {assignments.length === 0 && (
+                <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20">
+                    <CardContent className="pt-6">
+                        <div className="flex items-center gap-3 text-yellow-800 dark:text-yellow-200">
+                            <AlertCircle className="h-5 w-5" />
+                            <div>
+                                <p className="font-medium">لا يمكن تحديد أوقات الفراغ</p>
+                                <p className="text-sm">يرجى إضافة توزيعات (مواد وصفوف) للأستاذ أولاً</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Add Assignment Dialog */}
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -345,9 +447,8 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                                     // Generate available sections based on section_count
                                     if (selectedClass?.section_count) {
                                         const sections = [];
-                                        const arabicLetters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط', 'ي'];
-                                        for (let i = 0; i < selectedClass.section_count && i < arabicLetters.length; i++) {
-                                            sections.push(arabicLetters[i]);
+                                        for (let i = 0; i < selectedClass.section_count; i++) {
+                                            sections.push(String(i + 1)); // 1, 2, 3, ...
                                         }
                                         setAvailableSections(sections);
                                     } else {
@@ -426,13 +527,50 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
 
             {/* Free Time Slots Dialog */}
             <Dialog open={showFreeTimeDialog} onOpenChange={setShowFreeTimeDialog}>
-                <DialogContent className="sm:max-w-[800px]" dir="rtl">
+                <DialogContent className="sm:max-w-[900px]" dir="rtl">
                     <DialogHeader>
                         <DialogTitle>تعديل أوقات الفراغ</DialogTitle>
                         <DialogDescription>
-                            حدد الأوقات التي يكون فيها الأستاذ متاحاً (الأزرق = متاح، الرمادي = مشغول)
+                            حدد الأوقات التي يكون فيها الأستاذ متاحاً (الأخضر = متاح، الرمادي = مشغول)
                         </DialogDescription>
                     </DialogHeader>
+                    
+                    {/* Requirement Indicator */}
+                    {calculateTotalWeeklyHours() > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                                        ℹ️
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-blue-900 dark:text-blue-100">
+                                            عدد الحصص المطلوبة: <span className="text-lg">{calculateTotalWeeklyHours()}</span> حصة أسبوعياً
+                                        </p>
+                                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                                            عدد أوقات الفراغ المحددة حالياً: {freeTimeSlots.filter(s => s.is_free).length}
+                                        </p>
+                                    </div>
+                                </div>
+                                {freeTimeSlots.filter(s => s.is_free).length >= calculateTotalWeeklyHours() ? (
+                                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
+                                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>كافي</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 font-semibold">
+                                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>غير كافي</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="py-4">
                         <FreeTimeSlotsCalendar
                             slots={freeTimeSlots}

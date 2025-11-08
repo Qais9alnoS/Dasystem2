@@ -87,10 +87,10 @@ export const StudentFinanceCard: React.FC<StudentFinanceCardProps> = ({
             <div className={`text-lg font-bold ${
               hasBalance ? 'text-red-600' : 'text-green-600'
             }`}>
-              {student.balance.toLocaleString('ar-SY')}
+              {(Number(student.balance) || 0).toLocaleString('ar-SY')}
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {student.total_paid.toLocaleString('ar-SY')} / {student.total_owed.toLocaleString('ar-SY')}
+              {(Number(student.total_paid) || 0).toLocaleString('ar-SY')} / {(Number(student.total_owed) || 0).toLocaleString('ar-SY')}
             </div>
           </div>
         </div>

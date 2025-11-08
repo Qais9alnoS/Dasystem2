@@ -73,6 +73,8 @@ const getRoleLabel = (role: string): string => {
     finance: 'مالية',
     morning_school: 'مدرسة صباحية',
     evening_school: 'مدرسة مسائية',
+    morning_supervisor: 'مشرف فترة صباحية',
+    evening_supervisor: 'مشرف فترة مسائية',
   };
   return roleLabels[role] || role;
 };
@@ -183,6 +185,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       href: '/teachers',
       icon: Users,
       allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+    },
+    {
+      name: 'إدارة الجداول',
+      href: '/schedules',
+      icon: CalendarDays,
+      allowedRoles: ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'], // All supervisors and directors
     },
     {
       name: 'النشاطات',
@@ -355,13 +363,18 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
             <NavLink
               key={item.name}
               to={item.href}
-              className={({ isActive }) =>
-                `flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={() => {
+                // For finance pages, check full URL including query params
+                const currentPath = location.pathname + location.search;
+                const isActive = currentPath === item.href || 
+                                (item.href.includes('?') && currentPath.startsWith(item.href));
+                
+                return `flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                } ${isCollapsed && !showText ? 'justify-center' : ''}`
-              }
+                } ${isCollapsed && !showText ? 'justify-center' : ''}`;
+              }}
             >
               <Icon className="h-5 w-5 flex-shrink-0" />
               {showText && (

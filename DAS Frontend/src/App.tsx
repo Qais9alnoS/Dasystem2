@@ -10,7 +10,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { FirstRunSetup } from '@/components/FirstRunSetup';
-import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, StudentAcademicInfoPage, SchoolInfoManagementPage, ActivitiesManagementPage, AddEditGradePage, TeacherManagementPage } from '@/pages';
+import { AcademicYearManagementPage, DashboardPage, StudentPersonalInfoPage, StudentAcademicInfoPage, SchoolInfoManagementPage, ActivitiesManagementPage, AddEditGradePage, TeacherManagementPage, ScheduleManagementPage } from '@/pages';
 import LoginPage from '@/pages/LoginPage';
 import NotFound from '@/pages/NotFound';
 import DirectorNotesPage from '@/pages/DirectorNotesPage';
@@ -30,6 +30,8 @@ const getRoleLabel = (role: string): string => {
     finance: 'مالية',
     morning_school: 'مدرسة صباحية',
     evening_school: 'مدرسة مسائية',
+    morning_supervisor: 'مشرف فترة صباحية',
+    evening_supervisor: 'مشرف فترة مسائية',
   };
   return roleLabels[role] || role;
 };
@@ -180,6 +182,15 @@ const ProtectedApp = () => {
         <Route path="school-info/edit-grade/:gradeId" element={<AddEditGradePage />} />
         {/* Teacher Management */}
         <Route path="teachers" element={<TeacherManagementPage />} />
+        {/* Schedule Management */}
+        <Route 
+          path="schedules" 
+          element={
+            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor']} fallback={<AccessDenied />}>
+              <ScheduleManagementPage />
+            </ProtectedRoute>
+          } 
+        />
         {/* Student Management */}
         <Route 
           path="students/personal-info" 

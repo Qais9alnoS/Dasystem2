@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TreasurySection } from './TreasurySection';
 import { StudentsFinanceSection } from './StudentsFinanceSection';
 import { YearSelectionSection } from './YearSelectionSection';
-import { Wallet, Users, Calendar } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { academicYearsApi } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -61,44 +59,28 @@ export const FinanceManagerPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">الإدارة المالية</h1>
-        <p className="text-gray-600">إدارة المعلومات المالية للمدرسة</p>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={(value) => setSearchParams({ tab: value })} className="w-full" dir="rtl">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
-          <TabsTrigger value="treasury" className="flex items-center gap-2">
-            <Wallet className="w-4 h-4" />
-            الصندوق
-          </TabsTrigger>
-          <TabsTrigger value="students" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            الطلاب
-          </TabsTrigger>
-          <TabsTrigger value="year" className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            السنة الدراسية
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="treasury" className="space-y-4">
-          <TreasurySection academicYearId={selectedYearId} />
-        </TabsContent>
-
-        <TabsContent value="students" className="space-y-4">
-          <StudentsFinanceSection academicYearId={selectedYearId} />
-        </TabsContent>
-
-        <TabsContent value="year" className="space-y-4">
+  // Render section based on tab parameter (navigation through sidebar only)
+  const renderSection = () => {
+    switch (activeTab) {
+      case 'treasury':
+        return <TreasurySection academicYearId={selectedYearId} />;
+      case 'students':
+        return <StudentsFinanceSection academicYearId={selectedYearId} />;
+      case 'year':
+        return (
           <YearSelectionSection
             selectedYearId={selectedYearId}
             onYearChange={handleYearChange}
           />
-        </TabsContent>
-      </Tabs>
+        );
+      default:
+        return <TreasurySection academicYearId={selectedYearId} />;
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6">
+      {renderSection()}
     </div>
   );
 };

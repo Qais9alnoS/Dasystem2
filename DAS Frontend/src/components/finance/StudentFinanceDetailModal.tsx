@@ -127,12 +127,38 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
       return;
     }
 
+    // Validate payment amount doesn't exceed what is owed (only if total owed > 0)
+    const amount = parseFloat(paymentAmount);
+    if (student) {
+      const totalOwed = Number(student.total_owed) || 0;
+      const totalPaid = Number(student.total_paid) || 0;
+      
+      // Only validate if totalOwed > 0 (to avoid false positives when data is incomplete)
+      if (totalOwed > 0 && (totalPaid + amount) > totalOwed) {
+        const remaining = totalOwed - totalPaid;
+        if (remaining <= 0) {
+          toast({
+            title: 'خطأ',
+            description: `لا يمكن إضافة دفعة. الطالب قد سدد كامل المبلغ المطلوب (${totalOwed.toLocaleString('ar-SY')} ل.س)`,
+            variant: 'destructive'
+          });
+        } else {
+          toast({
+            title: 'خطأ',
+            description: `المبلغ المدخل (${amount.toLocaleString('ar-SY')} ل.س) يتجاوز الرصيد المتبقي (${remaining.toLocaleString('ar-SY')} ل.س). الإجمالي المطلوب: ${totalOwed.toLocaleString('ar-SY')} ل.س`,
+            variant: 'destructive'
+          });
+        }
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       await financeManagerApi.addStudentPayment(studentId, {
         student_id: studentId,
         academic_year_id: academicYearId,
-        payment_amount: parseFloat(paymentAmount),
+        payment_amount: amount,
         payment_date: paymentDate,
         receipt_number: receiptNumber || undefined,
         payment_status: 'completed'
@@ -148,11 +174,23 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
       setShowPaymentForm(false);
       loadStudentDetails();
       onUpdate?.();
-    } catch (error) {
+    } catch (error: any) {
+      // استخراج رسالة الخطأ من صيغ مختلفة
+      let errorMessage = 'فشل تسجيل الدفعة';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.details?.detail) {
+        errorMessage = error.details.detail;
+      } else if (error?.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      }
+      
       toast({
-        title: 'خطأ',
-        description: 'فشل تسجيل الدفعة',
-        variant: 'destructive'
+        title: 'خطأ في تسجيل الدفعة',
+        description: errorMessage,
+        variant: 'destructive',
+        duration: 6000 // عرض الرسالة لمدة أطول
       });
     } finally {
       setLoading(false);

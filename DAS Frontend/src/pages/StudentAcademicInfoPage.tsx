@@ -631,7 +631,7 @@ const StudentAcademicInfoPage = () => {
 
     const sections = [];
     for (let i = 0; i < (classData.section_count || 1); i++) {
-      sections.push(String.fromCharCode(65 + i));
+      sections.push(String(i + 1)); // 1, 2, 3, ...
     }
     return sections;
   };

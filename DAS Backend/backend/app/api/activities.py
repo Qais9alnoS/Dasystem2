@@ -4,6 +4,7 @@ from sqlalchemy import and_, or_, func
 from typing import List, Optional
 from datetime import datetime, date, time
 from decimal import Decimal
+import json
 
 from ..database import get_db
 from ..models.activities import (
@@ -22,6 +23,16 @@ from ..schemas.activities import (
 from ..core.dependencies import get_current_user, get_director_user, get_school_user
 
 router = APIRouter(tags=["activities"])
+
+# Helper function to parse JSON fields
+def parse_json_field(field_value):
+    """Parse JSON field if it's a string, otherwise return as is"""
+    if isinstance(field_value, str):
+        try:
+            return json.loads(field_value)
+        except (json.JSONDecodeError, TypeError):
+            return field_value
+    return field_value
 
 # Activity Management
 @router.get("/", response_model=List[ActivityResponse])
@@ -73,7 +84,7 @@ async def get_activities(
             "description": activity.description,
             "activity_type": activity.activity_type,
             "session_type": activity.session_type,
-            "target_grades": activity.target_grades,
+            "target_grades": parse_json_field(activity.target_grades),
             "max_participants": activity.max_participants,
             "cost_per_student": activity.cost_per_student,
             "start_date": activity.start_date,
@@ -123,7 +134,7 @@ async def create_activity(
         "description": db_activity.description,
         "activity_type": db_activity.activity_type,
         "session_type": db_activity.session_type,
-        "target_grades": db_activity.target_grades,
+        "target_grades": parse_json_field(db_activity.target_grades),
         "max_participants": db_activity.max_participants,
         "cost_per_student": db_activity.cost_per_student,
         "start_date": db_activity.start_date,
@@ -167,7 +178,7 @@ async def get_activity(
         "description": activity.description,
         "activity_type": activity.activity_type,
         "session_type": activity.session_type,
-        "target_grades": activity.target_grades,
+        "target_grades": parse_json_field(activity.target_grades),
         "max_participants": activity.max_participants,
         "cost_per_student": activity.cost_per_student,
         "start_date": activity.start_date,
@@ -232,7 +243,7 @@ async def update_activity(
         "description": activity.description,
         "activity_type": activity.activity_type,
         "session_type": activity.session_type,
-        "target_grades": activity.target_grades,
+        "target_grades": parse_json_field(activity.target_grades),
         "max_participants": activity.max_participants,
         "cost_per_student": activity.cost_per_student,
         "start_date": activity.start_date,
@@ -354,7 +365,8 @@ async def register_student_for_activity(
     
     # Check if student's grade is in target grades
     if hasattr(activity, 'target_grades') and activity.target_grades:
-        if student.grade_level not in activity.target_grades:
+        target_grades = parse_json_field(activity.target_grades)
+        if student.grade_level not in target_grades:
             raise HTTPException(status_code=400, detail="Student's grade is not eligible for this activity")
     
     registration_data = registration.dict()
@@ -365,6 +377,9 @@ async def register_student_for_activity(
     db.add(db_registration)
     db.commit()
     db.refresh(db_registration)
+    
+    # Finance integration is now handled in bulk by the finance dashboard sync
+    # No individual transactions created here anymore
     
     # Create response object with names
     registration_dict = {
@@ -394,12 +409,18 @@ async def update_activity_registration(
     if not registration:
         raise HTTPException(status_code=404, detail="Registration not found")
     
+    # Track if payment status is changing
+    old_payment_status = registration.payment_status
+    
     update_data = registration_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(registration, field, value)
     
     db.commit()
     db.refresh(registration)
+    
+    # Finance sync is now handled in bulk by the finance dashboard
+    # Individual transaction updates not needed
     
     # Add student and activity names to response
     student = db.query(Student).filter(Student.id == registration.student_id).first()  
@@ -840,7 +861,7 @@ async def search_activities(
             "description": activity.description,
             "activity_type": activity.activity_type,
             "session_type": activity.session_type,
-            "target_grades": activity.target_grades,
+            "target_grades": parse_json_field(activity.target_grades),
             "max_participants": activity.max_participants,
             "cost_per_student": activity.cost_per_student,
             "start_date": activity.start_date,

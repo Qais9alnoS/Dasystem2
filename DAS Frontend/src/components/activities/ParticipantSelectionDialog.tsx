@@ -38,6 +38,8 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<Set<number>>(new Set());
   const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
+  const [existingRegistrations, setExistingRegistrations] = useState<Map<number, any>>(new Map()); // Track existing registrations
+  const [studentPaymentStatus, setStudentPaymentStatus] = useState<Map<number, boolean>>(new Map()); // Track payment status per student
   const [searchQuery, setSearchQuery] = useState('');
 
   // Load data
@@ -66,8 +68,23 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       // Load existing registrations
       const registrationsResponse = await activitiesApi.getRegistrations(activity.id!);
       if (registrationsResponse.success && registrationsResponse.data) {
+        console.log('Loaded registrations:', registrationsResponse.data); // Debug log
+        
         const registeredStudentIds = new Set(registrationsResponse.data.map((r: any) => r.student_id));
         setSelectedStudents(registeredStudentIds);
+        
+        // Store existing registrations with their payment status
+        const existingRegsMap = new Map();
+        const paymentStatusMap = new Map();
+        registrationsResponse.data.forEach((r: any) => {
+          existingRegsMap.set(r.student_id, r);
+          paymentStatusMap.set(r.student_id, r.payment_status === 'paid');
+          console.log(`Student ${r.student_id}: registration ${r.id}, status ${r.payment_status}`); // Debug log
+        });
+        setExistingRegistrations(existingRegsMap);
+        setStudentPaymentStatus(paymentStatusMap);
+        
+        console.log('Existing registrations map:', existingRegsMap); // Debug log
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -143,30 +160,48 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
     const newSelectedStudents = new Set(selectedStudents);
     if (newSelectedStudents.has(studentId)) {
       newSelectedStudents.delete(studentId);
+      // Remove payment status when student is deselected
+      const newPaymentStatus = new Map(studentPaymentStatus);
+      newPaymentStatus.delete(studentId);
+      setStudentPaymentStatus(newPaymentStatus);
     } else {
       newSelectedStudents.add(studentId);
     }
     setSelectedStudents(newSelectedStudents);
   };
 
+  // Handle payment status toggle
+  const handlePaymentStatusToggle = (studentId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering student selection
+    const newPaymentStatus = new Map(studentPaymentStatus);
+    newPaymentStatus.set(studentId, !newPaymentStatus.get(studentId));
+    setStudentPaymentStatus(newPaymentStatus);
+  };
+
   // Handle select all students
   const handleSelectAll = () => {
-    const classStudents = getStudentsFromSelectedClasses();
+    const allStudents = students.filter((student) =>
+      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     const newSelectedStudents = new Set(selectedStudents);
-    classStudents.forEach((s) => newSelectedStudents.add(s.id!));
+    allStudents.forEach((s) => newSelectedStudents.add(s.id!));
     setSelectedStudents(newSelectedStudents);
   };
 
   // Handle deselect all students
   const handleDeselectAll = () => {
-    const classStudents = getStudentsFromSelectedClasses();
+    const allStudents = students.filter((student) =>
+      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     const newSelectedStudents = new Set(selectedStudents);
-    classStudents.forEach((s) => newSelectedStudents.delete(s.id!));
+    allStudents.forEach((s) => newSelectedStudents.delete(s.id!));
     setSelectedStudents(newSelectedStudents);
   };
 
-  // Filter students by search
-  const filteredStudents = getStudentsFromSelectedClasses().filter((student) =>
+  // Filter students by search - show all students, not just from selected classes
+  const filteredStudents = students.filter((student) =>
     student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -188,32 +223,90 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
     try {
       setSaving(true);
 
-      // Create registrations for selected students
       const studentIds = Array.from(selectedStudents);
-      const registrationPromises = studentIds.map((studentId) =>
-        activitiesApi.createRegistration(activity.id!, {
-          student_id: studentId,
-          activity_id: activity.id!,
-          registration_date: new Date().toISOString().split('T')[0],
-          payment_status: 'pending',
-          payment_amount: activity.cost_per_student,
-        })
-      );
+      const promises = [];
 
-      await Promise.all(registrationPromises);
+      // Separate new students from existing ones
+      const newStudents = [];
+      const updatedStudents = [];
+
+      console.log('Saving participants. Total selected:', studentIds.length); // Debug log
+      console.log('Existing registrations size:', existingRegistrations.size); // Debug log
+
+      for (const studentId of studentIds) {
+        const existingReg = existingRegistrations.get(studentId);
+        const hasPaid = studentPaymentStatus.get(studentId) || false;
+        const newPaymentStatus = hasPaid ? 'paid' : 'pending';
+
+        console.log(`Processing student ${studentId}:`, { // Debug log
+          hasExistingReg: !!existingReg,
+          existingRegId: existingReg?.id,
+          existingStatus: existingReg?.payment_status,
+          newStatus: newPaymentStatus
+        });
+
+        if (existingReg) {
+          // Update existing registration if payment status changed
+          if (existingReg.payment_status !== newPaymentStatus) {
+            console.log(`Updating registration ${existingReg.id} for student ${studentId}`); // Debug log
+            promises.push(
+              activitiesApi.updateRegistration(existingReg.id, {
+                payment_status: newPaymentStatus,
+              })
+            );
+            updatedStudents.push(studentId);
+          } else {
+            console.log(`No change needed for student ${studentId}`); // Debug log
+          }
+        } else {
+          // Create new registration
+          console.log(`Creating new registration for student ${studentId}`); // Debug log
+          promises.push(
+            activitiesApi.createRegistration(activity.id!, {
+              student_id: studentId,
+              activity_id: activity.id!,
+              registration_date: new Date().toISOString().split('T')[0],
+              payment_status: newPaymentStatus,
+              payment_amount: activity.cost_per_student,
+            })
+          );
+          newStudents.push(studentId);
+        }
+      }
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+
+      // Calculate payment summary
+      const paidCount = Array.from(studentIds).filter(id => studentPaymentStatus.get(id)).length;
+      const unpaidCount = studentIds.length - paidCount;
+      const totalPaid = paidCount * (activity.cost_per_student || 0);
+      const totalUnpaid = unpaidCount * (activity.cost_per_student || 0);
+
+      // Show detailed success message
+      const summaryParts = [];
+      if (newStudents.length > 0) summaryParts.push(`${newStudents.length} طالب جديد`);
+      if (updatedStudents.length > 0) summaryParts.push(`${updatedStudents.length} تحديث`);
+      
+      const paymentSummary = [];
+      if (paidCount > 0) paymentSummary.push(`${paidCount} دفع (${totalPaid.toLocaleString('ar-SY')} ل.س)`);
+      if (unpaidCount > 0) paymentSummary.push(`${unpaidCount} معلق (${totalUnpaid.toLocaleString('ar-SY')} ل.س)`);
 
       toast({
         title: 'نجاح',
-        description: `تم تسجيل ${studentIds.length} طالب في النشاط`,
+        description: `${summaryParts.join(' • ')}\n${paymentSummary.join(' • ')}`,
+        duration: 5000,
       });
 
       onSave();
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving participants:', error);
+      const errorMessage = error instanceof Error ? error.message : 'فشل في حفظ المشاركين';
       toast({
         title: 'خطأ',
-        description: 'فشل في حفظ المشاركين',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -328,77 +421,87 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
 
               <TabsContent value="students" className="flex-1 overflow-y-auto mt-4">
                 <div className="space-y-4">
-                  {selectedClasses.size === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>يرجى اختيار صف واحد على الأقل من تبويب "اختيار الصفوف"</p>
+                  <p className="text-sm text-muted-foreground">
+                    يمكنك تحديد الطلاب المشاركين فردياً. الطلاب المحددين من الصفوف يظهرون محددين تلقائياً.
+                  </p>
+
+                  {/* Search and Actions */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="البحث عن طالب..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-10"
+                      />
                     </div>
-                  ) : (
-                    <>
-                      {/* Search and Actions */}
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="البحث عن طالب..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pr-10"
-                          />
-                        </div>
-                        <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                          تحديد الكل
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-                          إلغاء الكل
-                        </Button>
-                      </div>
+                    <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                      تحديد الكل
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                      إلغاء الكل
+                    </Button>
+                  </div>
 
-                      {/* Students List */}
-                      <div className="space-y-2">
-                        {filteredStudents.map((student) => {
-                          const isSelected = selectedStudents.has(student.id!);
-                          
-                          return (
-                            <div
-                              key={student.id}
-                              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                                isSelected ? 'bg-primary/5 border-primary' : 'hover:bg-muted'
-                              }`}
-                              onClick={() => handleStudentToggle(student.id!)}
-                            >
-                              <div className="flex items-center gap-3">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => handleStudentToggle(student.id!)}
-                                />
-                                <div>
-                                  <p className="font-medium">{student.full_name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {student.father_name} - الصف {student.grade_number} {student.section && `شعبة ${student.section}`}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {student.has_special_needs && (
-                                  <Badge variant="outline" className="text-xs">
-                                    احتياجات خاصة
-                                  </Badge>
-                                )}
-                                {isSelected && <Check className="h-5 w-5 text-primary" />}
-                              </div>
+                  {/* Students List */}
+                  <div className="space-y-2">
+                    {filteredStudents.map((student) => {
+                      const isSelected = selectedStudents.has(student.id!);
+                      const hasPaid = studentPaymentStatus.get(student.id!) || false;
+                      
+                      return (
+                        <div
+                          key={student.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                            isSelected ? 'bg-primary/5 border-primary' : 'hover:bg-muted'
+                          }`}
+                          onClick={() => handleStudentToggle(student.id!)}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleStudentToggle(student.id!)}
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium">{student.full_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {student.father_name} - الصف {student.grade_number} {student.section && `شعبة ${student.section}`}
+                              </p>
                             </div>
-                          );
-                        })}
-
-                        {filteredStudents.length === 0 && (
-                          <div className="text-center py-8 text-muted-foreground">
-                            <p>لا توجد نتائج</p>
                           </div>
-                        )}
+                          <div className="flex items-center gap-3">
+                            {isSelected && (
+                              <div 
+                                className="flex items-center gap-2 px-2 py-1 rounded border bg-white dark:bg-gray-800"
+                                onClick={(e) => handlePaymentStatusToggle(student.id!, e)}
+                              >
+                                <Checkbox
+                                  checked={hasPaid}
+                                  onCheckedChange={() => {}}
+                                />
+                                <span className={`text-sm ${hasPaid ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                                  {hasPaid ? 'دفع' : 'لم يدفع'}
+                                </span>
+                              </div>
+                            )}
+                            {student.has_special_needs && (
+                              <Badge variant="outline" className="text-xs">
+                                احتياجات خاصة
+                              </Badge>
+                            )}
+                            {isSelected && <Check className="h-5 w-5 text-primary" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredStudents.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <p>لا توجد نتائج</p>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>

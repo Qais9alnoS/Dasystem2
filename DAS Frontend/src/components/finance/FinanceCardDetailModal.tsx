@@ -22,7 +22,8 @@ import {
   TrendingDown,
   CheckCircle,
   AlertCircle,
-  Edit2
+  Edit2,
+  X
 } from 'lucide-react';
 import { FinanceCardDetailed, FinanceTransaction } from '@/types/school';
 import { financeManagerApi } from '@/services/api';
@@ -55,12 +56,27 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   const [transactionDescription, setTransactionDescription] = useState('');
   const [transactionStatus, setTransactionStatus] = useState<'completed' | 'pending'>('completed');
   const [responsiblePerson, setResponsiblePerson] = useState('');
+  
+  // Edit transaction state
+  const [editingTransaction, setEditingTransaction] = useState<number | null>(null);
+  const [editTransactionData, setEditTransactionData] = useState<any>(null);
 
   useEffect(() => {
     if (open && cardId && academicYearId) {
       loadCardDetails();
     }
   }, [open, cardId, academicYearId]);
+
+  // Set transaction type based on card type when card loads
+  useEffect(() => {
+    if (card) {
+      if (card.card_type === 'income') {
+        setTransactionType('income');
+      } else if (card.card_type === 'expense') {
+        setTransactionType('expense');
+      }
+    }
+  }, [card]);
 
   const loadCardDetails = async () => {
     try {
@@ -82,23 +98,56 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   };
 
   const handleAddTransaction = async () => {
-    if (!transactionAmount || parseFloat(transactionAmount) <= 0) {
+    // Validate amount is not empty
+    if (!transactionAmount || transactionAmount.trim() === '') {
       toast({
         title: 'تنبيه',
-        description: 'يرجى إدخال مبلغ صحيح',
+        description: 'يرجى إدخال المبلغ',
         variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate amount is a valid number
+    const amount = parseFloat(transactionAmount);
+    if (isNaN(amount)) {
+      toast({
+        title: 'خطأ في المبلغ',
+        description: 'يرجى إدخال رقم صحيح في حقل المبلغ',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate amount is positive
+    if (amount <= 0) {
+      toast({
+        title: 'خطأ في المبلغ',
+        description: 'يجب أن يكون المبلغ أكبر من صفر',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate transaction date is not empty
+    if (!transactionDate || transactionDate.trim() === '') {
+      toast({
+        title: 'خطأ في التاريخ',
+        description: 'يرجى اختيار تاريخ المعاملة',
+        variant: 'destructive',
+        duration: 5000
       });
       return;
     }
 
     try {
       setLoading(true);
-      await financeManagerApi.addFinanceTransaction(cardId, {
-        academic_year_id: academicYearId,
+      await financeManagerApi.addCardTransaction(cardId, {
+        card_id: cardId,
         transaction_type: transactionType,
         amount: parseFloat(transactionAmount),
         transaction_date: transactionDate,
-        description: transactionDescription,
+        notes: transactionDescription,
         is_completed: transactionStatus === 'completed',
         responsible_person: responsiblePerson || undefined
       });
@@ -128,7 +177,7 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   const handleUpdateTransactionStatus = async (transactionId: number, newStatus: boolean) => {
     try {
       setLoading(true);
-      await financeManagerApi.updateFinanceTransaction(transactionId, {
+      await financeManagerApi.updateCardTransaction(transactionId, {
         is_completed: newStatus
       });
 
@@ -143,6 +192,140 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
       toast({
         title: 'خطأ',
         description: 'فشل تحديث حالة المعاملة',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if transaction is system-generated aggregated activity transaction
+  const isAggregatedActivityTransaction = (transaction: any) => {
+    return transaction.notes && transaction.notes.startsWith('activity_aggregated');
+  };
+
+  const handleEditTransaction = (transaction: any) => {
+    // Prevent editing system-generated aggregated transactions
+    if (isAggregatedActivityTransaction(transaction)) {
+      toast({
+        title: 'تنبيه',
+        description: 'لا يمكن تعديل المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين.',
+        variant: 'destructive',
+        duration: 5000
+      });
+      return;
+    }
+
+    setEditingTransaction(transaction.id);
+    setEditTransactionData({
+      transaction_type: transaction.transaction_type,
+      amount: transaction.amount.toString(),
+      transaction_date: transaction.transaction_date,
+      description: transaction.notes || '',
+      responsible_person: transaction.responsible_person || '',
+      is_completed: transaction.is_completed
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTransaction(null);
+    setEditTransactionData(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTransaction || !editTransactionData) return;
+
+    // Validate amount is not empty
+    if (!editTransactionData.amount || editTransactionData.amount.trim() === '') {
+      toast({
+        title: 'تنبيه',
+        description: 'يرجى إدخال المبلغ',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate amount is a valid number
+    const amount = parseFloat(editTransactionData.amount);
+    if (isNaN(amount)) {
+      toast({
+        title: 'خطأ في المبلغ',
+        description: 'يرجى إدخال رقم صحيح في حقل المبلغ',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate amount is positive
+    if (amount <= 0) {
+      toast({
+        title: 'خطأ في المبلغ',
+        description: 'يجب أن يكون المبلغ أكبر من صفر',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await financeManagerApi.updateCardTransaction(editingTransaction, {
+        transaction_type: editTransactionData.transaction_type,
+        amount: parseFloat(editTransactionData.amount),
+        transaction_date: editTransactionData.transaction_date,
+        notes: editTransactionData.description,
+        responsible_person: editTransactionData.responsible_person,
+        is_completed: editTransactionData.is_completed
+      });
+
+      toast({
+        title: 'نجح',
+        description: 'تم تحديث المعاملة بنجاح'
+      });
+
+      setEditingTransaction(null);
+      setEditTransactionData(null);
+      loadCardDetails();
+      onUpdate?.();
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل تحديث المعاملة',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: number, transaction: any) => {
+    // Prevent deleting system-generated aggregated transactions
+    if (isAggregatedActivityTransaction(transaction)) {
+      toast({
+        title: 'تنبيه',
+        description: 'لا يمكن حذف المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين.',
+        variant: 'destructive',
+        duration: 5000
+      });
+      return;
+    }
+
+    if (!confirm('هل أنت متأكد من حذف هذه المعاملة؟')) return;
+
+    try {
+      setLoading(true);
+      await financeManagerApi.deleteCardTransaction(transactionId);
+
+      toast({
+        title: 'نجح',
+        description: 'تم حذف المعاملة بنجاح'
+      });
+
+      loadCardDetails();
+      onUpdate?.();
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل حذف المعاملة',
         variant: 'destructive'
       });
     } finally {
@@ -253,17 +436,26 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
 
                 {showTransactionForm && (
                   <div className="space-y-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                    <div>
-                      <Label>نوع المعاملة</Label>
-                      <SegmentedControl
-                        value={transactionType}
-                        onValueChange={(value) => setTransactionType(value as 'income' | 'expense')}
-                        options={[
-                          { label: 'دخل', value: 'income' },
-                          { label: 'خرج', value: 'expense' }
-                        ]}
-                      />
-                    </div>
+                    {/* Only show transaction type selector for 'both' card types */}
+                    {card?.card_type === 'both' ? (
+                      <div>
+                        <Label>نوع المعاملة</Label>
+                        <SegmentedControl
+                          value={transactionType}
+                          onValueChange={(value) => setTransactionType(value as 'income' | 'expense')}
+                          options={[
+                            { label: 'دخل', value: 'income' },
+                            { label: 'خرج', value: 'expense' }
+                          ]}
+                        />
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <p className="text-sm text-blue-900 dark:text-blue-100">
+                          <strong>نوع المعاملة:</strong> {transactionType === 'income' ? 'دخل فقط' : 'خرج فقط'}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -273,6 +465,8 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
                           value={transactionAmount}
                           onChange={(e) => setTransactionAmount(e.target.value)}
                           placeholder="0.00"
+                          min="0"
+                          step="0.01"
                         />
                       </div>
                       <div>
@@ -354,63 +548,177 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
                           }`}
                         >
                           <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  {transaction.transaction_type === 'income' ? (
-                                    <TrendingUp className="w-4 h-4 text-green-600" />
-                                  ) : (
-                                    <TrendingDown className="w-4 h-4 text-red-600" />
+                            {editingTransaction === transaction.id ? (
+                              // Edit mode
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {card?.card_type === 'both' && (
+                                    <div>
+                                      <Label className="text-xs">نوع المعاملة</Label>
+                                      <SegmentedControl
+                                        value={editTransactionData.transaction_type}
+                                        onValueChange={(value) => setEditTransactionData({
+                                          ...editTransactionData,
+                                          transaction_type: value
+                                        })}
+                                        options={[
+                                          { label: 'دخل', value: 'income' },
+                                          { label: 'خرج', value: 'expense' }
+                                        ]}
+                                      />
+                                    </div>
                                   )}
-                                  <span className="font-medium">
-                                    {transaction.transaction_type === 'income' ? 'دخل' : 'خرج'}
-                                  </span>
-                                  <Badge
-                                    variant={transaction.is_completed ? 'default' : 'secondary'}
-                                    className="text-xs"
-                                  >
-                                    {transaction.is_completed ? (
-                                      <CheckCircle className="w-3 h-3 ml-1 inline" />
-                                    ) : (
-                                      <AlertCircle className="w-3 h-3 ml-1 inline" />
-                                    )}
-                                    {transaction.is_completed ? 'مكتمل' : 'معلق'}
-                                  </Badge>
-                                </div>
-
-                                <div className="text-sm text-gray-600 space-y-1">
-                                  {transaction.description && (
-                                    <div>{transaction.description}</div>
-                                  )}
-                                  {transaction.responsible_person && (
-                                    <div className="text-xs">المسؤول: {transaction.responsible_person}</div>
-                                  )}
-                                  <div className="text-xs text-gray-500">
-                                    {new Date(transaction.transaction_date).toLocaleDateString('ar-SY')}
+                                  <div>
+                                    <Label className="text-xs">المبلغ</Label>
+                                    <Input
+                                      type="number"
+                                      value={editTransactionData.amount}
+                                      onChange={(e) => setEditTransactionData({
+                                        ...editTransactionData,
+                                        amount: e.target.value
+                                      })}
+                                      min="0"
+                                      step="0.01"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">التاريخ</Label>
+                                    <Input
+                                      type="date"
+                                      value={editTransactionData.transaction_date}
+                                      onChange={(e) => setEditTransactionData({
+                                        ...editTransactionData,
+                                        transaction_date: e.target.value
+                                      })}
+                                    />
                                   </div>
                                 </div>
-                              </div>
-
-                              <div className="text-left ml-4">
-                                <div className={`text-lg font-bold ${
-                                  transaction.transaction_type === 'income'
-                                    ? 'text-green-600'
-                                    : 'text-red-600'
-                                }`}>
-                                  {transaction.amount.toLocaleString('ar-SY')} ل.س
+                                <div>
+                                  <Label className="text-xs">الوصف</Label>
+                                  <Textarea
+                                    value={editTransactionData.description}
+                                    onChange={(e) => setEditTransactionData({
+                                      ...editTransactionData,
+                                      description: e.target.value
+                                    })}
+                                    rows={2}
+                                  />
                                 </div>
-                                {!transaction.is_completed && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="mt-2 text-xs"
-                                    onClick={() => handleUpdateTransactionStatus(transaction.id, true)}
-                                  >
-                                    تمييز كمكتمل
+                                <div>
+                                  <Label className="text-xs">المسؤول</Label>
+                                  <Input
+                                    value={editTransactionData.responsible_person}
+                                    onChange={(e) => setEditTransactionData({
+                                      ...editTransactionData,
+                                      responsible_person: e.target.value
+                                    })}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">الحالة</Label>
+                                  <SegmentedControl
+                                    value={editTransactionData.is_completed ? 'completed' : 'pending'}
+                                    onValueChange={(value) => setEditTransactionData({
+                                      ...editTransactionData,
+                                      is_completed: value === 'completed'
+                                    })}
+                                    options={[
+                                      { label: 'مكتمل', value: 'completed' },
+                                      { label: 'معلق', value: 'pending' }
+                                    ]}
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button onClick={handleSaveEdit} size="sm" className="flex-1">
+                                    <Save className="w-4 h-4 ml-1" />
+                                    حفظ
                                   </Button>
-                                )}
+                                  <Button onClick={handleCancelEdit} size="sm" variant="outline" className="flex-1">
+                                    <X className="w-4 h-4 ml-1" />
+                                    إلغاء
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              // View mode
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {transaction.transaction_type === 'income' ? (
+                                      <TrendingUp className="w-4 h-4 text-green-600" />
+                                    ) : (
+                                      <TrendingDown className="w-4 h-4 text-red-600" />
+                                    )}
+                                    <span className="font-medium">
+                                      {transaction.transaction_type === 'income' ? 'دخل' : 'خرج'}
+                                    </span>
+                                    <Badge
+                                      variant={transaction.is_completed ? 'default' : 'secondary'}
+                                      className="text-xs"
+                                    >
+                                      {transaction.is_completed ? (
+                                        <CheckCircle className="w-3 h-3 ml-1 inline" />
+                                      ) : (
+                                        <AlertCircle className="w-3 h-3 ml-1 inline" />
+                                      )}
+                                      {transaction.is_completed ? 'مكتمل' : 'معلق'}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="text-sm text-gray-600 space-y-1">
+                                    {transaction.notes && (
+                                      <div>{transaction.notes}</div>
+                                    )}
+                                    {transaction.responsible_person && (
+                                      <div className="text-xs">المسؤول: {transaction.responsible_person}</div>
+                                    )}
+                                    <div className="text-xs text-gray-500">
+                                      {new Date(transaction.transaction_date).toLocaleDateString('ar-SY')}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-left ml-4">
+                                  <div className={`text-lg font-bold ${
+                                    transaction.transaction_type === 'income'
+                                      ? 'text-green-600'
+                                      : 'text-red-600'
+                                  }`}>
+                                    {transaction.amount.toLocaleString('ar-SY')} ل.س
+                                  </div>
+                                  {/* Hide edit/delete buttons for aggregated activity transactions */}
+                                  {!isAggregatedActivityTransaction(transaction) && (
+                                    <div className="flex gap-2 mt-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-xs"
+                                        onClick={() => handleEditTransaction(transaction)}
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-xs text-red-600"
+                                        onClick={() => handleDeleteTransaction(transaction.id, transaction)}
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                  {/* Show lock icon for protected transactions */}
+                                  {isAggregatedActivityTransaction(transaction) && (
+                                    <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                                      <Badge variant="secondary" className="text-xs">
+                                        محمي
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       ))}

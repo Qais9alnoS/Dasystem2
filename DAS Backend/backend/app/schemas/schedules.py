@@ -143,6 +143,10 @@ class ScheduleGenerationRequest(BaseModel):
     start_date: date
     end_date: date
     
+    # Target class and section
+    class_id: Optional[int] = None  # If None, generate for all classes
+    section: Optional[str] = None  # If None, generate for all sections
+    
     # Time slot configuration
     periods_per_day: int = 6
     break_periods: List[int] = [3, 6]  # After which periods to insert breaks
@@ -155,8 +159,25 @@ class ScheduleGenerationRequest(BaseModel):
     ]
     
     # Session times
-    session_start_time: time = time(8, 0)  # 8:00 AM for morning, 2:00 PM for evening
+    session_start_time: str = "08:00:00"  # Time in HH:MM:SS format
     period_duration: int = 45  # minutes per period
+    
+    @validator('session_start_time')
+    def validate_session_start_time(cls, v):
+        # Accept both time object and string, convert string to time format
+        if isinstance(v, time):
+            return v.strftime("%H:%M:%S")
+        # Validate string format
+        try:
+            parts = v.split(':')
+            if len(parts) >= 2:
+                hour = int(parts[0])
+                minute = int(parts[1])
+                if 0 <= hour < 24 and 0 <= minute < 60:
+                    return v
+        except:
+            pass
+        raise ValueError('session_start_time must be in HH:MM:SS or HH:MM format')
     
     # Generation preferences
     auto_assign_teachers: bool = True

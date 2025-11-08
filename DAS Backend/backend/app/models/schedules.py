@@ -68,6 +68,7 @@ class Schedule(BaseModel):
     start_date = Column(Date)
     end_date = Column(Date)
     is_active = Column(Boolean, default=True)
+    status = Column(String(20), default="draft")  # draft, published
     description = Column(Text)
     
     # Relationships

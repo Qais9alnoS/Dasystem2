@@ -2,16 +2,17 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { FinanceCardSummary } from '@/types/school';
 
 interface FinanceCardProps {
   card: FinanceCardSummary;
   onClick?: () => void;
+  onDelete?: (cardId: number) => void;
   className?: string;
 }
 
-export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, className = '' }) => {
+export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, onDelete, className = '' }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open':
@@ -72,13 +73,33 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, classNa
               <Badge variant="outline" className={`text-xs ${getStatusColor(card.status)}`}>
                 {getStatusLabel(card.status)}
               </Badge>
+              {card.is_default && (
+                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600">
+                  افتراضي
+                </Badge>
+              )}
             </div>
           </div>
-          {card.incomplete_transactions_count > 0 && (
-            <Badge variant="destructive" className="ml-2">
-              {card.incomplete_transactions_count}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2 ml-2">
+            {card.incomplete_transactions_count > 0 && (
+              <Badge variant="destructive">
+                {card.incomplete_transactions_count}
+              </Badge>
+            )}
+            {!card.is_default && onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(card.card_id);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
 

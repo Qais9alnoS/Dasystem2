@@ -29,6 +29,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
   const [gradeNumber, setGradeNumber] = useState<string>('all');
   const [section, setSection] = useState<string>('all');
   const [sessionType, setSessionType] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Filter options from database
   const [availableGradeNumbers, setAvailableGradeNumbers] = useState<number[]>([]);
@@ -45,6 +46,14 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
   useEffect(() => {
     if (academicYearId && gradeLevel) {
       loadFilterOptions();
+    }
+  }, [gradeLevel]);
+
+  // Auto-set grade and section to 'all' when stage is 'all'
+  useEffect(() => {
+    if (gradeLevel === 'all') {
+      setGradeNumber('all');
+      setSection('all');
     }
   }, [gradeLevel]);
 
@@ -119,10 +128,42 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
   };
 
   const studentsWithBalance = students.filter(s => s.has_outstanding_balance);
-  const totalOutstanding = students.reduce((sum, s) => sum + s.balance, 0);
+  // جمع الأرصدة الموجبة فقط (الديون الفعلية)
+  const totalOutstanding = students.reduce((sum, s) => {
+    const balance = Number(s.balance) || 0;
+    return sum + (balance > 0 ? balance : 0); // نجمع فقط الأرصدة الموجبة
+  }, 0);
+  
+  // Filter students by search query
+  const filteredStudents = students.filter(student => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      student.full_name.toLowerCase().includes(query) ||
+      student.father_name.toLowerCase().includes(query) ||
+      (student.father_phone && student.father_phone.includes(query)) ||
+      (student.mother_phone && student.mother_phone.includes(query))
+    );
+  });
 
   return (
     <div className="space-y-6">
+      {/* Search Bar */}
+      <Card className="ios-card">
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن طالب بالاسم، اسم الأب، أو رقم الهاتف..."
+              className="w-full pr-10 pl-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filters Panel */}
       <Card className="ios-card">
         <CardContent className="pt-6">
@@ -144,7 +185,11 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
 
             <div>
               <Label>الصف</Label>
-              <Select value={gradeNumber} onValueChange={setGradeNumber}>
+              <Select 
+                value={gradeNumber} 
+                onValueChange={setGradeNumber}
+                disabled={gradeLevel === 'all'}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الصف" />
                 </SelectTrigger>
@@ -159,7 +204,11 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
 
             <div>
               <Label>الشعبة</Label>
-              <Select value={section} onValueChange={setSection}>
+              <Select 
+                value={section} 
+                onValueChange={setSection}
+                disabled={gradeLevel === 'all'}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الشعبة" />
                 </SelectTrigger>
@@ -206,7 +255,9 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
           <Card className="ios-card">
             <CardContent className="pt-4">
               <div className="text-sm text-gray-600 dark:text-gray-400">إجمالي الطلاب</div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{students.length}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {filteredStudents.length} {searchQuery && `من ${students.length}`}
+              </div>
             </CardContent>
           </Card>
           <Card className="ios-card">
@@ -245,9 +296,16 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
             لا يوجد طلاب. قم بتحديد الفلاتر والضغط على "استيراد الطلاب".
           </AlertDescription>
         </Alert>
+      ) : filteredStudents.length === 0 ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            لا توجد نتائج مطابقة لبحثك "{searchQuery}". جرب كلمات مختلفة.
+          </AlertDescription>
+        </Alert>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {students
+          {filteredStudents
             .sort((a, b) => a.full_name.localeCompare(b.full_name, 'ar'))
             .map((student) => (
               <StudentFinanceCard
@@ -312,7 +370,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
               ) : (
                 <div className="space-y-2">
                   {studentsWithBalance
-                    .sort((a, b) => b.balance - a.balance) // ترتيب من الأكبر للأصغر
+                    .sort((a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0)) // ترتيب من الأكبر للأصغر
                     .map((student, index) => (
                       <Card 
                         key={student.student_id}
@@ -339,10 +397,10 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
                             </div>
                             <div className="text-left">
                               <div className="text-xl font-bold text-orange-600">
-                                {student.balance.toLocaleString('ar-SY')} ل.س
+                                {(Number(student.balance) || 0).toLocaleString('ar-SY')} ل.س
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
-                                مدفوع: {student.total_paid.toLocaleString('ar-SY')}
+                                مدفوع: {(Number(student.total_paid) || 0).toLocaleString('ar-SY')}
                               </div>
                             </div>
                           </div>

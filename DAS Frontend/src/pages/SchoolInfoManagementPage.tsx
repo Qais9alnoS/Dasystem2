@@ -14,6 +14,7 @@ const SchoolInfoManagementPage = () => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasDefaultClasses, setHasDefaultClasses] = useState(false);
 
@@ -57,6 +58,26 @@ const SchoolInfoManagementPage = () => {
       const teachersResponse = await api.teachers.getAll({ academic_year_id: selectedAcademicYear });
       const allTeachers = Array.isArray(teachersResponse) ? teachersResponse : (teachersResponse?.data || []);
       setTeachers(allTeachers);
+      
+      // Load teacher assignments for all teachers
+      const assignmentsPromises = allTeachers.map(async (teacher: Teacher) => {
+        if (teacher.id) {
+          try {
+            const response = await api.teachers.getAssignments(teacher.id, {
+              academic_year_id: selectedAcademicYear
+            });
+            return response.success && response.data ? response.data : [];
+          } catch (error) {
+            console.error(`Failed to load assignments for teacher ${teacher.id}:`, error);
+            return [];
+          }
+        }
+        return [];
+      });
+      
+      const allAssignments = await Promise.all(assignmentsPromises);
+      const flatAssignments = allAssignments.flat();
+      setTeacherAssignments(flatAssignments);
     } catch (error) {
       console.error('Failed to load data:', error);
       toast({
@@ -170,6 +191,16 @@ const SchoolInfoManagementPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to count teachers for a specific class
+  const getTeachersForClass = (classId: number) => {
+    const teacherIds = new Set(
+      teacherAssignments
+        .filter(assignment => assignment.class_id === classId)
+        .map(assignment => assignment.teacher_id)
+    );
+    return teacherIds.size;
   };
 
   // Calculate statistics
@@ -330,6 +361,8 @@ const SchoolInfoManagementPage = () => {
                              s.grade_number === cls.grade_number &&
                              s.session_type === cls.session_type
                       );
+                      
+                      const teachersCount = cls.id ? getTeachersForClass(cls.id) : 0;
 
                       return (
                         <Card key={cls.id} className="hover:shadow-md transition-shadow">
@@ -350,6 +383,10 @@ const SchoolInfoManagementPage = () => {
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">عدد الطلاب:</span>
                                 <span className="font-medium">{studentsInClass.length}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">عدد الأساتذة:</span>
+                                <span className="font-medium text-green-600 dark:text-green-400">{teachersCount}</span>
                               </div>
                             </div>
                             <div className="flex gap-2 mt-4">

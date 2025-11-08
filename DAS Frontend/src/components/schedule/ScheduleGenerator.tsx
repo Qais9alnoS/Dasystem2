@@ -40,6 +40,8 @@ interface ScheduleGeneratorProps {
   projectId: string;
   academicYearId: number;
   sessionType: 'morning' | 'evening';
+  classId?: number;
+  section?: string;
   onScheduleGenerated?: (result: ScheduleGenerationResult) => void;
 }
 
@@ -47,6 +49,8 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   projectId,
   academicYearId,
   sessionType,
+  classId,
+  section,
   onScheduleGenerated 
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -74,14 +78,86 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     setCurrentStep('');
 
     try {
-      // Call the backend API to generate schedules
-      const response = await schedulesApi.create({
+      // Prepare the request with required fields for schedule generation
+      const currentDate = new Date();
+      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 6, 0);
+
+      const generationRequest = {
         academic_year_id: academicYearId,
         session_type: sessionType,
-        // Add other required fields as needed
-      });
+        class_id: classId,  // Add class_id
+        section: section,   // Add section
+        name: `${sessionType === 'morning' ? 'جدول الفترة الصباحية' : 'جدول الفترة المسائية'} - ${new Date().getFullYear()}`,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        periods_per_day: 6,
+        break_periods: [3],
+        break_duration: 15,
+        working_days: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'],
+        session_start_time: sessionType === 'morning' ? '08:00:00' : '14:00:00',
+        period_duration: 45,
+        auto_assign_teachers: true,
+        balance_teacher_load: true,
+        avoid_teacher_conflicts: true,
+        prefer_subject_continuity: true
+      };
+
+      console.log('Sending generation request:', generationRequest);
+
+      // Call the backend API to generate schedules
+      const response = await schedulesApi.generate(generationRequest);
+      
+      console.log('Generation response:', response);
 
       if (response.success && response.data) {
+        // Check if generation actually created schedules
+        const totalCreated = response.data.total_assignments_created || 0;
+        
+        if (totalCreated === 0 && response.data.warnings && response.data.warnings.length > 0) {
+          // Generation failed - show detailed error
+          const firstWarnings = response.data.warnings.slice(0, 5);
+          const warningsText = firstWarnings.join('\n• ');
+          
+          toast({
+            title: "فشل في إنشاء الجدول",
+            description: `تم اكتشاف ${response.data.warnings.length} مشكلة. أول 5 مشاكل:\n• ${warningsText}`,
+            variant: "destructive"
+          });
+          
+          // Show diagnostic info
+          try {
+            console.log('Fetching diagnostics with:', { academicYearId, sessionType });
+            const diagnostics = await schedulesApi.getDiagnostics(academicYearId, sessionType);
+            if (diagnostics.success && diagnostics.data) {
+              const issues = diagnostics.data.issues;
+              const recommendations = diagnostics.data.recommendations.filter((r: string | null) => r !== null);
+              
+              console.log('Diagnostics:', diagnostics.data);
+              
+              if (recommendations.length > 0) {
+                toast({
+                  title: "تشخيص المشكلة",
+                  description: `${recommendations.join('\n')}\n\nالمواد الناقصة: ${issues.missing_subjects.length}\nالمعلمين غير المكلفين: ${issues.missing_teacher_assignments.length}`,
+                  variant: "destructive",
+                  duration: 10000 // Show for 10 seconds
+                });
+              }
+            }
+          } catch (diagError: any) {
+            console.error('Error fetching diagnostics:', diagError);
+            console.error('Diagnostics error details:', {
+              academicYearId,
+              sessionType,
+              error: diagError.message || diagError
+            });
+            // Continue even if diagnostics fail - don't show error to user
+          }
+          
+          setIsGenerating(false);
+          return;
+        }
+        
         // Simulate step-by-step generation process for UI feedback
         for (let i = 0; i < generationSteps.length; i++) {
           setCurrentStep(generationSteps[i]);
@@ -93,27 +169,13 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
         // Process the response data to match our UI structure
         const processedResult: ScheduleGenerationResult = {
-          success: response.data.success,
-          generatedSchedules: response.data.generated_schedules?.length || 0,
-          totalClasses: response.data.total_grades || 0,
-          completedClasses: response.data.generated_schedules?.map(schedule => 
-            `${schedule.grade_id} - ${schedule.division_id}`) || [],
-          incompleteClasses: response.data.missing_data?.map(data => ({
-            className: `${data.grade} - ${data.division}`,
-            reason: data.reason,
-            missingItems: data.required_actions || [],
-            suggestion: data.suggestion || ''
-          })) || [],
-          conflicts: response.data.conflicts?.map(conflict => ({
-            type: 'constraint_violation', // Map appropriately based on conflict type
-            description: conflict.description,
-            affectedItems: conflict.affected_items || [],
-            severity: conflict.priority === 'عالي' ? 'high' : 
-                     conflict.priority === 'متوسط' ? 'medium' : 'low',
-            suggestion: conflict.suggestion || ''
-          })) || [],
-          generationTime: 0, // This would need to be provided by backend
-          suggestions: response.data.conflicts?.map(conflict => conflict.suggestion || '') || []
+          success: response.data.generation_status === 'completed',
+          generated_schedules: [],
+          missing_data: [],
+          conflicts: [],
+          total_grades: response.data.summary?.classes_scheduled || 0,
+          completed_grades: response.data.summary?.classes_scheduled || 0,
+          message: `تم إنشاء ${response.data.total_assignments_created} حصة بنجاح`
         };
 
         setLastResult(processedResult);
@@ -121,24 +183,90 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           onScheduleGenerated(response.data);
         }
 
+        const classesScheduled = response.data.summary?.classes_scheduled || 0;
+        const classWord = classesScheduled === 1 ? 'صف' : 'صفوف';
+        
         toast({
-          title: "تم إنشاء الجداول بنجاح",
-          description: "تم إنشاء جداول الصفوف بنجاح مع حل معظم التعارضات",
+          title: "تم إنشاء الجدول بنجاح",
+          description: `تم إنشاء ${response.data.total_assignments_created} حصة لـ ${classesScheduled} ${classWord}`,
         });
       } else {
-        throw new Error(response.message || 'فشل في إنشاء الجداول');
+        throw new Error(response.message || 'فشل في إنشاء الجدول');
       }
     } catch (error: any) {
       console.error('Error generating schedules:', error);
+      
+      // More detailed error message
+      let errorMessage = "حدث خطأ أثناء إنشاء الجدول";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      if (error.details) {
+        console.log('Error details:', error.details);
+        errorMessage += `\n\nالتفاصيل: ${JSON.stringify(error.details)}`;
+      }
+      
       toast({
-        title: "خطأ في إنشاء الجداول",
-        description: error.message || "حدث خطأ أثناء إنشاء الجداول",
-        variant: "destructive"
+        title: "خطأ في إنشاء الجدول",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 10000
       });
+      
+      // Try to get diagnostics even on error
+      try {
+        console.log('Fetching diagnostics after error with:', { academicYearId, sessionType });
+        const diagnostics = await schedulesApi.getDiagnostics(academicYearId, sessionType);
+        if (diagnostics.success && diagnostics.data) {
+          console.log('System diagnostics:', diagnostics.data);
+          
+          if (!diagnostics.data.is_ready_for_generation) {
+            const recommendations = diagnostics.data.recommendations.filter((r: string | null) => r !== null);
+            if (recommendations.length > 0) {
+              toast({
+                title: "النظام غير جاهز لإنشاء الجدول",
+                description: recommendations.join('\n'),
+                variant: "destructive",
+                duration: 10000
+              });
+            }
+          }
+        }
+      } catch (diagError: any) {
+        console.error('Error fetching diagnostics after generation error:', diagError);
+        console.error('Diagnostics error details:', {
+          academicYearId,
+          sessionType,
+          error: diagError.message || diagError
+        });
+        // Don't show error to user - diagnostics is optional
+      }
     } finally {
       setIsGenerating(false);
       setCurrentStep('');
     }
+  };
+
+  const handleViewSchedules = () => {
+    // Navigate to schedule viewer or pass data to parent
+    if (onScheduleGenerated && lastResult) {
+      toast({
+        title: "فتح عارض الجدول",
+        description: "جاري تحميل الجدول المُنشأ...",
+      });
+      // The parent component should handle navigation to view page
+    }
+  };
+
+  const handleExportSchedules = () => {
+    toast({
+      title: "تصدير الجدول",
+      description: "جاري تجهيز ملف التصدير...",
+    });
+    // TODO: Implement export functionality
+    // This would typically call an API endpoint to generate Excel/PDF
   };
 
   const getSeverityColor = (severity: string) => {
@@ -166,23 +294,23 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            إنشاء الجداول الدراسية
+            إنشاء الجدول الدراسي
           </CardTitle>
           <CardDescription>
-            إنشاء جداول تلقائية لجميع الصفوف والشعب مع مراعاة القيود والشروط
+            إنشاء جدول تلقائي للصف والشعبة المحددين مع مراعاة القيود والشروط
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!isGenerating && !lastResult && (
             <div className="text-center py-8">
               <Play className="h-16 w-16 mx-auto mb-4 text-primary opacity-50" />
-              <h3 className="text-lg font-medium mb-2">جاهز لإنشاء الجداول</h3>
+              <h3 className="text-lg font-medium mb-2">جاهز لإنشاء الجدول</h3>
               <p className="text-muted-foreground mb-4">
-                انقر على الزر أدناه لبدء عملية إنشاء الجداول التلقائية
+                انقر على الزر أدناه لبدء عملية إنشاء الجدول الدراسي
               </p>
               <Button onClick={handleGenerateSchedules} size="lg" className="gap-2">
                 <Play className="h-5 w-5" />
-                بدء إنشاء الجداول
+                بدء إنشاء الجدول
               </Button>
             </div>
           )}
@@ -191,7 +319,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             <div className="space-y-4">
               <div className="text-center">
                 <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
-                <h3 className="text-lg font-medium mb-2">جاري إنشاء الجداول...</h3>
+                <h3 className="text-lg font-medium mb-2">جاري إنشاء الجدول...</h3>
                 <p className="text-muted-foreground">{currentStep}</p>
               </div>
               
@@ -215,9 +343,9 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-8 w-8 text-green-500" />
                   <div>
-                    <h3 className="text-lg font-medium">تم إنشاء الجداول بنجاح</h3>
+                    <h3 className="text-lg font-medium">تم إنشاء الجدول بنجاح</h3>
                     <p className="text-sm text-muted-foreground">
-                      استغرقت العملية {lastResult.generationTime} ثانية
+                      {lastResult.message}
                     </p>
                   </div>
                 </div>
@@ -226,13 +354,13 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                     <RefreshCw className="h-4 w-4 ml-1" />
                     إعادة إنشاء
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={handleExportSchedules}>
                     <Download className="h-4 w-4 ml-1" />
                     تصدير
                   </Button>
-                  <Button size="sm">
+                  <Button size="sm" onClick={handleViewSchedules}>
                     <Eye className="h-4 w-4 ml-1" />
-                    عرض الجداول
+                    عرض الجدول
                   </Button>
                 </div>
               </div>
@@ -248,15 +376,15 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             <Card>
               <CardContent className="p-4 text-center">
                 <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                <p className="text-2xl font-bold">{lastResult.generatedSchedules}</p>
-                <p className="text-sm text-muted-foreground">جدول مكتمل</p>
+                <p className="text-2xl font-bold">{lastResult.generated_schedules.length}</p>
+                <p className="text-sm text-muted-foreground">جداول مُنشأة</p>
               </CardContent>
             </Card>
             
             <Card>
               <CardContent className="p-4 text-center">
                 <Calendar className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                <p className="text-2xl font-bold">{lastResult.totalClasses}</p>
+                <p className="text-2xl font-bold">{lastResult.total_grades}</p>
                 <p className="text-sm text-muted-foreground">إجمالي الصفوف</p>
               </CardContent>
             </Card>
@@ -264,7 +392,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             <Card>
               <CardContent className="p-4 text-center">
                 <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-orange-500" />
-                <p className="text-2xl font-bold">{lastResult.incompleteClasses.length}</p>
+                <p className="text-2xl font-bold">{lastResult.missing_data.length}</p>
                 <p className="text-sm text-muted-foreground">صفوف ناقصة</p>
               </CardContent>
             </Card>
@@ -278,13 +406,13 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             </Card>
           </div>
 
-          {/* Incomplete Classes */}
-          {lastResult.incompleteClasses.length > 0 && (
+          {/* Missing Data (Incomplete Classes) */}
+          {lastResult.missing_data.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-orange-500" />
-                  الصفوف غير المكتملة ({lastResult.incompleteClasses.length})
+                  الصفوف غير المكتملة ({lastResult.missing_data.length})
                 </CardTitle>
                 <CardDescription>
                   الصفوف التي لم يتم إنشاء جداولها بسبب نقص المعلومات
@@ -292,27 +420,27 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {lastResult.incompleteClasses.map((classInfo, index) => (
+                  {lastResult.missing_data.map((missingInfo, index) => (
                     <div key={index} className="p-4 border rounded-lg bg-orange-50">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
-                          <h4 className="font-medium text-orange-800">{classInfo.className}</h4>
-                          <p className="text-sm text-orange-700 mt-1">{classInfo.reason}</p>
+                          <h4 className="font-medium text-orange-800">{missingInfo.grade} - {missingInfo.division}</h4>
+                          <p className="text-sm text-orange-700 mt-1">{missingInfo.reason}</p>
                           
                           <div className="mt-2">
                             <p className="text-xs font-medium text-orange-800 mb-1">المطلوب:</p>
                             <div className="flex flex-wrap gap-1">
-                              {classInfo.missingItems.map((item, idx) => (
+                              {missingInfo.required_actions.map((action, idx) => (
                                 <Badge key={idx} variant="outline" className="text-xs text-orange-700 border-orange-300">
-                                  {item}
+                                  {action}
                                 </Badge>
                               ))}
                             </div>
                           </div>
                           
                           <div className="mt-2 p-2 bg-orange-100 rounded text-xs text-orange-800">
-                            <strong>الحل المقترح:</strong> {classInfo.suggestion}
+                            <strong>الحل المقترح:</strong> {missingInfo.suggestion}
                           </div>
                         </div>
                         <Button variant="outline" size="sm" className="text-orange-700 border-orange-300">
@@ -341,7 +469,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               <CardContent>
                 <div className="space-y-4">
                   {lastResult.conflicts.map((conflict, index) => {
-                    const ConflictIcon = getConflictIcon(conflict.type);
+                    const ConflictIcon = getConflictIcon(conflict.constraint_type);
                     return (
                       <div key={index} className="p-4 border rounded-lg">
                         <div className="flex items-start gap-3">
@@ -349,19 +477,29 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <h4 className="font-medium">{conflict.description}</h4>
-                              <Badge variant={getSeverityColor(conflict.severity) as any} className="text-xs">
-                                {conflict.severity === 'high' ? 'عالي' : 
-                                 conflict.severity === 'medium' ? 'متوسط' : 'منخفض'}
+                              <Badge variant={getSeverityColor(conflict.priority) as any} className="text-xs">
+                                {conflict.priority}
                               </Badge>
                             </div>
                             
                             <div className="text-sm text-muted-foreground mb-2">
-                              <strong>المتأثر:</strong> {conflict.affectedItems.join(', ')}
+                              <strong>المتأثر:</strong> {conflict.affected_items.join(', ')}
                             </div>
                             
                             <div className="p-2 bg-blue-50 rounded text-sm text-blue-800">
                               <strong>الحل المقترح:</strong> {conflict.suggestion}
                             </div>
+                            
+                            {conflict.detailed_steps && conflict.detailed_steps.length > 0 && (
+                              <div className="mt-2">
+                                <strong className="text-xs">خطوات الحل:</strong>
+                                <ul className="list-disc list-inside text-xs text-gray-600 mt-1">
+                                  {conflict.detailed_steps.map((step, idx) => (
+                                    <li key={idx}>{step}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                           <Button variant="outline" size="sm">
                             حل
@@ -375,29 +513,17 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             </Card>
           )}
 
-          {/* Suggestions */}
-          {lastResult.suggestions.length > 0 && (
+          {/* Message */}
+          {lastResult.message && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-blue-500" />
-                  اقتراحات التحسين
+                  معلومات إضافية
                 </CardTitle>
-                <CardDescription>
-                  اقتراحات لتحسين جودة الجداول في المرات القادمة
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {lastResult.suggestions.map((suggestion, index) => (
-                    <div key={index} className="flex items-start gap-2 p-2 rounded bg-blue-50">
-                      <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center mt-0.5 flex-shrink-0">
-                        {index + 1}
-                      </div>
-                      <p className="text-sm text-blue-800">{suggestion}</p>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm text-gray-700">{lastResult.message}</p>
               </CardContent>
             </Card>
           )}

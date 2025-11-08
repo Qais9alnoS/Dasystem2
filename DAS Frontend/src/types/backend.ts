@@ -181,12 +181,12 @@ export const DEFAULT_GRADES = [
 
 export const DEFAULT_DIVISIONS = [
   // الصفوف 1-6: شعبة واحدة فقط
-  { name: "أ", type: "شعبة واحدة", grade_order: 1, division_order: 1 },
-  { name: "أ", type: "شعبة واحدة", grade_order: 2, division_order: 1 },
-  { name: "أ", type: "شعبة واحدة", grade_order: 3, division_order: 1 },
-  { name: "أ", type: "شعبة واحدة", grade_order: 4, division_order: 1 },
-  { name: "أ", type: "شعبة واحدة", grade_order: 5, division_order: 1 },
-  { name: "أ", type: "شعبة واحدة", grade_order: 6, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 1, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 2, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 3, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 4, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 5, division_order: 1 },
+  { name: "1", type: "شعبة واحدة", grade_order: 6, division_order: 1 },
   // الصفوف 7-11: شعبتين (شباب وبنات)
   { name: "شباب", type: "شباب", grade_order: 7, division_order: 1 },
   { name: "بنات", type: "بنات", grade_order: 7, division_order: 2 },

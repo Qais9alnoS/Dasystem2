@@ -4,8 +4,11 @@ import {
   AcademicYear,
   Class, Subject,
   Student, StudentFinance, StudentPayment, StudentAcademic,
+  StudentFinanceSummary, StudentFinanceDetailed,
   Teacher, TeacherAssignment, TeacherAttendance,
   FinanceCategory, FinanceTransaction, Budget,
+  FinanceCard, FinanceCardTransaction, FinanceCardSummary, FinanceCardDetailed,
+  HistoricalBalance, FinanceManagerDashboard,
   Activity, ActivityParticipant, StudentActivityParticipation,
   ActivityRegistration, ActivitySchedule, ActivityAttendance,
   Schedule, ScheduleConstraint, ConstraintTemplate,
@@ -95,15 +98,20 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        
         // Handle authentication errors
         if (response.status === 401) {
-          localStorage.removeItem('das_token');
-          localStorage.removeItem('das_user');
-          window.location.href = '/login';
-          throw new ApiError('Authentication required', 401, 'UNAUTHORIZED');
+          // Don't automatically logout - let AuthContext handle it
+          // Only clear and redirect after multiple failed attempts
+          throw new ApiError(
+            errorData?.detail || 'Authentication required',
+            401,
+            'UNAUTHORIZED',
+            errorData
+          );
         }
 
-        const errorData = await response.json().catch(() => null);
         throw new ApiError(
           errorData?.message || errorData?.detail || `HTTP ${response.status}`,
           response.status,
@@ -623,8 +631,8 @@ export const activitiesApi = {
     return apiClient.post<ActivityRegistration>(`/activities/${activity_id}/registrations`, registration);
   },
 
-  updateRegistration: async (activity_id: number, registration_id: number, registration: Partial<ActivityRegistration>) => {
-    return apiClient.put<ActivityRegistration>(`/activities/${activity_id}/registrations/${registration_id}`, registration);
+  updateRegistration: async (registration_id: number, registration: Partial<ActivityRegistration>) => {
+    return apiClient.put<ActivityRegistration>(`/activities/registrations/${registration_id}`, registration);
   },
 
   deleteRegistration: async (activity_id: number, registration_id: number) => {
@@ -922,23 +930,23 @@ export const schedulesApi = {
         .filter(([_, v]) => v !== undefined && v !== null)
         .map(([k, v]) => [k, String(v)])
     ).toString() : '';
-    return apiClient.get<Schedule[]>(`/api/schedules/${queryString}`);
+    return apiClient.get<Schedule[]>(`/schedules/${queryString}`);
   },
 
   getById: async (id: number) => {
-    return apiClient.get<Schedule>(`/api/schedules/${id}`);
+    return apiClient.get<Schedule>(`/schedules/${id}`);
   },
 
   create: async (schedule: Omit<Schedule, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<Schedule>('/api/schedules/', schedule);
+    return apiClient.post<Schedule>('/schedules/', schedule);
   },
 
   update: async (id: number, schedule: Partial<Schedule>) => {
-    return apiClient.put<Schedule>(`/api/schedules/${id}`, schedule);
+    return apiClient.put<Schedule>(`/schedules/${id}`, schedule);
   },
 
   delete: async (id: number) => {
-    return apiClient.delete<{ message: string }>(`/api/schedules/${id}`);
+    return apiClient.delete<{ message: string }>(`/schedules/${id}`);
   },
 
   getWeeklyView: async (academic_year_id: number, session_type: string, class_id?: number, teacher_id?: number) => {
@@ -946,29 +954,29 @@ export const schedulesApi = {
     if (class_id) paramsObj.class_id = class_id;
     if (teacher_id) paramsObj.teacher_id = teacher_id;
     const params = '?' + new URLSearchParams(paramsObj).toString();
-    return apiClient.get<any>(`/api/schedules/weekly-view${params}`);
+    return apiClient.get<any>(`/schedules/weekly-view${params}`);
   },
 
   analyzeConflicts: async (academic_year_id: number, session_type: string) => {
     const params = '?' + new URLSearchParams({ academic_year_id: academic_year_id.toString(), session_type }).toString();
-    return apiClient.get<any>(`/api/schedules/analysis/conflicts${params}`);
+    return apiClient.get<any>(`/schedules/analysis/conflicts${params}`);
   },
 
   getConstraints: async (academic_year_id?: number) => {
     const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<ScheduleConstraint[]>(`/api/schedules/constraints${params}`);
+    return apiClient.get<ScheduleConstraint[]>(`/schedules/constraints${params}`);
   },
 
   createConstraint: async (constraint: Omit<ScheduleConstraint, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<ScheduleConstraint>('/api/schedules/constraints', constraint);
+    return apiClient.post<ScheduleConstraint>('/schedules/constraints/', constraint);
   },
 
   updateConstraint: async (id: number, constraint: Partial<ScheduleConstraint>) => {
-    return apiClient.put<ScheduleConstraint>(`/api/schedules/constraints/${id}`, constraint);
+    return apiClient.put<ScheduleConstraint>(`/schedules/constraints/${id}`, constraint);
   },
 
   deleteConstraint: async (id: number) => {
-    return apiClient.delete<void>(`/api/schedules/constraints/${id}`);
+    return apiClient.delete<void>(`/schedules/constraints/${id}`);
   },
 
   // Constraint Template Management
@@ -982,23 +990,113 @@ export const schedulesApi = {
         .filter(([_, v]) => v !== undefined && v !== null)
         .map(([k, v]) => [k, String(v)])
     ).toString() : '';
-    return apiClient.get<ConstraintTemplate[]>(`/api/schedules/constraint-templates/${queryString}`);
+    return apiClient.get<ConstraintTemplate[]>(`/schedules/constraint-templates/${queryString}`);
   },
 
   getConstraintTemplate: async (id: number) => {
-    return apiClient.get<ConstraintTemplate>(`/api/schedules/constraint-templates/${id}`);
+    return apiClient.get<ConstraintTemplate>(`/schedules/constraint-templates/${id}`);
   },
 
   createConstraintTemplate: async (template: Omit<ConstraintTemplate, 'id' | 'created_at' | 'updated_at'>) => {
-    return apiClient.post<ConstraintTemplate>('/api/schedules/constraint-templates/', template);
+    return apiClient.post<ConstraintTemplate>('/schedules/constraint-templates/', template);
   },
 
   updateConstraintTemplate: async (id: number, template: Partial<ConstraintTemplate>) => {
-    return apiClient.put<ConstraintTemplate>(`/api/schedules/constraint-templates/${id}`, template);
+    return apiClient.put<ConstraintTemplate>(`/schedules/constraint-templates/${id}`, template);
   },
 
   deleteConstraintTemplate: async (id: number) => {
-    return apiClient.delete<void>(`/api/schedules/constraint-templates/${id}`);
+    return apiClient.delete<void>(`/schedules/constraint-templates/${id}`);
+  },
+
+  // Schedule Generation
+  generate: async (request: {
+    academic_year_id: number;
+    session_type: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    periods_per_day?: number;
+    break_periods?: number[];
+    break_duration?: number;
+    working_days?: string[];
+    session_start_time?: string;
+    period_duration?: number;
+    auto_assign_teachers?: boolean;
+    balance_teacher_load?: boolean;
+    avoid_teacher_conflicts?: boolean;
+    prefer_subject_continuity?: boolean;
+  }) => {
+    return apiClient.post<any>('/schedules/generate', request);
+  },
+
+  // Schedule Validation
+  validate: async (params: {
+    academic_year_id: number;
+    class_id: number;
+    section?: string;
+    session_type?: string;
+  }) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return apiClient.post<any>(`/schedules/validate?${queryString}`, {});
+  },
+
+  // Get Schedule Conflicts
+  getConflicts: async (scheduleId: number) => {
+    return apiClient.get<any>(`/schedules/${scheduleId}/conflicts`);
+  },
+
+  // Publish Schedule
+  publish: async (scheduleId: number) => {
+    return apiClient.post<any>(`/schedules/${scheduleId}/publish`, {});
+  },
+
+  // Save as Draft
+  saveAsDraft: async (scheduleId: number) => {
+    return apiClient.post<any>(`/schedules/${scheduleId}/save-as-draft`, {});
+  },
+
+  // Get Diagnostics
+  getDiagnostics: async (academicYearId: number, sessionType: string) => {
+    const params = new URLSearchParams({
+      academic_year_id: academicYearId.toString(),
+      session_type: sessionType
+    });
+    return apiClient.get<any>(`/schedules/diagnostics?${params.toString()}`);
+  },
+
+  // Bulk Delete Schedules
+  bulkDelete: async (params: {
+    academic_year_id: number;
+    session_type: string;
+    class_id?: number;
+    section?: string;
+  }) => {
+    const queryParams = new URLSearchParams({
+      academic_year_id: params.academic_year_id.toString(),
+      session_type: params.session_type
+    });
+    
+    if (params.class_id !== undefined && params.class_id !== null) {
+      queryParams.append('class_id', params.class_id.toString());
+    }
+    
+    if (params.section !== undefined && params.section !== null && params.section !== '') {
+      queryParams.append('section', String(params.section));
+    }
+    
+    return apiClient.delete<{
+      message: string;
+      deleted_count: number;
+      academic_year_id: number;
+      session_type: string;
+      class_id?: number;
+      section?: string;
+    }>(`/schedules/bulk-delete?${queryParams.toString()}`);
   },
 };
 

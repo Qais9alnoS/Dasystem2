@@ -140,11 +140,46 @@ const AddEditGradePage = () => {
       const allStudents = Array.isArray(studentsResponse) ? studentsResponse : (studentsResponse?.data || []);
       setStudentsInGrade(allStudents);
 
-      // For teachers, we would need teacher assignments
-      // For now, we'll just get all teachers
-      const teachersResponse = await api.teachers.getAll({ academic_year_id: selectedAcademicYear });
-      const allTeachers = Array.isArray(teachersResponse) ? teachersResponse : (teachersResponse?.data || []);
-      setTeachersInGrade(allTeachers);
+      // Load teachers assigned to this specific class
+      if (gradeId) {
+        // In edit mode, we have a class ID to filter by
+        const classId = parseInt(gradeId);
+        
+        // Get all teachers
+        const teachersResponse = await api.teachers.getAll({ 
+          academic_year_id: selectedAcademicYear,
+          session_type: formData.session_type
+        });
+        const allTeachers = Array.isArray(teachersResponse) ? teachersResponse : (teachersResponse?.data || []);
+        
+        // Get assignments for each teacher and filter those assigned to this class
+        const teacherAssignmentsPromises = allTeachers.map(async (teacher: Teacher) => {
+          if (teacher.id) {
+            try {
+              const assignmentsResponse = await api.teachers.getAssignments(teacher.id, {
+                academic_year_id: selectedAcademicYear
+              });
+              const assignments = assignmentsResponse.success && assignmentsResponse.data ? assignmentsResponse.data : [];
+              
+              // Check if this teacher has any assignment to this class
+              const hasAssignmentToThisClass = assignments.some((a: any) => a.class_id === classId);
+              
+              return hasAssignmentToThisClass ? teacher : null;
+            } catch (error) {
+              console.error(`Failed to load assignments for teacher ${teacher.id}:`, error);
+              return null;
+            }
+          }
+          return null;
+        });
+        
+        const teachersResults = await Promise.all(teacherAssignmentsPromises);
+        const filteredTeachers = teachersResults.filter((t): t is Teacher => t !== null);
+        setTeachersInGrade(filteredTeachers);
+      } else {
+        // In create mode, no teachers assigned yet
+        setTeachersInGrade([]);
+      }
     } catch (error) {
       console.error('Failed to load students/teachers:', error);
     }
@@ -572,7 +607,9 @@ const AddEditGradePage = () => {
                   {teachersInGrade.length}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  أستاذ مسجل في المدرسة
+                  {teachersInGrade.length === 0 ? 'لا يوجد أساتذة معينون' :
+                   teachersInGrade.length === 1 ? 'أستاذ واحد معيّن لهذا الصف' :
+                   `${teachersInGrade.length} أساتذة معينون لهذا الصف`}
                 </p>
               </CardContent>
             </Card>

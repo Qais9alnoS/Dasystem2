@@ -422,11 +422,26 @@ export interface FinanceCardSummary {
     card_id: number;
     card_name: string;
     card_type: 'income' | 'expense' | 'both';
+    category: string; // activity, student, custom
+    is_default?: boolean; // افتراضي (نشاطات/طلاب) أم مخصص
     total_income: number; // إجمالي المدخولات
     total_expenses: number; // إجمالي المصروفات
     net_amount: number; // الصافي (المدخولات - المصروفات)
     incomplete_transactions_count: number; // عدد المعاملات غير المكتملة
     status: 'open' | 'closed' | 'partial';
+}
+
+// Finance Card Detailed - تفاصيل الكارد المالي
+export interface FinanceCardDetailed {
+    card: FinanceCard;
+    transactions: FinanceCardTransaction[];
+    summary: {
+        total_income: number;
+        total_expenses: number;
+        net_amount: number;
+        completed_transactions_count: number;
+        incomplete_transactions_count: number;
+    };
 }
 
 // Historical Balance - الرصيد التاريخي

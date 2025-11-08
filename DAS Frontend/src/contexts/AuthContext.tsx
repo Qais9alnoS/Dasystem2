@@ -94,30 +94,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (storedToken && storedUser) {
                 try {
-                    dispatch({ type: 'AUTH_START' });
-                    // Validate token with backend
-                    const response = await authApi.getMe();
-                    if (response.success) {
-                        const user = response.data;
-                        if (user) {
-                            dispatch({
-                                type: 'AUTH_SUCCESS',
-                                payload: {
-                                    access_token: storedToken,
-                                    token_type: 'Bearer',
-                                    user
-                                }
-                            });
-                        } else {
-                            throw new Error('Invalid user data');
+                    // First, try to parse stored user to restore state immediately
+                    const parsedUser = JSON.parse(storedUser);
+                    
+                    // Restore state from localStorage first (optimistic)
+                    dispatch({
+                        type: 'AUTH_SUCCESS',
+                        payload: {
+                            access_token: storedToken,
+                            token_type: 'Bearer',
+                            user: parsedUser
                         }
-                    } else {
-                        throw new Error('Token validation failed');
+                    });
+                    
+                    // Then validate token with backend in background
+                    try {
+                        const response = await authApi.getMe();
+                        if (!response.success || !response.data) {
+                            // Token is invalid, logout
+                            localStorage.removeItem('das_token');
+                            localStorage.removeItem('das_user');
+                            dispatch({ type: 'AUTH_LOGOUT' });
+                        }
+                    } catch (validationError) {
+                        // If validation fails, check if it's a 401 (unauthorized) or network error
+                        if (validationError instanceof Error && validationError.message.includes('401')) {
+                            // Token is invalid, logout
+                            localStorage.removeItem('das_token');
+                            localStorage.removeItem('das_user');
+                            dispatch({ type: 'AUTH_LOGOUT' });
+                        }
+                        // For network errors, keep the user logged in (token might still be valid)
                     }
                 } catch (error) {
+                    // If stored data is corrupt, clear it
                     localStorage.removeItem('das_token');
                     localStorage.removeItem('das_user');
-                    dispatch({ type: 'AUTH_LOGOUT' }); // Changed from AUTH_ERROR to AUTH_LOGOUT
+                    dispatch({ type: 'AUTH_LOGOUT' });
                 }
             }
         };

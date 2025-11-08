@@ -134,12 +134,11 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overview">معلومات</TabsTrigger>
             <TabsTrigger value="participants">
               المشاركون ({stats.totalRegistered})
             </TabsTrigger>
-            <TabsTrigger value="financial">ملخص مالي</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto mt-4">
@@ -287,80 +286,6 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
-
-            <TabsContent value="financial" className="space-y-4">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold">{stats.totalRegistered}</p>
-                      <p className="text-sm text-muted-foreground">إجمالي المسجلين</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
-                      <p className="text-sm text-muted-foreground">مدفوع</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-                      <p className="text-sm text-muted-foreground">قيد الانتظار</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-primary">{stats.totalRevenue.toFixed(2)}</p>
-                      <p className="text-sm text-muted-foreground">الإيرادات (ل.س)</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>الملخص المالي</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">التكلفة لكل طالب:</span>
-                    <span className="font-medium">{activity.cost_per_student} ل.س</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">عدد المسجلين:</span>
-                    <span className="font-medium">{stats.totalRegistered} طالب</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الإيرادات المتوقعة:</span>
-                    <span className="font-medium">
-                      {(activity.cost_per_student * stats.totalRegistered).toFixed(2)} ل.س
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الإيرادات المحصلة:</span>
-                    <span className="font-medium text-green-600">{stats.totalRevenue.toFixed(2)} ل.س</span>
-                  </div>
-                  <div className="flex justify-between pt-3 border-t">
-                    <span className="text-muted-foreground">المبلغ المتبقي:</span>
-                    <span className="font-bold text-yellow-600">
-                      {(activity.cost_per_student * stats.totalRegistered - stats.totalRevenue).toFixed(2)} ل.س
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
             </TabsContent>
           </div>
         </Tabs>

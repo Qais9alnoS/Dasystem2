@@ -5,13 +5,25 @@ from sqlalchemy import and_, or_, func
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+from collections import defaultdict
 
 from ..database import get_db
-from ..models.schedules import Schedule, ScheduleConstraint, ScheduleGenerationHistory, ConstraintTemplate
+from ..models.schedules import Schedule, ScheduleConstraint, ScheduleGenerationHistory, ConstraintTemplate, ScheduleAssignment, TimeSlot
 from ..models.academic import Class, Subject
 from ..models.teachers import Teacher
 from ..models.users import User
-from ..core.dependencies import get_current_user, get_school_user, get_director_user
+from ..core.dependencies import (
+    get_current_user, 
+    get_school_user, 
+    get_director_user,
+    get_morning_supervisor,
+    get_evening_supervisor,
+    get_any_supervisor,
+    check_session_access,
+    get_user_allowed_sessions
+)
+from ..schemas.schedules import ScheduleGenerationRequest, ScheduleGenerationResponse
+from ..services.schedule_service import ScheduleGenerationService
 
 router = APIRouter(tags=["schedules"])
 
@@ -197,6 +209,30 @@ async def create_schedule_entry(
     db.commit()
     db.refresh(db_schedule)
     return db_schedule
+
+@router.post("/generate", response_model=ScheduleGenerationResponse)
+async def generate_schedule(
+    request: ScheduleGenerationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Generate a complete schedule automatically based on the provided configuration.
+    This endpoint creates a full schedule with optimized teacher assignments and time slots.
+    """
+    try:
+        # Initialize the schedule generation service
+        schedule_service = ScheduleGenerationService(db)
+        
+        # Generate the schedule
+        result = schedule_service.generate_schedule(request)
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Schedule generation failed: {str(e)}")
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(
@@ -591,4 +627,695 @@ async def analyze_schedule_conflicts(
         "session_type": session_type,
         "total_conflicts": len(conflicts),
         "conflicts": conflicts
+    }
+
+# Draft Management Endpoints
+@router.get("/drafts", response_model=List[ScheduleResponse])
+async def get_draft_schedules(
+    academic_year_id: Optional[int] = Query(None),
+    session_type: Optional[str] = Query(None),
+    class_id: Optional[int] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Get all draft schedules"""
+    query = db.query(Schedule).filter(Schedule.status == "draft")
+    
+    if academic_year_id:
+        query = query.filter(Schedule.academic_year_id == academic_year_id)
+    
+    if session_type:
+        query = query.filter(Schedule.session_type == session_type)
+    
+    if class_id:
+        query = query.filter(Schedule.class_id == class_id)
+    
+    drafts = query.offset(skip).limit(limit).all()
+    return drafts
+
+@router.post("/{schedule_id}/publish", response_model=ScheduleResponse)
+async def publish_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Publish a draft schedule after validating for conflicts
+    """
+    from ..services.teacher_availability_service import TeacherAvailabilityService
+    
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    if schedule.status == "published":
+        raise HTTPException(status_code=400, detail="Schedule is already published")
+    
+    # Check for conflicts before publishing
+    conflicts = []
+    
+    # Get all assignments for this schedule
+    assignments = db.query(ScheduleAssignment).filter(
+        ScheduleAssignment.schedule_id == schedule_id
+    ).all()
+    
+    # Check for teacher conflicts
+    for assignment in assignments:
+        if not assignment.teacher_id or not assignment.time_slot_id:
+            continue
+            
+        from ..models.schedules import TimeSlot
+        time_slot = db.query(TimeSlot).filter(TimeSlot.id == assignment.time_slot_id).first()
+        
+        if time_slot:
+            # Check if teacher has another assignment at the same time
+            conflicting_assignment = db.query(ScheduleAssignment).join(
+                TimeSlot, ScheduleAssignment.time_slot_id == TimeSlot.id
+            ).filter(
+                and_(
+                    ScheduleAssignment.teacher_id == assignment.teacher_id,
+                    ScheduleAssignment.schedule_id != schedule_id,
+                    TimeSlot.day_of_week == time_slot.day_of_week,
+                    TimeSlot.period_number == time_slot.period_number,
+                    ScheduleAssignment.id != assignment.id
+                )
+            ).join(
+                Schedule, ScheduleAssignment.schedule_id == Schedule.id
+            ).filter(
+                Schedule.status == "published"
+            ).first()
+            
+            if conflicting_assignment:
+                teacher = db.query(Teacher).filter(Teacher.id == assignment.teacher_id).first()
+                conflicts.append({
+                    "type": "teacher_conflict",
+                    "severity": "critical",
+                    "description": f"المعلم {teacher.full_name if teacher else 'Unknown'} لديه حصة أخرى في نفس الوقت",
+                    "teacher_id": assignment.teacher_id,
+                    "day": time_slot.day_of_week,
+                    "period": time_slot.period_number
+                })
+    
+    # Check for constraint violations
+    constraints = db.query(ScheduleConstraint).filter(
+        and_(
+            ScheduleConstraint.academic_year_id == schedule.academic_year_id,
+            ScheduleConstraint.is_active == True
+        )
+    ).all()
+    
+    # For now, just check if there are active constraints (detailed validation can be added)
+    if len(constraints) > 0:
+        # TODO: Implement detailed constraint validation
+        pass
+    
+    # If there are critical conflicts, block publishing
+    critical_conflicts = [c for c in conflicts if c.get("severity") == "critical"]
+    if critical_conflicts:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Cannot publish schedule with critical conflicts",
+                "conflicts": critical_conflicts
+            }
+        )
+    
+    # Update schedule status to published
+    schedule.status = "published"
+    db.commit()
+    
+    # Update teacher availability
+    availability_service = TeacherAvailabilityService(db)
+    availability_service.update_teacher_availability_on_schedule_save(schedule_id)
+    
+    db.refresh(schedule)
+    return schedule
+
+@router.delete("/{schedule_id}")
+async def delete_schedule_with_availability_restore(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """Delete a schedule and restore teacher availability"""
+    from ..services.teacher_availability_service import TeacherAvailabilityService
+    
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    # Restore teacher availability if schedule was published
+    if schedule.status == "published":
+        availability_service = TeacherAvailabilityService(db)
+        result = availability_service.update_teacher_availability_on_schedule_delete(schedule_id)
+    
+    # Delete the schedule (cascade will delete assignments and time slots)
+    db.delete(schedule)
+    db.commit()
+    
+    return {
+        "message": "Schedule deleted successfully",
+        "teachers_restored": result.get("restored_teachers", []) if schedule.status == "published" else []
+    }
+
+@router.post("/{schedule_id}/save-as-draft", response_model=ScheduleResponse)
+async def save_schedule_as_draft(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Save/update a schedule as draft without publishing"""
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    # Ensure status is draft
+    schedule.status = "draft"
+    db.commit()
+    db.refresh(schedule)
+    
+    return schedule
+
+@router.delete("/bulk-delete")
+async def bulk_delete_schedules(
+    academic_year_id: int = Query(..., description="Academic Year ID"),
+    session_type: str = Query(..., description="Session Type: morning, evening"),
+    class_id: Optional[int] = Query(None, description="Optional: Delete schedules only for specific class"),
+    section: Optional[str] = Query(None, description="Optional: Delete schedules only for specific section"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Bulk delete schedules for a specific academic year and session type
+    Optionally filter by class_id and section
+    """
+    # Validate session_type
+    if session_type not in ['morning', 'evening']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid session_type. Must be 'morning' or 'evening', got '{session_type}'"
+        )
+    
+    # Build query filters
+    filters = [
+        Schedule.academic_year_id == academic_year_id,
+        Schedule.session_type == session_type
+    ]
+    
+    if class_id:
+        filters.append(Schedule.class_id == class_id)
+    
+    if section and section.strip():
+        filters.append(Schedule.section == str(section).strip())
+    
+    # Get all schedules that match the filters
+    schedules_to_delete = db.query(Schedule).filter(and_(*filters)).all()
+    
+    deleted_count = len(schedules_to_delete)
+    
+    if deleted_count == 0:
+        return {
+            "message": "No schedules found matching the criteria",
+            "deleted_count": 0,
+            "academic_year_id": academic_year_id,
+            "session_type": session_type,
+            "class_id": class_id,
+            "section": section
+        }
+    
+    # Delete all matching schedules
+    for schedule in schedules_to_delete:
+        db.delete(schedule)
+    
+    db.commit()
+    
+    return {
+        "message": f"Successfully deleted {deleted_count} schedules",
+        "deleted_count": deleted_count,
+        "academic_year_id": academic_year_id,
+        "session_type": session_type,
+        "class_id": class_id,
+        "section": section
+    }
+
+@router.get("/{schedule_id}/conflicts")
+async def get_schedule_conflicts(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Get detailed conflict analysis for a specific schedule"""
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    conflicts = []
+    warnings = []
+    
+    # Get all assignments for this schedule
+    assignments = db.query(ScheduleAssignment).filter(
+        ScheduleAssignment.schedule_id == schedule_id
+    ).all()
+    
+    # Check for teacher conflicts
+    for assignment in assignments:
+        if not assignment.teacher_id or not assignment.time_slot_id:
+            warnings.append({
+                "type": "incomplete_assignment",
+                "severity": "medium",
+                "description": "توجد حصة بدون معلم محدد",
+                "assignment_id": assignment.id
+            })
+            continue
+            
+        from ..models.schedules import TimeSlot
+        time_slot = db.query(TimeSlot).filter(TimeSlot.id == assignment.time_slot_id).first()
+        
+        if time_slot:
+            # Check for teacher double-booking
+            conflicting = db.query(ScheduleAssignment).join(
+                TimeSlot, ScheduleAssignment.time_slot_id == TimeSlot.id
+            ).filter(
+                and_(
+                    ScheduleAssignment.teacher_id == assignment.teacher_id,
+                    ScheduleAssignment.id != assignment.id,
+                    TimeSlot.day_of_week == time_slot.day_of_week,
+                    TimeSlot.period_number == time_slot.period_number
+                )
+            ).first()
+            
+            if conflicting:
+                teacher = db.query(Teacher).filter(Teacher.id == assignment.teacher_id).first()
+                subject = db.query(Subject).filter(Subject.id == assignment.subject_id).first()
+                conflicts.append({
+                    "type": "teacher_conflict",
+                    "severity": "critical",
+                    "description": f"المعلم {teacher.full_name if teacher else ''} لديه تعارض في الحصة",
+                    "teacher_id": assignment.teacher_id,
+                    "teacher_name": teacher.full_name if teacher else "Unknown",
+                    "subject_name": subject.subject_name if subject else "Unknown",
+                    "day": time_slot.day_of_week,
+                    "period": time_slot.period_number,
+                    "suggestion": "اختر فترة زمنية مختلفة أو معلم آخر"
+                })
+    
+    # Check constraint violations
+    constraints = db.query(ScheduleConstraint).filter(
+        and_(
+            ScheduleConstraint.academic_year_id == schedule.academic_year_id,
+            ScheduleConstraint.is_active == True
+        )
+    ).all()
+    
+    for constraint in constraints:
+        # Check if constraint applies to this class
+        if constraint.class_id and constraint.class_id != schedule.class_id:
+            continue
+            
+        # Check constraint type and validate
+        if constraint.constraint_type == "no_consecutive" and constraint.subject_id:
+            # Check for consecutive periods of the same subject
+            subject_assignments = [a for a in assignments if a.subject_id == constraint.subject_id]
+            
+            # Group by day
+            from collections import defaultdict
+            by_day = defaultdict(list)
+            for sa in subject_assignments:
+                ts = db.query(TimeSlot).filter(TimeSlot.id == sa.time_slot_id).first()
+                if ts:
+                    by_day[ts.day_of_week].append(ts.period_number)
+            
+            # Check for consecutive periods
+            for day, periods in by_day.items():
+                sorted_periods = sorted(periods)
+                for i in range(len(sorted_periods) - 1):
+                    if sorted_periods[i + 1] == sorted_periods[i] + 1:
+                        subject = db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                        severity = "critical" if constraint.priority_level >= 4 else "warning"
+                        conflicts.append({
+                            "type": "constraint_violation",
+                            "constraint_type": "no_consecutive",
+                            "severity": severity,
+                            "description": f"القيد: لا يجب أن تكون حصص {subject.subject_name if subject else 'المادة'} متتالية",
+                            "subject_id": constraint.subject_id,
+                            "day": day,
+                            "periods": [sorted_periods[i], sorted_periods[i + 1]],
+                            "suggestion": "قم بتوزيع حصص المادة على فترات غير متتالية"
+                        })
+    
+    return {
+        "schedule_id": schedule_id,
+        "status": schedule.status,
+        "total_conflicts": len(conflicts),
+        "total_warnings": len(warnings),
+        "conflicts": conflicts,
+        "warnings": warnings,
+        "can_publish": len([c for c in conflicts if c.get("severity") == "critical"]) == 0
+    }
+
+# Export Endpoints
+@router.get("/{schedule_id}/export/excel")
+async def export_schedule_to_excel(
+    schedule_id: int,
+    include_logo: bool = Query(True),
+    include_notes: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Export schedule to Excel format"""
+    from ..services.export_service import ExportService
+    from fastapi.responses import StreamingResponse
+    
+    export_service = ExportService(db)
+    
+    try:
+        excel_file = export_service.export_schedule_excel(
+            schedule_id=schedule_id,
+            include_logo=include_logo,
+            include_notes=include_notes
+        )
+        
+        # Get schedule for filename
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        
+        class_obj = db.query(Class).filter(Class.id == schedule.class_id).first()
+        filename = f"schedule_{class_obj.grade_number if class_obj else schedule_id}_{schedule.section or '1'}.xlsx"
+        
+        return StreamingResponse(
+            excel_file,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@router.get("/{schedule_id}/export/pdf")
+async def export_schedule_to_pdf(
+    schedule_id: int,
+    orientation: str = Query("landscape", regex="^(portrait|landscape)$"),
+    include_logo: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Export schedule to PDF format"""
+    from ..services.export_service import ExportService
+    from fastapi.responses import StreamingResponse
+    
+    export_service = ExportService(db)
+    
+    try:
+        pdf_file = export_service.export_schedule_pdf(
+            schedule_id=schedule_id,
+            orientation=orientation,
+            include_logo=include_logo
+        )
+        
+        # Get schedule for filename
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        
+        class_obj = db.query(Class).filter(Class.id == schedule.class_id).first()
+        filename = f"schedule_{class_obj.grade_number if class_obj else schedule_id}_{schedule.section or '1'}.pdf"
+        
+        return StreamingResponse(
+            pdf_file,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@router.get("/{schedule_id}/export/image")
+async def export_schedule_to_image(
+    schedule_id: int,
+    format: str = Query("PNG", regex="^(PNG|JPG|JPEG)$"),
+    width: int = Query(1920, ge=800, le=4000),
+    height: int = Query(1080, ge=600, le=3000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Export schedule to image format (PNG/JPG)"""
+    from ..services.export_service import ExportService
+    from fastapi.responses import StreamingResponse
+    
+    export_service = ExportService(db)
+    
+    try:
+        image_file = export_service.export_schedule_image(
+            schedule_id=schedule_id,
+            format=format,
+            width=width,
+            height=height
+        )
+        
+        # Get schedule for filename
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        
+        class_obj = db.query(Class).filter(Class.id == schedule.class_id).first()
+        extension = format.lower()
+        filename = f"schedule_{class_obj.grade_number if class_obj else schedule_id}_{schedule.section or '1'}.{extension}"
+        
+        media_type = f"image/{extension}"
+        
+        return StreamingResponse(
+            image_file,
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@router.post("/bulk-export")
+async def bulk_export_schedules(
+    schedule_ids: List[int],
+    format: str = Query("excel", regex="^(excel|pdf)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """
+    Bulk export multiple schedules
+    Note: Returns a ZIP file containing all exported schedules
+    """
+    from ..services.export_service import ExportService
+    from fastapi.responses import StreamingResponse
+    import zipfile
+    from io import BytesIO
+    
+    export_service = ExportService(db)
+    
+    try:
+        # Create ZIP file
+        zip_buffer = BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for schedule_id in schedule_ids:
+                schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+                if not schedule:
+                    continue
+                
+                class_obj = db.query(Class).filter(Class.id == schedule.class_id).first()
+                base_filename = f"schedule_{class_obj.grade_number if class_obj else schedule_id}_{schedule.section or '1'}"
+                
+                if format == "excel":
+                    file_content = export_service.export_schedule_excel(schedule_id)
+                    filename = f"{base_filename}.xlsx"
+                else:  # pdf
+                    file_content = export_service.export_schedule_pdf(schedule_id)
+                    filename = f"{base_filename}.pdf"
+                
+                zip_file.writestr(filename, file_content.read())
+        
+        zip_buffer.seek(0)
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=schedules_export.zip"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Bulk export failed: {str(e)}")
+
+# Validation endpoint
+@router.post("/validate")
+async def validate_schedule_prerequisites(
+    academic_year_id: int,
+    class_id: int,
+    section: Optional[str] = None,
+    session_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Validate schedule prerequisites before generation"""
+    from ..services.validation_service import ValidationService
+    
+    validation_service = ValidationService(db)
+    
+    result = validation_service.validate_schedule_prerequisites(
+        academic_year_id=academic_year_id,
+        class_id=class_id,
+        section=section,
+        session_type=session_type
+    )
+    
+    return result
+
+@router.get("/check-teacher-availability")
+async def check_teacher_availability_endpoint(
+    teacher_id: int,
+    required_periods: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Check if teacher has sufficient availability"""
+    from ..services.teacher_availability_service import TeacherAvailabilityService
+    
+    availability_service = TeacherAvailabilityService(db)
+    
+    result = availability_service.check_teacher_sufficient_availability(
+        teacher_id=teacher_id,
+        required_periods=required_periods
+    )
+    
+    return result
+
+@router.get("/diagnostics")
+async def get_schedule_generation_diagnostics(
+    academic_year_id: int,
+    session_type: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Diagnostic endpoint to check if system is ready for schedule generation
+    Returns detailed information about classes, subjects, teachers, and assignments
+    Note: This endpoint doesn't require authentication for easier debugging
+    """
+    from ..models.teachers import TeacherAssignment
+    
+    # Log the incoming parameters for debugging
+    print(f"\n=== Diagnostics Request ===")
+    print(f"Academic Year ID: {academic_year_id}")
+    print(f"Session Type: '{session_type}'")
+    
+    # Validate session_type
+    if session_type not in ['morning', 'evening']:
+        print(f"ERROR: Invalid session_type: '{session_type}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid session_type. Must be 'morning' or 'evening', got '{session_type}'"
+        )
+    
+    # Get classes for this academic year and session
+    classes = db.query(Class).filter(
+        and_(
+            Class.academic_year_id == academic_year_id,
+            or_(Class.session_type == session_type, Class.session_type == "both")
+        )
+    ).all()
+    
+    # Get all subjects
+    subjects = db.query(Subject).filter(Subject.is_active == True).all()
+    
+    # Get available teachers
+    teachers = db.query(Teacher).filter(
+        and_(
+            Teacher.is_active == True,
+            or_(
+                Teacher.transportation_type.like(f"%{session_type}%"),
+                Teacher.transportation_type == "both"
+            )
+        )
+    ).all()
+    
+    # Get teacher assignments
+    teacher_assignments = db.query(TeacherAssignment).filter(
+        TeacherAssignment.is_active == True
+    ).all()
+    
+    # Analyze each class
+    classes_analysis = []
+    total_subjects_needed = 0
+    total_teachers_needed = 0
+    missing_subjects = []
+    missing_teachers = []
+    
+    for cls in classes:
+        # Get subjects for this class
+        class_subjects = [s for s in subjects if s.class_id == cls.id]
+        total_subjects_needed += len(class_subjects)
+        
+        if not class_subjects:
+            missing_subjects.append({
+                "class_id": cls.id,
+                "class_name": f"{cls.grade_level} - الصف {cls.grade_number}",
+                "issue": "لا توجد مواد مرتبطة بهذا الصف"
+            })
+        
+        # Check if subjects have teachers
+        subjects_without_teachers = []
+        for subject in class_subjects:
+            # Find teachers assigned to this subject
+            assigned_teachers = [
+                ta for ta in teacher_assignments 
+                if ta.subject_id == subject.id and ta.is_active
+            ]
+            
+            if not assigned_teachers:
+                subjects_without_teachers.append({
+                    "subject_id": subject.id,
+                    "subject_name": subject.subject_name,
+                    "issue": "لا يوجد معلم مكلف بتدريس هذه المادة"
+                })
+                missing_teachers.append({
+                    "class_id": cls.id,
+                    "class_name": f"{cls.grade_level} - الصف {cls.grade_number}",
+                    "subject_id": subject.id,
+                    "subject_name": subject.subject_name
+                })
+        
+        classes_analysis.append({
+            "class_id": cls.id,
+            "class_name": f"{cls.grade_level} - الصف {cls.grade_number}",
+            "session_type": cls.session_type,
+            "section_count": cls.section_count,
+            "subjects_count": len(class_subjects),
+            "subjects_without_teachers": subjects_without_teachers,
+            "has_issues": len(class_subjects) == 0 or len(subjects_without_teachers) > 0
+        })
+    
+    # Calculate readiness
+    is_ready = len(missing_subjects) == 0 and len(missing_teachers) == 0
+    
+    return {
+        "is_ready_for_generation": is_ready,
+        "summary": {
+            "total_classes": len(classes),
+            "total_subjects": total_subjects_needed,
+            "total_teachers": len(teachers),
+            "total_teacher_assignments": len(teacher_assignments),
+            "classes_with_no_subjects": len(missing_subjects),
+            "subjects_without_teachers": len(missing_teachers)
+        },
+        "classes_analysis": classes_analysis,
+        "issues": {
+            "missing_subjects": missing_subjects,
+            "missing_teacher_assignments": missing_teachers
+        },
+        "recommendations": [
+            "تأكد من إضافة المواد لكل صف في نظام إدارة المواد" if missing_subjects else None,
+            "تأكد من تكليف المعلمين بتدريس المواد في نظام إدارة المعلمين" if missing_teachers else None,
+            "يمكنك الآن إنشاء الجداول!" if is_ready else None
+        ]
     }

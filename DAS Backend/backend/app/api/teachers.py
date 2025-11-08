@@ -276,7 +276,7 @@ async def assign_teacher_subject(
     if not subject_obj:
         raise HTTPException(status_code=404, detail="Subject not found")
     
-    # Check if assignment already exists
+    # Check if assignment already exists for this teacher
     existing_assignment = db.query(TeacherAssignment).filter(
         and_(
             TeacherAssignment.teacher_id == teacher_id,
@@ -287,7 +287,50 @@ async def assign_teacher_subject(
     ).first()
     
     if existing_assignment:
-        raise HTTPException(status_code=400, detail="This assignment already exists")
+        raise HTTPException(status_code=400, detail="This assignment already exists for this teacher")
+    
+    # Check if another teacher is already assigned to this subject/class/section combination
+    # Handle both specific section and "all sections" (None) cases
+    if section:
+        # Specific section: check for conflicts with same section or "all sections"
+        conflicting_assignment = db.query(TeacherAssignment).filter(
+            and_(
+                TeacherAssignment.class_id == class_id,
+                TeacherAssignment.subject_id == subject_id,
+                TeacherAssignment.teacher_id != teacher_id,
+                or_(
+                    TeacherAssignment.section == section,
+                    TeacherAssignment.section == None
+                )
+            )
+        ).first()
+    else:
+        # "All sections": check for any assignment to this class/subject combination
+        conflicting_assignment = db.query(TeacherAssignment).filter(
+            and_(
+                TeacherAssignment.class_id == class_id,
+                TeacherAssignment.subject_id == subject_id,
+                TeacherAssignment.teacher_id != teacher_id
+            )
+        ).first()
+    
+    if conflicting_assignment:
+        # Get conflicting teacher name
+        conflicting_teacher = db.query(Teacher).filter(Teacher.id == conflicting_assignment.teacher_id).first()
+        teacher_name = conflicting_teacher.full_name if conflicting_teacher else "Unknown"
+        
+        # Get class and subject names for better error message
+        if section:
+            section_text = f" - شعبة {section}"
+        else:
+            section_text = " (جميع الشعب)"
+            
+        conflict_section_text = f" - شعبة {conflicting_assignment.section}" if conflicting_assignment.section else " (جميع الشعب)"
+        
+        raise HTTPException(
+            status_code=400, 
+            detail=f"تعذر التعيين: الأستاذ/ة '{teacher_name}' معيّن/ة بالفعل لهذه المادة في هذا الصف{conflict_section_text}. لا يمكن تعيين أكثر من أستاذ لنفس المادة في نفس الصف والشعبة."
+        )
     
     # Create assignment using dict unpacking to avoid Pyright issues
     assignment_dict = {

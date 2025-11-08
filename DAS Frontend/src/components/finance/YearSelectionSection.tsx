@@ -93,17 +93,17 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
           </div>
 
           {selectedYear && (
-            <Card className="border-2 border-blue-200 bg-blue-50">
+            <Card className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50">
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <span className="font-semibold text-blue-900">
+                    <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span className="font-semibold text-blue-900 dark:text-blue-100">
                       السنة المختارة
                     </span>
                   </div>
                   {selectedYear.is_active && (
-                    <Badge variant="default" className="bg-blue-600">
+                    <Badge variant="default" className="bg-blue-600 dark:bg-blue-500">
                       السنة النشطة
                     </Badge>
                   )}
@@ -111,23 +111,23 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
                 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">السنة الدراسية:</span>
-                    <span className="font-medium text-blue-900">
+                    <span className="text-gray-600 dark:text-gray-400">السنة الدراسية:</span>
+                    <span className="font-medium text-blue-900 dark:text-blue-100">
                       {selectedYear.year_name}
                     </span>
                   </div>
                   
                   {selectedYear.description && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">الوصف:</span>
-                      <span className="font-medium text-blue-900">
+                      <span className="text-gray-600 dark:text-gray-400">الوصف:</span>
+                      <span className="font-medium text-blue-900 dark:text-blue-100">
                         {selectedYear.description}
                       </span>
                     </div>
                   )}
                   
                   <div className="flex justify-between">
-                    <span className="text-gray-600">الحالة:</span>
+                    <span className="text-gray-600 dark:text-gray-400">الحالة:</span>
                     <Badge
                       variant={selectedYear.is_active ? 'default' : 'secondary'}
                       className="text-xs"
@@ -141,8 +141,8 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
           )}
 
           {/* Information Alert */}
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600">
-            <p className="font-medium mb-2">ملاحظة:</p>
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300">
+            <p className="font-medium mb-2 dark:text-gray-200">ملاحظة:</p>
             <ul className="space-y-1 text-xs">
               <li>• يمكنك اختيار السنة الدراسية فقط، ولا يمكن التعديل عليها من هنا</li>
               <li>• لإضافة أو تعديل السنوات الدراسية، اتصل بالمدير</li>

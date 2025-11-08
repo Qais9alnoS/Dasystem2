@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FinanceCard } from './FinanceCard';
 import { FinanceCardDetailModal } from './FinanceCardDetailModal';
 import { AddFinanceCardModal } from './AddFinanceCardModal';
-import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle, Search } from 'lucide-react';
 import { financeManagerApi } from '@/services/api';
 import { FinanceManagerDashboard, FinanceCardSummary } from '@/types/school';
 import { useToast } from '@/hooks/use-toast';
@@ -16,12 +17,15 @@ interface TreasurySectionProps {
 
 export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [dashboard, setDashboard] = useState<FinanceManagerDashboard | null>(null);
   const [selectedCardType, setSelectedCardType] = useState<'all' | 'activity' | 'student' | 'custom'>('all');
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     if (academicYearId) {
@@ -46,6 +50,13 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
   };
 
   const handleCardClick = (card: FinanceCardSummary) => {
+    // Check if it's the default student card - navigate to students page instead of modal
+    // Only default student cards should navigate, custom student cards should open modal
+    if (card.category === 'student' && card.is_default) {
+      navigate('/finance?tab=students');
+      return;
+    }
+    
     setSelectedCard(card.card_id);
     setShowDetailModal(true);
   };
@@ -63,17 +74,48 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
     loadDashboard();
   };
 
+  const handleDeleteCard = async (cardId: number) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الكارد؟ سيتم حذف جميع المعاملات المرتبطة به.')) {
+      return;
+    }
+
+    try {
+      await financeManagerApi.deleteFinanceCard(cardId);
+      toast({
+        title: 'نجح',
+        description: 'تم حذف الكارد بنجاح'
+      });
+      loadDashboard();
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.response?.data?.detail || 'فشل حذف الكارد',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const filteredCards = dashboard?.finance_cards.filter(card => {
-    if (selectedCardType === 'all') return true;
+    // Filter by card type
+    let matchesType = true;
+    if (selectedCardType !== 'all') {
+      if (card.card_name.includes('طلاب') || card.card_name.includes('Students')) {
+        matchesType = selectedCardType === 'student';
+      } else if (card.card_name.includes('نشاط') || card.card_name.includes('Activity')) {
+        matchesType = selectedCardType === 'activity';
+      } else {
+        matchesType = selectedCardType === 'custom';
+      }
+    }
     
-    // Determine card category based on name or properties
-    if (card.card_name.includes('طلاب') || card.card_name.includes('Students')) {
-      return selectedCardType === 'student';
+    // Filter by search query
+    let matchesSearch = true;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      matchesSearch = card.card_name.toLowerCase().includes(query);
     }
-    if (card.card_name.includes('نشاط') || card.card_name.includes('Activity')) {
-      return selectedCardType === 'activity';
-    }
-    return selectedCardType === 'custom';
+    
+    return matchesType && matchesSearch;
   }) || [];
 
   if (loading) {
@@ -82,6 +124,22 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
 
   return (
     <div className="space-y-6">
+      {/* Search Bar */}
+      <Card className="ios-card">
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن كارد مالي بالاسم..."
+              className="w-full pr-10 pl-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Header Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* صافي الربح */}
@@ -99,8 +157,10 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
               {(dashboard?.net_profit || 0).toLocaleString('ar-SY')} ل.س
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              دخل: {(dashboard?.summary.total_income || 0).toLocaleString('ar-SY')} - 
-              خرج: {(dashboard?.summary.total_expenses || 0).toLocaleString('ar-SY')}
+              {(dashboard?.summary.total_income || 0).toLocaleString('ar-SY')} (دخل) - {(dashboard?.summary.total_expenses || 0).toLocaleString('ar-SY')} (مصروفات)
+            </div>
+            <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 italic">
+              * لا يشمل الديون
             </div>
           </CardContent>
         </Card>
@@ -196,6 +256,7 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
               key={card.card_id}
               card={card}
               onClick={() => handleCardClick(card)}
+              onDelete={handleDeleteCard}
             />
           ))}
         </div>

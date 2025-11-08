@@ -349,7 +349,7 @@ export const ScheduleViewer: React.FC<{
                   <SelectContent>
                     {classes.map((cls) => (
                       <SelectItem key={cls.id} value={cls.id?.toString() || ''}>
-                        الصف {cls.grade_number} {cls.grade_level === 'primary' ? 'ابتدائي' : cls.grade_level === 'intermediate' ? 'متوسط' : 'ثانوي'} - شعبة أ
+                        الصف {cls.grade_number} {cls.grade_level === 'primary' ? 'ابتدائي' : cls.grade_level === 'intermediate' ? 'متوسط' : 'ثانوي'} - شعبة 1
                       </SelectItem>
                     ))}
                   </SelectContent>

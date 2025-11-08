@@ -8,3 +8,4 @@ export { default as AddEditGradePage } from './AddEditGradePage';
 export { default as TeacherManagementPage } from './TeacherManagementPage';
 export { default as DirectorNotesPage } from './DirectorNotesPage';
 export { default as DirectorNotesSearchPage } from './DirectorNotesSearchPage';
+export { ScheduleManagementPage } from './ScheduleManagementPage';
