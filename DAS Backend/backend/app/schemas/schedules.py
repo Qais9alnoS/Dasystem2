@@ -185,6 +185,9 @@ class ScheduleGenerationRequest(BaseModel):
     avoid_teacher_conflicts: bool = True
     prefer_subject_continuity: bool = True
     
+    # Preview mode - if True, don't save to database, just return preview data
+    preview_only: bool = False
+    
     @validator('periods_per_day')
     def validate_periods_per_day(cls, v):
         if v < 1 or v > 10:
@@ -209,6 +212,7 @@ class ScheduleGenerationResponse(BaseModel):
     warnings: List[str]
     generation_time: float  # seconds
     summary: Dict[str, Any]
+    preview_data: Optional[List[Dict[str, Any]]] = None  # Preview schedule entries when preview_only=True
 
 # Schedule Conflict Schema
 class ScheduleConflictBase(BaseModel):

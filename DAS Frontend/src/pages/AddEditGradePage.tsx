@@ -221,6 +221,21 @@ const AddEditGradePage = () => {
       return;
     }
 
+    // Check for duplicate subject name in the same class
+    const duplicateSubject = subjects.find(
+      (subject) => subject.subject_name.toLowerCase().trim() === newSubject.subject_name.toLowerCase().trim()
+    );
+
+    if (duplicateSubject) {
+      toast({
+        title: '⚠️ مادة مكررة',
+        description: `يوجد بالفعل مادة باسم "${newSubject.subject_name}" في قائمة المواد. يرجى اختيار اسم آخر.`,
+        variant: 'destructive',
+        duration: 5000,
+      });
+      return;
+    }
+
     setSubjects([
       ...subjects,
       {
@@ -297,18 +312,116 @@ const AddEditGradePage = () => {
         });
         classId = parseInt(gradeId!);
 
-        // Delete existing subjects
-        const existingSubjects = await api.academic.getSubjects({ class_id: classId });
-        const subjectsList = Array.isArray(existingSubjects) ? existingSubjects : (existingSubjects?.data || []);
-        for (const subject of subjectsList) {
-          if (subject.id) {
-            await api.subjects.delete(subject.id);
+        // Smart update subjects: preserve existing subjects to keep teacher assignments
+        const existingSubjectsResponse = await api.academic.getSubjects({ class_id: classId });
+        const existingSubjects = Array.isArray(existingSubjectsResponse) 
+          ? existingSubjectsResponse 
+          : (existingSubjectsResponse?.data || []);
+        
+        // Create maps for efficient lookup
+        const existingSubjectsMap = new Map(
+          existingSubjects.map((s: Subject) => [s.id, s])
+        );
+        const newSubjectsMap = new Map(
+          subjects.map((s, index) => [s.subject_name.toLowerCase().trim(), { ...s, index }])
+        );
+
+        // Process each new subject
+        for (const newSubject of subjects) {
+          const normalizedName = newSubject.subject_name.toLowerCase().trim();
+          
+          // Find existing subject with same name (case-insensitive)
+          const existingSubject = Array.from(existingSubjectsMap.values()).find(
+            (s: Subject) => s.subject_name.toLowerCase().trim() === normalizedName
+          );
+
+          if (existingSubject && existingSubject.id) {
+            // Update existing subject if weekly_hours changed
+            if (existingSubject.weekly_hours !== newSubject.weekly_hours) {
+              try {
+                await api.subjects.update(existingSubject.id, {
+                  weekly_hours: newSubject.weekly_hours,
+                  is_active: true,
+                });
+              } catch (error: any) {
+                const errorMessage = error.response?.data?.detail || error.message || '';
+                toast({
+                  title: '⚠️ خطأ في تحديث المادة',
+                  description: errorMessage || `فشل تحديث مادة "${newSubject.subject_name}"`,
+                  variant: 'destructive',
+                  duration: 6000,
+                });
+                throw error;
+              }
+            }
+            // Remove from map so we know it's been processed
+            existingSubjectsMap.delete(existingSubject.id);
+          } else {
+            // Create new subject
+            try {
+              await api.subjects.create({
+                class_id: classId,
+                subject_name: newSubject.subject_name,
+                weekly_hours: newSubject.weekly_hours,
+                is_active: true,
+              });
+            } catch (error: any) {
+              const errorMessage = error.response?.data?.detail || error.message || '';
+              const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') || 
+                                     errorMessage.includes('already exists') ||
+                                     errorMessage.includes('مادة باسم');
+              
+              if (isDuplicateName) {
+                toast({
+                  title: '⚠️ مادة مكررة',
+                  description: errorMessage || `يوجد بالفعل مادة باسم "${newSubject.subject_name}" في هذا الصف. يرجى اختيار اسم آخر.`,
+                  variant: 'destructive',
+                  duration: 6000,
+                });
+                throw error; // Stop the process
+              } else {
+                throw error; // Re-throw other errors
+              }
+            }
+          }
+        }
+
+        // Delete subjects that are no longer in the new list
+        // Only delete if they have no teacher assignments (to preserve assignments)
+        for (const [subjectId, existingSubject] of existingSubjectsMap.entries()) {
+          if (existingSubject.id) {
+            try {
+              // Try to delete - backend will check for assignments
+              await api.subjects.delete(existingSubject.id);
+            } catch (error: any) {
+              // If deletion fails due to existing assignments, mark as inactive instead
+              const errorMessage = error.response?.data?.detail || error.message || '';
+              const hasAssignments = errorMessage.includes('assignments') || 
+                                    errorMessage.includes('توزيعات') ||
+                                    errorMessage.includes('مرتبطة بتوزيعات');
+              
+              if (hasAssignments) {
+                // Subject has assignments, mark as inactive instead of deleting
+                try {
+                  await api.subjects.update(existingSubject.id, {
+                    is_active: false,
+                  });
+                  console.log(`Subject ${existingSubject.subject_name} marked as inactive due to existing assignments`);
+                } catch (updateError) {
+                  console.warn(`Could not deactivate subject ${existingSubject.id}:`, updateError);
+                  // Don't throw - just log the warning and continue
+                }
+              } else {
+                // Other error (e.g., not found), log but don't throw to allow process to continue
+                console.warn(`Could not delete subject ${existingSubject.id}:`, errorMessage);
+              }
+            }
           }
         }
 
         toast({
           title: 'نجح',
-          description: 'تم تحديث الصف بنجاح',
+          description: 'تم تحديث الصف والمواد بنجاح',
         });
       } else {
         // Create new class
@@ -326,16 +439,36 @@ const AddEditGradePage = () => {
           title: 'نجح',
           description: 'تم إنشاء الصف بنجاح',
         });
-      }
 
-      // Create subjects
-      for (const subject of subjects) {
-        await api.subjects.create({
-          class_id: classId,
-          subject_name: subject.subject_name,
-          weekly_hours: subject.weekly_hours,
-          is_active: true,
-        });
+        // Create subjects for new class
+        for (const subject of subjects) {
+          try {
+            await api.subjects.create({
+              class_id: classId,
+              subject_name: subject.subject_name,
+              weekly_hours: subject.weekly_hours,
+              is_active: true,
+            });
+          } catch (error: any) {
+            // Check if error is about duplicate subject name
+            const errorMessage = error.response?.data?.detail || error.message || '';
+            const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') || 
+                                   errorMessage.includes('already exists') ||
+                                   errorMessage.includes('مادة باسم');
+            
+            if (isDuplicateName) {
+              toast({
+                title: '⚠️ مادة مكررة',
+                description: errorMessage || `يوجد بالفعل مادة باسم "${subject.subject_name}" في هذا الصف. يرجى اختيار اسم آخر.`,
+                variant: 'destructive',
+                duration: 6000,
+              });
+              throw error; // Stop the process
+            } else {
+              throw error; // Re-throw other errors
+            }
+          }
+        }
       }
 
       navigate('/school-info');

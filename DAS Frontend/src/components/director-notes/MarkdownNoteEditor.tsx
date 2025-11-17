@@ -35,24 +35,7 @@ const MarkdownNoteEditor: React.FC = () => {
     }
   }, [fileId]);
 
-  useEffect(() => {
-    // Auto-save after 3 seconds of inactivity
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-
-    autoSaveTimerRef.current = setTimeout(() => {
-      if (fileId && !loading) {
-        handleSave(true);
-      }
-    }, 3000);
-
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [content, title]);
+  // Auto-save removed - user must save manually
 
   const loadFile = async () => {
     if (!fileId) return;

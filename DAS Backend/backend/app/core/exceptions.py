@@ -4,9 +4,11 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 import traceback
 import logging
-from typing import Union
+from typing import Union, Optional, Dict, Any
+import asyncio
 
 from ..services.security_service import security_service
+from ..services.telegram_service import telegram_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +48,44 @@ class BusinessLogicError(HTTPException):
     def __init__(self, detail: str = "Business logic violation"):
         super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
+# Schedule-specific exceptions
+class ScheduleValidationError(HTTPException):
+    """Raised when schedule generation prerequisites are not met"""
+    def __init__(self, detail: str = "فشل التحقق من متطلبات إنشاء الجدول", errors: list = None):
+        self.errors = errors or []
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+class TeacherAvailabilityError(HTTPException):
+    """Raised when no teachers are available for a required time slot"""
+    def __init__(self, detail: str = "لا توجد معلمين متاحين للفترة الزمنية المطلوبة"):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+class ScheduleConflictError(HTTPException):
+    """Raised when a conflict is detected in the schedule"""
+    def __init__(self, detail: str = "تعارض في الجدول الدراسي"):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+class ConstraintViolationError(HTTPException):
+    """Raised when a critical schedule constraint is violated"""
+    def __init__(self, detail: str = "انتهاك قيد حرج في الجدول", constraint_type: str = None):
+        self.constraint_type = constraint_type
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+class InsufficientDataError(HTTPException):
+    """Raised when there's insufficient data to generate a schedule"""
+    def __init__(self, detail: str = "بيانات غير كافية لإنشاء الجدول"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
 # Global Exception Handlers
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Global exception handler for unhandled exceptions"""
     error_id = id(exc)
+    error_traceback = traceback.format_exc()
     
     # Log the error
     logger.error(f"Unhandled exception [{error_id}]: {str(exc)}")
-    logger.error(f"Traceback: {traceback.format_exc()}")
+    logger.error(f"Traceback: {error_traceback}")
     
     # Log to audit system
     client_ip = request.client.host if request.client else "unknown"
@@ -71,6 +102,43 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             "method": request.method
         }
     )
+    
+    # Send to Telegram
+    try:
+        # Get user info from request if available
+        user_info: Optional[Dict[str, Any]] = None
+        if hasattr(request.state, 'user') and request.state.user:
+            user_info = {
+                "user_id": getattr(request.state.user, 'id', None),
+                "username": getattr(request.state.user, 'username', None),
+                "role": getattr(request.state.user, 'role', None)
+            }
+        
+        request_info = {
+            "path": str(request.url),
+            "method": request.method,
+            "ip_address": client_ip,
+            "headers": dict(request.headers) if request.headers else None
+        }
+        
+        error_details = {
+            "error_id": error_id,
+            "error_type": type(exc).__name__,
+            "module": getattr(exc, '__module__', 'unknown'),
+        }
+        
+        # Send error report to Telegram (non-blocking)
+        asyncio.create_task(telegram_service.send_error_report(
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            error_location=f"{request.method} {request.url.path}",
+            error_details=error_details,
+            stack_trace=error_traceback,
+            user_info=user_info,
+            request_info=request_info
+        ))
+    except Exception as telegram_error:
+        logger.error(f"Failed to send error to Telegram: {telegram_error}")
     
     # Create system notification for critical errors
     security_service.create_system_notification(
@@ -110,6 +178,39 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
                 "method": request.method
             }
         )
+        
+        # Send to Telegram for server errors (5xx) and important client errors (4xx except 404)
+        if http_exc.status_code >= 500 or (http_exc.status_code >= 400 and http_exc.status_code != 404):  # type: ignore
+            try:
+                user_info: Optional[Dict[str, Any]] = None
+                if hasattr(request.state, 'user') and request.state.user:
+                    user_info = {
+                        "user_id": getattr(request.state.user, 'id', None),
+                        "username": getattr(request.state.user, 'username', None),
+                        "role": getattr(request.state.user, 'role', None)
+                    }
+                
+                request_info = {
+                    "path": str(request.url),
+                    "method": request.method,
+                    "ip_address": client_ip,
+                }
+                
+                error_details = {
+                    "status_code": http_exc.status_code,  # type: ignore
+                    "error_type": type(http_exc).__name__,
+                }
+                
+                asyncio.create_task(telegram_service.send_error_report(
+                    error_type=f"HTTP {http_exc.status_code}",  # type: ignore
+                    error_message=str(http_exc.detail) if hasattr(http_exc, 'detail') else str(http_exc),  # type: ignore
+                    error_location=f"{request.method} {request.url.path}",
+                    error_details=error_details,
+                    user_info=user_info,
+                    request_info=request_info
+                ))
+            except Exception as telegram_error:
+                logger.error(f"Failed to send HTTP error to Telegram: {telegram_error}")
     
     return JSONResponse(
         status_code=http_exc.status_code,  # type: ignore
@@ -165,9 +266,12 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
     # Cast to SQLAlchemyError
     db_exc = exc  # type: ignore
     client_ip = request.client.host if request.client else "unknown"
+    error_traceback = traceback.format_exc()
     
     # Log database errors
     logger.error(f"Database error: {str(db_exc)}")  # type: ignore
+    logger.error(f"Traceback: {error_traceback}")
+    
     security_service.log_audit_event(
         user_id=None,
         action="DATABASE_ERROR",
@@ -180,6 +284,39 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
             "method": request.method
         }
     )
+    
+    # Send to Telegram
+    try:
+        user_info: Optional[Dict[str, Any]] = None
+        if hasattr(request.state, 'user') and request.state.user:
+            user_info = {
+                "user_id": getattr(request.state.user, 'id', None),
+                "username": getattr(request.state.user, 'username', None),
+                "role": getattr(request.state.user, 'role', None)
+            }
+        
+        request_info = {
+            "path": str(request.url),
+            "method": request.method,
+            "ip_address": client_ip,
+        }
+        
+        error_details = {
+            "error_type": type(db_exc).__name__,  # type: ignore
+            "sqlalchemy_error": str(db_exc)[:500],  # type: ignore
+        }
+        
+        asyncio.create_task(telegram_service.send_error_report(
+            error_type="Database Error",
+            error_message=str(db_exc),  # type: ignore
+            error_location=f"{request.method} {request.url.path}",
+            error_details=error_details,
+            stack_trace=error_traceback,
+            user_info=user_info,
+            request_info=request_info
+        ))
+    except Exception as telegram_error:
+        logger.error(f"Failed to send database error to Telegram: {telegram_error}")
     
     # Create system notification for database errors
     security_service.create_system_notification(

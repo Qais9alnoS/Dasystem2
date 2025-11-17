@@ -13,6 +13,7 @@ from ..models.teachers import TeacherFinance
 from ..models.users import User
 from ..models.activities import Activity, ActivityRegistration
 from ..models.students import HistoricalBalance
+from ..models.director import Reward, AssistanceRecord
 from ..services.balance_transfer_service import BalanceTransferService
 from ..schemas.finance import (
     FinanceTransactionCreate, FinanceTransactionUpdate, FinanceTransactionResponse,
@@ -913,6 +914,28 @@ async def get_finance_manager_dashboard(
                     elif transaction.transaction_type == "expense":
                         total_expenses += amount
         
+        # Calculate rewards and assistance totals and add to expenses
+        total_rewards_amount = Decimal('0.00')
+        total_assistance_amount = Decimal('0.00')
+        try:
+            rewards = db.query(Reward).filter(
+                Reward.academic_year_id == academic_year_id
+            ).all()
+            total_rewards_amount = sum(Decimal(str(reward.amount or 0)) for reward in rewards)
+            
+            assistance_records = db.query(AssistanceRecord).filter(
+                AssistanceRecord.academic_year_id == academic_year_id
+            ).all()
+            total_assistance_amount = sum(Decimal(str(record.amount or 0)) for record in assistance_records)
+        except Exception:
+            # If tables don't exist or have issues, skip
+            pass
+        
+        # Add rewards and assistance to total expenses (they are expenses)
+        total_rewards_and_assistance = total_rewards_amount + total_assistance_amount
+        total_expenses += total_rewards_and_assistance
+        
+        # Calculate net profit after including rewards and assistance
         net_profit = total_income - total_expenses
         
         # Calculate outstanding debts (receivables - what students owe)
@@ -1046,6 +1069,11 @@ async def get_finance_manager_dashboard(
             "summary": {
                 "total_income": float(total_income),
                 "total_expenses": float(total_expenses)
+            },
+            "rewards_and_assistance": {
+                "total_rewards": float(total_rewards_amount),
+                "total_assistance": float(total_assistance_amount),
+                "total": float(total_rewards_and_assistance)
             }
         }
         

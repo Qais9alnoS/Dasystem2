@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session, Query as SqlAlchemyQuery
 from typing import Optional, List
 from datetime import datetime
+import logging
 
 from app.database import get_db
 from app.models.users import User
 from app.core.dependencies import get_current_user, get_director_user
+
+logger = logging.getLogger(__name__)
 from app.services.backup_service import backup_service
-from app.services.telegram_service import telegram_service, notify_system
+from app.services.telegram_service import telegram_service, notify_system, notify_error, notify_warning
 from app.schemas.system import (
     BackupRequest,
     BackupResponse,
@@ -209,6 +212,61 @@ async def send_notification(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Notification failed: {str(e)}")
+
+@router.post("/telegram/report-error")
+async def report_error_from_frontend(
+    error_report: dict,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Receive error reports from frontend and send to Telegram"""
+    try:
+        user_info = None
+        if current_user:
+            user_info = {
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+            }
+        
+        # Merge browser_info into request_info
+        request_info = error_report.get("browser_info", {})
+        request_info["ip_address"] = request.client.host if request.client else "unknown"
+        
+        await notify_error(
+            error_type=error_report.get("error_type", "Unknown Error"),
+            error_message=error_report.get("error_message", "No error message"),
+            error_location=error_report.get("error_location", "Unknown location"),
+            error_details=error_report.get("error_details"),
+            stack_trace=error_report.get("stack_trace"),
+            user_info=user_info or error_report.get("user_info"),
+            request_info=request_info
+        )
+        
+        return {"success": True, "message": "Error reported to Telegram"}
+    except Exception as e:
+        logger.error(f"Failed to process error report: {e}")
+        return {"success": False, "error": str(e)}
+
+@router.post("/telegram/report-warning")
+async def report_warning_from_frontend(
+    warning_report: dict,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Receive warning reports from frontend and send to Telegram"""
+    try:
+        await notify_warning(
+            warning_type=warning_report.get("warning_type", "Unknown Warning"),
+            warning_message=warning_report.get("warning_message", "No warning message"),
+            warning_location=warning_report.get("warning_location", "Unknown location"),
+            warning_details=warning_report.get("warning_details")
+        )
+        
+        return {"success": True, "message": "Warning reported to Telegram"}
+    except Exception as e:
+        logger.error(f"Failed to process warning report: {e}")
+        return {"success": False, "error": str(e)}
 
 @router.get("/notification/test", response_model=TelegramTestResponse)
 async def test_telegram_connection(

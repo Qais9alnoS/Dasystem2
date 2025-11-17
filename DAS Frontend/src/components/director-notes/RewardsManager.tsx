@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Plus, Edit, Trash2, ArrowLeft, Calendar, User, DollarSign } from 'lucide-react';
+import { Award, Plus, Edit, Trash2, ArrowLeft, Calendar, User, DollarSign, Search, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { directorApi } from '@/services/api';
+import { directorApi, studentsApi, teachersApi } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
 
 interface Reward {
@@ -39,6 +39,12 @@ const RewardsManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
+  const [suggestions, setSuggestions] = useState<{ id: number; name: string }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRecipient, setSelectedRecipient] = useState<{ id: number; name: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -76,6 +82,86 @@ const RewardsManager: React.FC = () => {
     }
   };
 
+  // Search for students or teachers
+  useEffect(() => {
+    if (searchQuery.length >= 1 && (formData.recipient_type === 'student' || formData.recipient_type === 'teacher')) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (formData.recipient_type === 'student') {
+            const response = await studentsApi.search(searchQuery, academicYearId, undefined, 10);
+            if (response.success && response.data) {
+              const studentList = response.data.map((s: any) => ({
+                id: s.id,
+                name: s.full_name || `${s.father_name || ''} ${s.mother_name || ''}`.trim()
+              }));
+              setSuggestions(studentList);
+              setShowSuggestions(true);
+            } else {
+              setSuggestions([]);
+              setShowSuggestions(false);
+            }
+          } else if (formData.recipient_type === 'teacher') {
+            const response = await teachersApi.search(searchQuery, 0, 10);
+            if (response.success && response.data) {
+              const teacherList = response.data.map((t: any) => ({
+                id: t.id,
+                name: t.full_name || t.name || ''
+              }));
+              setSuggestions(teacherList);
+              setShowSuggestions(true);
+            } else {
+              setSuggestions([]);
+              setShowSuggestions(false);
+            }
+          }
+        } catch (error) {
+          console.error('Error searching:', error);
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, formData.recipient_type, academicYearId]);
+
+  // Reset search when recipient type changes
+  useEffect(() => {
+    setSearchQuery('');
+    setSelectedRecipient(null);
+    setFormData(prev => ({ ...prev, recipient_name: '' }));
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }, [formData.recipient_type]);
+
+  const handleSelectSuggestion = (suggestion: { id: number; name: string }) => {
+    setSelectedRecipient(suggestion);
+    setFormData(prev => ({ ...prev, recipient_name: suggestion.name }));
+    setSearchQuery(suggestion.name);
+    setShowSuggestions(false);
+  };
+
+  const handleRecipientNameChange = (value: string) => {
+    setSearchQuery(value);
+    setFormData(prev => ({ ...prev, recipient_name: value }));
+    
+    // If name doesn't match selected recipient, clear selection
+    if (selectedRecipient && selectedRecipient.name !== value) {
+      setSelectedRecipient(null);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validate amount is a valid number
     const amountValue = parseFloat(formData.amount);
@@ -96,6 +182,21 @@ const RewardsManager: React.FC = () => {
         variant: 'destructive',
       });
       return;
+    }
+
+    // Validate that name exists in database if type is student or teacher
+    if ((formData.recipient_type === 'student' || formData.recipient_type === 'teacher') && !selectedRecipient) {
+      // Check if the entered name exists in suggestions
+      const nameExists = suggestions.some(s => s.name.toLowerCase() === formData.recipient_name.trim().toLowerCase());
+      
+      if (!nameExists) {
+        toast({
+          title: 'خطأ في الإدخال',
+          description: 'الاسم المدخل غير موجود في قاعدة البيانات. يرجى اختيار "آخر" كنوع المستفيد إذا كان الاسم غير موجود.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     try {
@@ -136,6 +237,9 @@ const RewardsManager: React.FC = () => {
       amount: reward.amount.toString(),
       description: reward.description || ''
     });
+    setSearchQuery(reward.recipient_name);
+    // Don't set selectedRecipient for editing, allow free text for existing records
+    setSelectedRecipient(null);
     setShowDialog(true);
   };
 
@@ -166,6 +270,10 @@ const RewardsManager: React.FC = () => {
       description: ''
     });
     setEditingReward(null);
+    setSearchQuery('');
+    setSelectedRecipient(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const totalAmount = rewards.reduce((sum, reward) => sum + reward.amount, 0);
@@ -294,11 +402,72 @@ const RewardsManager: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="recipient_name">اسم المستفيد</Label>
-                <Input
-                  id="recipient_name"
-                  value={formData.recipient_name}
-                  onChange={(e) => setFormData({ ...formData, recipient_name: e.target.value })}
-                />
+                <div className="relative">
+                  <Input
+                    id="recipient_name"
+                    ref={inputRef}
+                    value={searchQuery || formData.recipient_name}
+                    onChange={(e) => handleRecipientNameChange(e.target.value)}
+                    onFocus={() => {
+                      if (suggestions.length > 0) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                    placeholder={
+                      formData.recipient_type === 'student' 
+                        ? 'ابحث عن طالب...'
+                        : formData.recipient_type === 'teacher'
+                        ? 'ابحث عن معلم...'
+                        : 'أدخل اسم المستفيد'
+                    }
+                    disabled={formData.recipient_type === 'other'}
+                  />
+                  {formData.recipient_type !== 'other' && (
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  )}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setShowSuggestions(false)}
+                      />
+                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg max-h-60 overflow-y-auto">
+                        {suggestions.map((suggestion) => (
+                          <div
+                            key={suggestion.id}
+                            onClick={() => handleSelectSuggestion(suggestion)}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
+                          >
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-gray-400" />
+                              <span>{suggestion.name}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {formData.recipient_type !== 'other' && selectedRecipient && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRecipient(null);
+                        setSearchQuery('');
+                        setFormData(prev => ({ ...prev, recipient_name: '' }));
+                      }}
+                      className="absolute left-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {formData.recipient_type !== 'other' && !selectedRecipient && formData.recipient_name.trim() && (
+                  <p className="text-xs text-gray-500">
+                    {suggestions.length === 0 && searchQuery.length >= 1
+                      ? 'لم يتم العثور على نتائج. يرجى اختيار "آخر" إذا كان الاسم غير موجود.'
+                      : 'ابدأ بالكتابة للبحث'}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="recipient_type">نوع المستفيد</Label>

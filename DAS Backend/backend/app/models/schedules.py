@@ -83,7 +83,7 @@ class ScheduleConstraint(BaseModel):
     
     # Schedule constraint attributes
     academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
-    constraint_type = Column(String(20), nullable=False)  # forbidden, required, no_consecutive, max_consecutive, min_consecutive
+    constraint_type = Column(String(20), nullable=False)  # forbidden, required, no_consecutive, max_consecutive, min_consecutive, subject_per_day
     
     # Target Specification
     class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"))

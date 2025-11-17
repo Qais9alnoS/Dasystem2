@@ -19,10 +19,14 @@ from app.core.exceptions import (
 )
 from app.services.security_service import security_service
 from app.services.config_service import config_service
+from app.core.telegram_logging_handler import setup_telegram_logging
 
 # Create database tables
 # Suppressing type error for Base.metadata as it's a known SQLAlchemy pattern
 Base.metadata.create_all(bind=engine)  # type: ignore
+
+# Setup Telegram logging handler for error reporting
+setup_telegram_logging()
 
 # Initialize FastAPI app
 app = FastAPI(

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { User, UserRole, AuthResponse, LoginCredentials } from '@/types/school';
-import { authApi } from '@/services/api';
+import { authApi, setApiToken } from '@/services/api';
 
 // Auth State
 interface AuthState {
@@ -86,56 +86,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(authReducer, initialState);
 
-    // Initialize auth state from localStorage
+    // No automatic login - user must login manually each time
+    // Clear any stored tokens on mount to ensure fresh login
     useEffect(() => {
-        const initAuth = async () => {
-            const storedToken = localStorage.getItem('das_token');
-            const storedUser = localStorage.getItem('das_user');
-
-            if (storedToken && storedUser) {
-                try {
-                    // First, try to parse stored user to restore state immediately
-                    const parsedUser = JSON.parse(storedUser);
-                    
-                    // Restore state from localStorage first (optimistic)
-                    dispatch({
-                        type: 'AUTH_SUCCESS',
-                        payload: {
-                            access_token: storedToken,
-                            token_type: 'Bearer',
-                            user: parsedUser
-                        }
-                    });
-                    
-                    // Then validate token with backend in background
-                    try {
-                        const response = await authApi.getMe();
-                        if (!response.success || !response.data) {
-                            // Token is invalid, logout
-                            localStorage.removeItem('das_token');
-                            localStorage.removeItem('das_user');
-                            dispatch({ type: 'AUTH_LOGOUT' });
-                        }
-                    } catch (validationError) {
-                        // If validation fails, check if it's a 401 (unauthorized) or network error
-                        if (validationError instanceof Error && validationError.message.includes('401')) {
-                            // Token is invalid, logout
-                            localStorage.removeItem('das_token');
-                            localStorage.removeItem('das_user');
-                            dispatch({ type: 'AUTH_LOGOUT' });
-                        }
-                        // For network errors, keep the user logged in (token might still be valid)
-                    }
-                } catch (error) {
-                    // If stored data is corrupt, clear it
-                    localStorage.removeItem('das_token');
-                    localStorage.removeItem('das_user');
-                    dispatch({ type: 'AUTH_LOGOUT' });
-                }
-            }
-        };
-
-        initAuth();
+        localStorage.removeItem('das_token');
+        localStorage.removeItem('das_user');
+        setApiToken(null); // Clear token from API client
     }, []);
 
     const login = async (credentials: LoginCredentials) => {
@@ -144,10 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const response = await authApi.login(credentials);
 
             if (response.success && response.data) {
-                // Store in localStorage
-                localStorage.setItem('das_token', response.data.access_token);
-                localStorage.setItem('das_user', JSON.stringify(response.data.user));
-
+                // Do NOT store in localStorage - user must login manually each time
+                // Only keep in memory for current session
+                setApiToken(response.data.access_token); // Set token for API client
                 dispatch({ type: 'AUTH_SUCCESS', payload: response.data });
             } else {
                 throw new Error(response.message || 'Login failed');
@@ -166,11 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const response = await authApi.refresh();
             
             if (response.success && response.data) {
-                // Store new token in localStorage
-                localStorage.setItem('das_token', response.data.access_token);
-                localStorage.setItem('das_user', JSON.stringify(response.data.user));
-                
+                // Do NOT store in localStorage - only keep in memory
                 // Update state with new token
+                setApiToken(response.data.access_token); // Set token for API client
                 dispatch({
                     type: 'AUTH_SUCCESS',
                     payload: response.data
@@ -218,6 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             localStorage.removeItem('das_token');
             localStorage.removeItem('das_user');
+            setApiToken(null); // Clear token from API client
             dispatch({ type: 'AUTH_LOGOUT' });
         }
     };

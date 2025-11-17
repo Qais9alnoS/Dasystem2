@@ -3,16 +3,25 @@ import { Button } from '@/components/ui/button';
 import { FreeTimeSlot } from '@/types/school';
 import { cn } from '@/lib/utils';
 
+interface OccupiedSlot {
+    day: number;
+    period: number;
+    className: string;
+    subject: string;
+}
+
 interface FreeTimeSlotsCalendarProps {
     slots: FreeTimeSlot[];
     readonly?: boolean;
     onSlotsChange?: (slots: FreeTimeSlot[]) => void;
+    occupiedSlots?: OccupiedSlot[]; // New prop for showing occupied slots
 }
 
 export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
     slots,
     readonly = false,
-    onSlotsChange
+    onSlotsChange,
+    occupiedSlots = []
 }) => {
     const [currentSlots, setCurrentSlots] = useState<FreeTimeSlot[]>([]);
 
@@ -71,6 +80,10 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
 
     const getSlot = (day: number, period: number): FreeTimeSlot | undefined => {
         return currentSlots.find(slot => slot.day === day && slot.period === period);
+    };
+
+    const getOccupiedSlot = (day: number, period: number): OccupiedSlot | undefined => {
+        return occupiedSlots.find(slot => slot.day === day && slot.period === period);
     };
 
     const toggleSlot = (day: number, period: number) => {
@@ -143,6 +156,12 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
                     <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm border border-emerald-500/30"></div>
                     <span className="font-semibold text-gray-700 dark:text-gray-300">متاح</span>
                 </div>
+                {occupiedSlots.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-sm border border-blue-500/30"></div>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">محجوز (مجدول)</span>
+                    </div>
+                )}
             </div>
 
             {/* Calendar Grid - Modern Design */}
@@ -191,7 +210,9 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
                                     </td>
                                     {periods.map((period) => {
                                         const slot = getSlot(day.id, period);
+                                        const occupiedSlot = getOccupiedSlot(day.id, period);
                                         const isFree = slot?.is_free || false;
+                                        const isOccupied = !!occupiedSlot;
 
                                         return (
                                             <td
@@ -200,21 +221,29 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
                                             >
                                                 <div
                                                     className={cn(
-                                                        "w-full h-12 rounded-xl transition-all duration-300 ease-in-out flex items-center justify-center",
-                                                        isFree
+                                                        "w-full h-12 rounded-xl transition-all duration-300 ease-in-out flex items-center justify-center text-xs font-bold",
+                                                        isOccupied
+                                                            ? "bg-gradient-to-br from-blue-400 to-blue-600 shadow-md border-2 border-blue-500/30 text-white"
+                                                            : isFree
                                                             ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md border-2 border-emerald-500/30"
                                                             : "bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 border-2 border-gray-300/30 dark:border-gray-600/30",
-                                                        !readonly && "cursor-pointer hover:scale-105 hover:shadow-lg active:scale-95",
-                                                        !readonly && isFree && "hover:from-emerald-500 hover:to-teal-600",
-                                                        !readonly && !isFree && "hover:from-gray-300 hover:to-gray-400 dark:hover:from-gray-600 dark:hover:to-gray-500"
+                                                        !readonly && !isOccupied && "cursor-pointer hover:scale-105 hover:shadow-lg active:scale-95",
+                                                        !readonly && isFree && !isOccupied && "hover:from-emerald-500 hover:to-teal-600",
+                                                        !readonly && !isFree && !isOccupied && "hover:from-gray-300 hover:to-gray-400 dark:hover:from-gray-600 dark:hover:to-gray-500",
+                                                        isOccupied && "cursor-not-allowed"
                                                     )}
-                                                    onClick={() => !readonly && toggleSlot(day.id, period)}
+                                                    onClick={() => !readonly && !isOccupied && toggleSlot(day.id, period)}
+                                                    title={isOccupied ? `${occupiedSlot.subject} - ${occupiedSlot.className}` : undefined}
                                                 >
-                                                    {isFree && (
+                                                    {isOccupied ? (
+                                                        <span className="text-[10px] leading-tight text-center px-1">
+                                                            {occupiedSlot.className}
+                                                        </span>
+                                                    ) : isFree ? (
                                                         <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                         </svg>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </td>
                                         );

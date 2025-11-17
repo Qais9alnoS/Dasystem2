@@ -39,6 +39,8 @@ interface SubjectDetail {
   teacher_subjects_count?: number;
   is_sufficient?: boolean;
   teacher_availability: string;
+  teacher_has_free_slots_per_timeslot?: boolean; // New field
+  missing_timeslots?: string[]; // Days/periods where no teacher is free
   status: string;
 }
 
@@ -64,6 +66,7 @@ interface ValidationResult {
 export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, onContinue }) => {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasSignaledReady, setHasSignaledReady] = useState(false);
 
   useEffect(() => {
     validateSchedule();
@@ -94,6 +97,16 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       setLoading(false);
     }
   };
+
+  // Automatically notify parent when validation allows proceeding
+  useEffect(() => {
+    if (!validationResult) return;
+    if (!validationResult.can_proceed) return;
+    if (hasSignaledReady) return;
+
+    onContinue();
+    setHasSignaledReady(true);
+  }, [validationResult, hasSignaledReady, onContinue]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -166,9 +179,9 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       <Card className={
         validationResult.can_proceed
           ? validationResult.is_valid
-            ? 'border-green-200 bg-green-50'
-            : 'border-yellow-200 bg-yellow-50'
-          : 'border-red-200 bg-red-50'
+            ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40'
+            : 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/20'
+          : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40'
       }>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -201,42 +214,44 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
 
       {/* Summary Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="bg-white dark:bg-slate-900 border dark:border-slate-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{validationResult.summary.total_subjects}</p>
+                <p className="text-2xl font-bold text-foreground">{validationResult.summary.total_subjects}</p>
                 <p className="text-xs text-muted-foreground">إجمالي المواد</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white dark:bg-slate-900 border dark:border-slate-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <User className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <User className="h-5 w-5 text-green-600 dark:text-green-300" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{validationResult.summary.subjects_with_teachers}</p>
-                <p className="text-xs text-muted-foreground">لديها معلمين</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {new Set(validationResult.subject_details.filter(s => s.has_teacher).map(s => s.teacher_id)).size}
+                </p>
+                <p className="text-xs text-muted-foreground">معلمين مكلفين</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white dark:bg-slate-900 border dark:border-slate-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Clock className="h-5 w-5 text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <Clock className="h-5 w-5 text-purple-600 dark:text-purple-300" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{validationResult.summary.total_periods_needed}</p>
+                <p className="text-2xl font-bold text-foreground">{validationResult.summary.total_periods_needed}</p>
                 <p className="text-xs text-muted-foreground">حصة مطلوبة</p>
               </div>
             </div>
@@ -246,10 +261,10 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
 
       {/* Errors */}
       {validationResult.errors.length > 0 && (
-        <Alert variant="destructive">
-          <XCircle className="h-4 w-4" />
-          <AlertTitle>أخطاء يجب إصلاحها</AlertTitle>
-          <AlertDescription>
+        <Alert variant="destructive" className="dark:bg-red-950/30 dark:border-red-900">
+          <XCircle className="h-4 w-4 dark:text-red-300" />
+          <AlertTitle className="dark:text-red-100">أخطاء يجب إصلاحها</AlertTitle>
+          <AlertDescription className="dark:text-red-200">
             <ul className="list-disc list-inside space-y-1 mt-2">
               {validationResult.errors.map((error, index) => (
                 <li key={index}>{error}</li>
@@ -261,10 +276,10 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
 
       {/* Warnings */}
       {validationResult.warnings.length > 0 && (
-        <Alert className="border-yellow-200 bg-yellow-50">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          <AlertTitle className="text-yellow-900">تحذيرات</AlertTitle>
-          <AlertDescription className="text-yellow-800">
+        <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/20">
+          <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
+          <AlertTitle className="text-yellow-900 dark:text-yellow-100">تحذيرات</AlertTitle>
+          <AlertDescription className="text-yellow-800 dark:text-yellow-100">
             <ul className="list-disc list-inside space-y-1 mt-2">
               {validationResult.warnings.map((warning, index) => (
                 <li key={index}>{warning}</li>
@@ -275,30 +290,30 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       )}
 
       {/* Subject Details */}
-      <Card>
+      <Card className="bg-white dark:bg-slate-900 border dark:border-slate-800">
         <CardHeader>
-          <CardTitle>تفاصيل المواد</CardTitle>
+          <CardTitle className="text-foreground">تفاصيل المواد</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             {validationResult.subject_details.map((subject, index) => (
               <div
                 key={subject.subject_id}
-                className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className="p-4 border rounded-lg hover:bg-muted/50 dark:hover:bg-slate-800 transition-colors dark:border-slate-700"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1">
                     {getStatusIcon(subject.status)}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{subject.subject_name}</h4>
+                        <h4 className="font-medium text-foreground">{subject.subject_name}</h4>
                         {getStatusBadge(subject.status)}
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                         <div>
                           <span className="text-muted-foreground">الحصص المطلوبة:</span>
-                          <span className="font-medium mr-1">{subject.required_periods} حصة/أسبوع</span>
+                          <span className="font-medium mr-1 text-foreground">{subject.required_periods} حصة/أسبوع</span>
                         </div>
                         
                         {subject.has_teacher ? (
@@ -320,30 +335,35 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
                       </div>
 
                       {subject.has_teacher && subject.available_slots !== undefined && (
-                        <div className="p-3 bg-blue-50 rounded text-sm">
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded text-sm">
                           <div className="flex items-center justify-between">
                             <span>عدد الحصص المطلوبة (هذه المادة):</span>
                             <span className="font-medium">{subject.required_periods} حصة أسبوعياً</span>
                           </div>
                           {subject.teacher_subjects_count && subject.teacher_subjects_count > 1 && (
-                            <div className="flex items-center justify-between mt-1 pt-2 border-t border-blue-200">
-                              <span className="text-orange-700">إجمالي حصص المعلم (جميع المواد):</span>
-                              <span className="font-bold text-orange-700">{subject.teacher_total_required} حصة أسبوعياً</span>
+                            <div className="flex items-center justify-between mt-1 pt-2 border-t border-blue-200 dark:border-blue-800">
+                              <span className="text-orange-700 dark:text-orange-300">إجمالي حصص المعلم (جميع المواد):</span>
+                              <span className="font-bold text-orange-700 dark:text-orange-300">{subject.teacher_total_required} حصة أسبوعياً</span>
                             </div>
                           )}
                           <div className="flex items-center justify-between mt-1">
                             <span>عدد أوقات الفراغ المحددة للمعلم:</span>
                             <span className="font-medium">{subject.available_slots}</span>
                           </div>
-                          <div className="flex items-center justify-between mt-1 pt-2 border-t border-blue-200">
+                          <div className="flex items-center justify-between mt-1 pt-2 border-t border-blue-200 dark:border-blue-800">
                             <span className="font-medium">الحالة:</span>
                             <span className={subject.is_sufficient ? 'text-green-700 font-medium' : 'text-red-700 font-medium'}>
                               {subject.is_sufficient ? 'كافي ✓' : 'غير كافي ✗'}
                             </span>
                           </div>
                           {subject.teacher_subjects_count && subject.teacher_subjects_count > 1 && !subject.is_sufficient && (
-                            <div className="mt-2 p-2 bg-orange-100 border border-orange-200 rounded text-xs text-orange-800">
+                            <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded text-xs text-orange-800 dark:text-orange-200">
                               <strong>ملاحظة:</strong> المعلم يدرس {subject.teacher_subjects_count} مواد ويحتاج إجمالي {subject.teacher_total_required} حصة، لكن لديه {subject.available_slots} فقط
+                            </div>
+                          )}
+                          {subject.missing_timeslots && subject.missing_timeslots.length > 0 && (
+                            <div className="mt-2 p-2 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded text-xs text-yellow-800 dark:text-yellow-200">
+                              <strong>تحذير:</strong> المعلم غير متاح في الأوقات التالية: {subject.missing_timeslots.join(', ')}
                             </div>
                           )}
                         </div>
@@ -359,10 +379,10 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
 
       {/* Suggestions */}
       {validationResult.suggestions.length > 0 && (
-        <Alert className="border-blue-200 bg-blue-50">
-          <Info className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-900">اقتراحات</AlertTitle>
-          <AlertDescription className="text-blue-800">
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+          <AlertTitle className="text-blue-900 dark:text-blue-100">اقتراحات</AlertTitle>
+          <AlertDescription className="text-blue-800 dark:text-blue-100">
             <ul className="list-disc list-inside space-y-1 mt-2">
               {validationResult.suggestions.map((suggestion, index) => (
                 <li key={index}>{suggestion}</li>
@@ -372,7 +392,7 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
         </Alert>
       )}
 
-      {/* Action Buttons */}
+      {/* Action Buttons (بدون تغيير للخطوة، فقط إجراءات مساعدة) */}
       <div className="flex justify-between items-center pt-4 border-t">
         <Button
           variant="outline"
@@ -381,27 +401,11 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
           إدارة المعلمين
         </Button>
 
-        <div className="flex gap-2">
-          {!validationResult.can_proceed && (
-            <Button variant="secondary" onClick={validateSchedule}>
-              إعادة التحقق
-            </Button>
-          )}
-          <Button
-            onClick={onContinue}
-            disabled={!validationResult.can_proceed}
-            size="lg"
-          >
-            {validationResult.can_proceed ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 ml-2" />
-                المتابعة لتحديد القيود
-              </>
-            ) : (
-              'يجب إصلاح الأخطاء أولاً'
-            )}
+        {!validationResult.can_proceed && (
+          <Button variant="secondary" onClick={validateSchedule}>
+            إعادة التحقق
           </Button>
-        </div>
+        )}
       </div>
     </div>
   );

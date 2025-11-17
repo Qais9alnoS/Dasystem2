@@ -583,50 +583,37 @@ async def get_teacher_schedule(
     
     assignments = assignment_query.all()
     
-    # Get schedule information for each assignment
-    schedule_info = []
-    for assignment in assignments:
-        class_info = db.query(Class).filter(Class.id == assignment.class_id).first()
-        subject_info = db.query(Subject).filter(Subject.id == assignment.subject_id).first()
+    # Get all schedule entries for this teacher directly
+    from ..models.schedules import Schedule
+    schedule_entries = db.query(Schedule).filter(
+        Schedule.teacher_id == teacher_id,
+        Schedule.is_active == True
+    )
+    
+    if academic_year_id is not None:
+        schedule_entries = schedule_entries.filter(Schedule.academic_year_id == academic_year_id)
+    
+    schedule_entries = schedule_entries.all()
+    
+    # Build flat list of schedule entries with class/subject info
+    result = []
+    for entry in schedule_entries:
+        class_info = db.query(Class).filter(Class.id == entry.class_id).first()
+        subject_info = db.query(Subject).filter(Subject.id == entry.subject_id).first()
         
-        # Get schedule entries for this assignment
-        from ..models.schedules import Schedule
-        schedule_entries = db.query(Schedule).filter(
-            and_(
-                Schedule.teacher_id == teacher_id,
-                Schedule.class_id == assignment.class_id,
-                Schedule.subject_id == assignment.subject_id
-            )
-        ).all()
-        
-        class_name = "Unknown"
-        if class_info is not None:
-            class_name = f"{class_info.grade_level} {class_info.grade_number}"
-            
-        subject_name = "Unknown"
-        if subject_info is not None:
-            subject_name = subject_info.subject_name
-        
-        schedule_info.append({
-            "assignment_id": assignment.id,
-            "class": class_name,
-            "subject": subject_name,
-            "section": assignment.section,
-            "schedule_entries": [
-                {
-                    "day_of_week": entry.day_of_week if entry.day_of_week is not None else 0,
-                    "period_number": entry.period_number if entry.period_number is not None else 0,
-                    "session_type": entry.session_type if entry.session_type is not None else ""
-                }
-                for entry in schedule_entries
-            ]
+        result.append({
+            "day_of_week": entry.day_of_week,
+            "period_number": entry.period_number,
+            "subject_name": subject_info.subject_name if subject_info else "Unknown",
+            "subject_id": entry.subject_id,
+            "class_id": entry.class_id,
+            "grade_level": class_info.grade_level if class_info else "Unknown",
+            "grade_number": class_info.grade_number if class_info else 0,
+            "section": entry.section,
+            "session_type": entry.session_type
         })
     
-    return {
-        "teacher_id": teacher_id,
-        "teacher_name": teacher.full_name if teacher is not None else "Unknown",
-        "assignments": schedule_info
-    }
+    return result
 
 # Search Teachers
 @router.get("/search/", response_model=List[TeacherResponse])

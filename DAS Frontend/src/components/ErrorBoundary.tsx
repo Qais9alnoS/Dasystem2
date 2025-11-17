@@ -46,6 +46,22 @@ export class ErrorBoundary extends Component<Props, State> {
             this.props.onError(error, errorInfo);
         }
 
+        // Send to Telegram
+        try {
+            const { reportErrorToTelegram } = require('@/services/telegramErrorService');
+            const errorDetails = {
+                component_stack: errorInfo.componentStack,
+                error_name: error.name,
+            };
+            reportErrorToTelegram(
+                error,
+                `ErrorBoundary: ${errorInfo.componentStack?.split('\n')[0] || 'Unknown Component'}`,
+                errorDetails
+            );
+        } catch (telegramError) {
+            console.warn('Failed to send error to Telegram:', telegramError);
+        }
+
         // Log to monitoring service in production
         if (process.env.NODE_ENV === 'production') {
             // Send to monitoring service (e.g., Sentry, LogRocket)

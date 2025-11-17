@@ -221,6 +221,25 @@ async def generate_schedule(
     This endpoint creates a full schedule with optimized teacher assignments and time slots.
     """
     try:
+        # Check if a schedule with the same name already exists for this class
+        # Skip this check for preview mode since we won't actually save
+        if not request.preview_only and request.class_id and request.name:
+            existing_schedule = db.query(Schedule).filter(
+                and_(
+                    Schedule.academic_year_id == request.academic_year_id,
+                    Schedule.session_type == request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type),
+                    Schedule.class_id == request.class_id,
+                    Schedule.name == request.name,
+                    Schedule.is_active == True
+                )
+            ).first()
+            
+            if existing_schedule:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"يوجد بالفعل جدول باسم '{request.name}' للصف المحدد. يرجى اختيار اسم آخر."
+                )
+        
         # Initialize the schedule generation service
         schedule_service = ScheduleGenerationService(db)
         
@@ -229,10 +248,100 @@ async def generate_schedule(
         
         return result
         
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Schedule generation failed: {str(e)}")
+
+class SavePreviewRequest(BaseModel):
+    request: ScheduleGenerationRequest
+    preview_data: List[dict]
+
+@router.post("/save-preview")
+async def save_preview_schedule(
+    save_request: SavePreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Save a preview schedule to the database.
+    This endpoint takes preview data from generate endpoint and saves it.
+    """
+    try:
+        request = save_request.request
+        
+        # Check if a schedule with the same name already exists for this class
+        # If it exists, delete it first (we're replacing it with the new preview)
+        if request.class_id and request.name:
+            existing_schedules = db.query(Schedule).filter(
+                and_(
+                    Schedule.academic_year_id == request.academic_year_id,
+                    Schedule.session_type == request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type),
+                    Schedule.class_id == request.class_id,
+                    Schedule.section == request.section,
+                    Schedule.is_active == True
+                )
+            ).all()
+            
+            if existing_schedules:
+                # Delete existing schedules for this class/section
+                for schedule in existing_schedules:
+                    db.delete(schedule)
+                db.commit()
+        
+        # Initialize the schedule generation service
+        schedule_service = ScheduleGenerationService(db)
+        
+        # Save the preview schedule
+        result = schedule_service.save_preview_schedule(save_request.request, save_request.preview_data)
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save schedule: {str(e)}")
+
+@router.post("/generate-all")
+async def generate_schedules_for_all_classes(
+    academic_year_id: int,
+    session_type: str,
+    periods_per_day: int = 6,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Generate schedules for all classes in batch
+    
+    Args:
+        academic_year_id: Academic year ID
+        session_type: morning or evening
+        periods_per_day: Number of periods per day (default 6)
+        
+    Returns:
+        Batch generation results for all classes
+    """
+    try:
+        # Initialize the schedule generation service
+        schedule_service = ScheduleGenerationService(db)
+        
+        # Generate schedules for all classes
+        result = schedule_service.generate_schedules_for_all_classes(
+            academic_year_id=academic_year_id,
+            session_type=session_type,
+            periods_per_day=periods_per_day
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch generation failed: {str(e)}")
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(
@@ -280,6 +389,158 @@ async def delete_schedule(
     db.delete(schedule)
     db.commit()
     return {"message": "Schedule entry deleted successfully"}
+
+# Schedule Swap Endpoint
+class ScheduleSwapRequest(BaseModel):
+    schedule1_id: int
+    schedule2_id: int
+    
+class ScheduleSwapResponse(BaseModel):
+    success: bool
+    message: str
+    schedule1: Optional[ScheduleResponse] = None
+    schedule2: Optional[ScheduleResponse] = None
+    conflicts: List[str] = []
+    
+@router.post("/swap", response_model=ScheduleSwapResponse)
+async def swap_schedule_periods(
+    swap_request: ScheduleSwapRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Swap two schedule periods with validation and transaction support.
+    This ensures data integrity and checks for conflicts before committing.
+    """
+    try:
+        # Fetch both schedules
+        schedule1 = db.query(Schedule).filter(Schedule.id == swap_request.schedule1_id).first()
+        schedule2 = db.query(Schedule).filter(Schedule.id == swap_request.schedule2_id).first()
+        
+        if not schedule1:
+            raise HTTPException(status_code=404, detail=f"Schedule 1 (ID: {swap_request.schedule1_id}) not found")
+        if not schedule2:
+            raise HTTPException(status_code=404, detail=f"Schedule 2 (ID: {swap_request.schedule2_id}) not found")
+        
+        # Validate: Must be same academic year and session
+        if schedule1.academic_year_id != schedule2.academic_year_id:
+            return ScheduleSwapResponse(
+                success=False,
+                message="لا يمكن تبديل حصص من سنوات دراسية مختلفة",
+                conflicts=["Academic years don't match"]
+            )
+        
+        if schedule1.session_type != schedule2.session_type:
+            return ScheduleSwapResponse(
+                success=False,
+                message="لا يمكن تبديل حصص من فترات مختلفة (صباحي/مسائي)",
+                conflicts=["Session types don't match"]
+            )
+        
+        # Store original values
+        original_1 = {
+            'day_of_week': schedule1.day_of_week,
+            'period_number': schedule1.period_number,
+            'subject_id': schedule1.subject_id,
+            'teacher_id': schedule1.teacher_id
+        }
+        original_2 = {
+            'day_of_week': schedule2.day_of_week,
+            'period_number': schedule2.period_number,
+            'subject_id': schedule2.subject_id,
+            'teacher_id': schedule2.teacher_id
+        }
+        
+        # Perform swap - swap everything about the periods
+        schedule1.day_of_week = original_2['day_of_week']
+        schedule1.period_number = original_2['period_number']
+        schedule1.subject_id = original_2['subject_id']
+        schedule1.teacher_id = original_2['teacher_id']
+        
+        schedule2.day_of_week = original_1['day_of_week']
+        schedule2.period_number = original_1['period_number']
+        schedule2.subject_id = original_1['subject_id']
+        schedule2.teacher_id = original_1['teacher_id']
+        
+        # Check for conflicts after swap
+        conflicts = []
+        
+        # Check if teacher 1 has conflict at new time
+        teacher1_conflict = db.query(Schedule).filter(
+            Schedule.id != schedule1.id,
+            Schedule.teacher_id == schedule1.teacher_id,
+            Schedule.day_of_week == schedule1.day_of_week,
+            Schedule.period_number == schedule1.period_number,
+            Schedule.academic_year_id == schedule1.academic_year_id,
+            Schedule.session_type == schedule1.session_type
+        ).first()
+        
+        if teacher1_conflict:
+            conflicts.append(f"المعلم (ID: {schedule1.teacher_id}) لديه حصة أخرى في هذا الوقت")
+        
+        # Check if teacher 2 has conflict at new time
+        teacher2_conflict = db.query(Schedule).filter(
+            Schedule.id != schedule2.id,
+            Schedule.teacher_id == schedule2.teacher_id,
+            Schedule.day_of_week == schedule2.day_of_week,
+            Schedule.period_number == schedule2.period_number,
+            Schedule.academic_year_id == schedule2.academic_year_id,
+            Schedule.session_type == schedule2.session_type
+        ).first()
+        
+        if teacher2_conflict:
+            conflicts.append(f"المعلم (ID: {schedule2.teacher_id}) لديه حصة أخرى في هذا الوقت")
+        
+        # Check if class has conflict
+        class1_conflict = db.query(Schedule).filter(
+            Schedule.id != schedule1.id,
+            Schedule.class_id == schedule1.class_id,
+            Schedule.section == schedule1.section,
+            Schedule.day_of_week == schedule1.day_of_week,
+            Schedule.period_number == schedule1.period_number
+        ).first()
+        
+        if class1_conflict:
+            conflicts.append(f"الصف {schedule1.class_id} شعبة {schedule1.section} لديه حصة أخرى في هذا الوقت")
+        
+        class2_conflict = db.query(Schedule).filter(
+            Schedule.id != schedule2.id,
+            Schedule.class_id == schedule2.class_id,
+            Schedule.section == schedule2.section,
+            Schedule.day_of_week == schedule2.day_of_week,
+            schedule2.period_number == schedule2.period_number
+        ).first()
+        
+        if class2_conflict:
+            conflicts.append(f"الصف {schedule2.class_id} شعبة {schedule2.section} لديه حصة أخرى في هذا الوقت")
+        
+        # If conflicts found, rollback and return error
+        if conflicts:
+            db.rollback()
+            return ScheduleSwapResponse(
+                success=False,
+                message="فشل التبديل بسبب تعارضات",
+                conflicts=conflicts
+            )
+        
+        # No conflicts, commit the swap
+        db.commit()
+        db.refresh(schedule1)
+        db.refresh(schedule2)
+        
+        return ScheduleSwapResponse(
+            success=True,
+            message="تم تبديل الحصص بنجاح",
+            schedule1=ScheduleResponse.model_validate(schedule1),
+            schedule2=ScheduleResponse.model_validate(schedule2),
+            conflicts=[]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error swapping schedules: {str(e)}")
 
 # Schedule Constraint Management
 @router.get("/constraints/", response_model=List[ScheduleConstraintResponse])

@@ -56,6 +56,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
     const [showFreeTimeDialog, setShowFreeTimeDialog] = useState(false);
     const [freeTimeSlots, setFreeTimeSlots] = useState<FreeTimeSlot[]>([]);
     const [availableSections, setAvailableSections] = useState<string[]>([]);
+    const [occupiedSlots, setOccupiedSlots] = useState<any[]>([]);
 
     const [newAssignment, setNewAssignment] = useState({
         class_id: '',
@@ -66,6 +67,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
     useEffect(() => {
         loadAssignments();
         loadClasses();
+        loadTeacherSchedule();
         
         // Initialize free time slots from teacher data
         if (teacher.free_time_slots && Array.isArray(teacher.free_time_slots)) {
@@ -101,6 +103,31 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
         }
         console.log('Initialized empty slots:', slots.length, 'slots');
         setFreeTimeSlots(slots);
+    };
+
+    const loadTeacherSchedule = async () => {
+        try {
+            const academicYearId = localStorage.getItem('selected_academic_year_id');
+            const response = await teachersApi.getSchedule(teacher.id!, {
+                academic_year_id: academicYearId ? parseInt(academicYearId) : undefined
+            });
+
+            if (response.success && response.data) {
+                // Ensure data is an array
+                const scheduleData = Array.isArray(response.data) ? response.data : [];
+                
+                // Map schedule entries to occupied slots format
+                const occupied = scheduleData.map((entry: any) => ({
+                    day: entry.day_of_week - 1, // Convert from 1-5 to 0-4
+                    period: entry.period_number,
+                    className: `${entry.grade_level}/${entry.grade_number}-${entry.section}`,
+                    subject: entry.subject_name || 'مادة'
+                }));
+                setOccupiedSlots(occupied);
+            }
+        } catch (error) {
+            console.error('Error loading teacher schedule:', error);
+        }
     };
 
     const loadAssignments = async () => {
@@ -399,6 +426,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                             <FreeTimeSlotsCalendar
                                 slots={freeTimeSlots}
                                 readonly={true}
+                                occupiedSlots={occupiedSlots}
                             />
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">
@@ -576,6 +604,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                             slots={freeTimeSlots}
                             readonly={false}
                             onSlotsChange={(slots) => setFreeTimeSlots(slots)}
+                            occupiedSlots={occupiedSlots}
                         />
                     </div>
                     <DialogFooter>

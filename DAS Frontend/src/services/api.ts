@@ -21,6 +21,19 @@ import { getSecurityHeaders } from '@/lib/security';
 const API_BASE_URL = typeof process !== 'undefined' && process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api';
 const API_TIMEOUT = 30000; // 30 seconds
 
+// Global token storage (in-memory only, not localStorage)
+let currentToken: string | null = null;
+
+// Function to set token (called from AuthContext)
+export const setApiToken = (token: string | null) => {
+  currentToken = token;
+};
+
+// Function to get token
+export const getApiToken = (): string | null => {
+  return currentToken;
+};
+
 // Types for API responses
 interface ApiResponse<T> {
   success: boolean;
@@ -66,7 +79,8 @@ class ApiClient {
   }
 
   private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('das_token');
+    // Use in-memory token instead of localStorage
+    const token = getApiToken();
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -1026,8 +1040,17 @@ export const schedulesApi = {
     balance_teacher_load?: boolean;
     avoid_teacher_conflicts?: boolean;
     prefer_subject_continuity?: boolean;
+    preview_only?: boolean;
   }) => {
     return apiClient.post<any>('/schedules/generate', request);
+  },
+
+  // Save Preview Schedule
+  savePreview: async (request: {
+    request: any;
+    preview_data: any[];
+  }) => {
+    return apiClient.post<any>('/schedules/save-preview', request);
   },
 
   // Schedule Validation
@@ -1058,6 +1081,17 @@ export const schedulesApi = {
   // Save as Draft
   saveAsDraft: async (scheduleId: number) => {
     return apiClient.post<any>(`/schedules/${scheduleId}/save-as-draft`, {});
+  },
+
+  // Swap Schedule Periods
+  swap: async (schedule1_id: number, schedule2_id: number) => {
+    return apiClient.post<{
+      success: boolean;
+      message: string;
+      schedule1?: Schedule;
+      schedule2?: Schedule;
+      conflicts: string[];
+    }>('/schedules/swap', { schedule1_id, schedule2_id });
   },
 
   // Get Diagnostics

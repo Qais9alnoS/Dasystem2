@@ -80,6 +80,9 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
 }) => {
   const [selectedCell, setSelectedCell] = useState<ScheduleAssignment | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [draggedAssignment, setDraggedAssignment] = useState<ScheduleAssignment | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+  const [isValidDrop, setIsValidDrop] = useState<boolean>(false);
   const viewMode = 'detailed'; // Always use detailed view
 
   // Create a grid map for quick lookup
@@ -90,9 +93,12 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
   });
 
   const handleCellClick = (assignment: ScheduleAssignment) => {
-    setSelectedCell(assignment);
-    setShowDetailsDialog(true);
-    onAssignmentClick?.(assignment);
+    // Only show details in readonly mode, don't allow edit/delete
+    if (readOnly) {
+      setSelectedCell(assignment);
+      setShowDetailsDialog(true);
+      onAssignmentClick?.(assignment);
+    }
   };
 
   const handleEdit = () => {
@@ -114,13 +120,117 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
     }
   };
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, assignment: ScheduleAssignment) => {
+    if (readOnly) return;
+    setDraggedAssignment(assignment);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/json', JSON.stringify(assignment));
+  };
+
+  const handleDragOver = (e: React.DragEvent, day: number, period: number) => {
+    e.preventDefault();
+    if (readOnly || !draggedAssignment) return;
+
+    const key = `${day}-${period}`;
+    const targetAssignment = gridMap.get(key);
+    
+    // Check if drop is valid
+    // Valid if: dropping on a different cell and target has an assignment
+    const valid = targetAssignment !== undefined && 
+                   !(draggedAssignment.day_of_week === day && draggedAssignment.period_number === period);
+    
+    setDragOverCell(key);
+    setIsValidDrop(valid);
+    e.dataTransfer.dropEffect = valid ? 'move' : 'none';
+  };
+
+  const handleDragLeave = () => {
+    setDragOverCell(null);
+    setIsValidDrop(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent, day: number, period: number) => {
+    e.preventDefault();
+    if (readOnly || !draggedAssignment) return;
+
+    const key = `${day}-${period}`;
+    const targetAssignment = gridMap.get(key);
+
+    // Only allow swap if both cells have assignments
+    if (!targetAssignment) {
+      toast({
+        title: 'غير مسموح',
+        description: 'لا يمكن التبديل مع خانة فارغة',
+        variant: 'destructive'
+      });
+      setDraggedAssignment(null);
+      setDragOverCell(null);
+      setIsValidDrop(false);
+      return;
+    }
+
+    // Don't swap with itself
+    if (draggedAssignment.id === targetAssignment.id) {
+      setDraggedAssignment(null);
+      setDragOverCell(null);
+      setIsValidDrop(false);
+      return;
+    }
+
+    // Call swap API using schedulesApi
+    try {
+      const { schedulesApi } = await import('@/services/api');
+      const result = await schedulesApi.swap(draggedAssignment.id, targetAssignment.id);
+
+      if (result.success) {
+        toast({
+          title: 'تم التبديل بنجاح',
+          description: 'تم تبديل الحصص بنجاح',
+        });
+        // Trigger parent refresh
+        window.location.reload(); // Simple refresh, can be optimized
+      } else {
+        throw new Error(result.message || 'حدث خطأ اثناء تبديل الحصص');
+      }
+    } catch (error: any) {
+      console.error('Swap error:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'حدث خطأ اثناء تبديل الحصص';
+      toast({
+        title: 'خطأ',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+    } finally {
+      setDraggedAssignment(null);
+      setDragOverCell(null);
+      setIsValidDrop(false);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedAssignment(null);
+    setDragOverCell(null);
+    setIsValidDrop(false);
+  };
+
   const renderCell = (day: number, period: number) => {
     const key = `${day}-${period}`;
     const assignment = gridMap.get(key);
+    const isDragOver = dragOverCell === key;
+    const isDragging = draggedAssignment?.id === assignment?.id;
 
     if (!assignment) {
       return (
-        <div className="h-full min-h-[80px] p-2 border border-dashed border-gray-200 rounded-lg bg-gray-50/50 hover:bg-gray-100/50 transition-colors flex items-center justify-center">
+        <div 
+          onDragOver={(e) => handleDragOver(e, day, period)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, day, period)}
+          className={cn(
+            "h-full min-h-[80px] p-2 border border-dashed border-gray-200 rounded-lg bg-gray-50/50 hover:bg-gray-100/50 transition-colors flex items-center justify-center",
+            isDragOver && !isValidDrop && "bg-red-100 border-red-400 animate-pulse"
+          )}
+        >
           <span className="text-xs text-gray-400">فارغ</span>
         </div>
       );
@@ -130,15 +240,26 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
 
     return (
       <div
-        onClick={() => !readOnly && handleCellClick(assignment)}
+        draggable={!readOnly}
+        onDragStart={(e) => handleDragStart(e, assignment)}
+        onDragEnd={handleDragEnd}
+        onDragOver={(e) => handleDragOver(e, day, period)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, day, period)}
         className={cn(
-          "h-full min-h-[80px] p-3 rounded-xl transition-all duration-200 cursor-pointer group relative",
+          "h-full min-h-[80px] p-3 rounded-xl transition-all duration-200 cursor-move group relative",
           "shadow-sm hover:shadow-md",
           hasConflict
-            ? "bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-300"
-            : "bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200",
-          !readOnly && "hover:scale-[1.02]"
+            ? "bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/40 border-2 border-red-300 dark:border-red-700"
+            : "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/40 border border-blue-200 dark:border-blue-700",
+          !readOnly && "hover:scale-[1.02]",
+          isDragging && "opacity-50 scale-95",
+          isDragOver && isValidDrop && "animate-wiggle border-green-500 dark:border-green-400 border-4 bg-green-100 dark:bg-green-900/40",
+          isDragOver && !isValidDrop && "border-red-500 dark:border-red-400 border-4 bg-red-100 dark:bg-red-900/40"
         )}
+        style={{
+          animation: isDragOver && isValidDrop ? 'wiggle 0.5s ease-in-out infinite' : undefined
+        }}
       >
         {/* Conflict Indicator */}
         {hasConflict && (
@@ -265,32 +386,32 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
       </Card>
 
       {/* Statistics Footer */}
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-blue-200 dark:border-blue-800">
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-blue-900">
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                 {assignments.length}
               </div>
-              <div className="text-xs text-blue-600">إجمالي الحصص</div>
+              <div className="text-xs text-blue-600 dark:text-blue-300">إجمالي الحصص</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-green-900">
+              <div className="text-2xl font-bold text-green-900 dark:text-green-100">
                 {assignments.filter(a => !a.has_conflict).length}
               </div>
-              <div className="text-xs text-green-600">حصص صحيحة</div>
+              <div className="text-xs text-green-600 dark:text-green-300">حصص صحيحة</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-red-900">
+              <div className="text-2xl font-bold text-red-900 dark:text-red-100">
                 {assignments.filter(a => a.has_conflict).length}
               </div>
-              <div className="text-xs text-red-600">تعارضات</div>
+              <div className="text-xs text-red-600 dark:text-red-300">تعارضات</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-purple-900">
+              <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                 {new Set(assignments.map(a => a.teacher_id)).size}
               </div>
-              <div className="text-xs text-purple-600">معلمين</div>
+              <div className="text-xs text-purple-600 dark:text-purple-300">معلمين</div>
             </div>
           </div>
         </CardContent>

@@ -468,6 +468,11 @@ export interface FinanceManagerDashboard {
         total_income: number;
         total_expenses: number;
     };
+    rewards_and_assistance?: {
+        total_rewards: number;
+        total_assistance: number;
+        total: number;
+    };
 }
 
 // ===== Activities Management =====

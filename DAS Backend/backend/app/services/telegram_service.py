@@ -251,6 +251,69 @@ class TelegramNotificationService:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    async def send_error_report(self, error_type: str, error_message: str, error_location: str,
+                               error_details: Optional[Dict[str, Any]] = None,
+                               stack_trace: Optional[str] = None,
+                               user_info: Optional[Dict[str, Any]] = None,
+                               request_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Send detailed error report to Telegram"""
+        message = f"<b>❌ تقرير خطأ</b>\n\n"
+        message += f"<b>نوع الخطأ:</b> <code>{error_type}</code>\n"
+        message += f"<b>الرسالة:</b> <code>{error_message[:200]}</code>\n"
+        message += f"<b>الموقع:</b> <code>{error_location}</code>\n"
+        message += f"<b>الوقت:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        
+        if error_details:
+            message += f"<b>التفاصيل:</b>\n"
+            for key, value in error_details.items():
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value, ensure_ascii=False, indent=2)[:500]
+                message += f"  • <b>{key}:</b> <code>{str(value)[:200]}</code>\n"
+            message += "\n"
+        
+        if stack_trace:
+            # Truncate stack trace if too long (Telegram has 4096 char limit)
+            stack_trace_short = stack_trace[:1500] + "..." if len(stack_trace) > 1500 else stack_trace
+            message += f"<b>Stack Trace:</b>\n<pre>{stack_trace_short}</pre>\n\n"
+        
+        if user_info:
+            message += f"<b>معلومات المستخدم:</b>\n"
+            for key, value in user_info.items():
+                message += f"  • <b>{key}:</b> <code>{str(value)}</code>\n"
+            message += "\n"
+        
+        if request_info:
+            message += f"<b>معلومات الطلب:</b>\n"
+            for key, value in request_info.items():
+                if key == "headers" and isinstance(value, dict):
+                    # Don't include all headers, just important ones
+                    important_headers = ["user-agent", "referer", "origin"]
+                    filtered_headers = {k: v for k, v in value.items() if k.lower() in important_headers}
+                    if filtered_headers:
+                        message += f"  • <b>{key}:</b> <code>{json.dumps(filtered_headers, ensure_ascii=False)[:200]}</code>\n"
+                else:
+                    message += f"  • <b>{key}:</b> <code>{str(value)[:200]}</code>\n"
+        
+        return await self.send_message(message, MessageType.ERROR)
+    
+    async def send_warning_report(self, warning_type: str, warning_message: str, warning_location: str,
+                                 warning_details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Send detailed warning report to Telegram"""
+        message = f"<b>⚠️ تقرير تحذير</b>\n\n"
+        message += f"<b>نوع التحذير:</b> <code>{warning_type}</code>\n"
+        message += f"<b>الرسالة:</b> <code>{warning_message[:200]}</code>\n"
+        message += f"<b>الموقع:</b> <code>{warning_location}</code>\n"
+        message += f"<b>الوقت:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        
+        if warning_details:
+            message += f"<b>التفاصيل:</b>\n"
+            for key, value in warning_details.items():
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value, ensure_ascii=False, indent=2)[:500]
+                message += f"  • <b>{key}:</b> <code>{str(value)[:200]}</code>\n"
+        
+        return await self.send_message(message, MessageType.WARNING)
+    
     def _format_message(self, message: str, message_type: MessageType) -> str:
         """Format message with emoji and timestamp"""
         if not message.startswith("<b>"):
@@ -284,3 +347,29 @@ async def notify_payment(student_name: str, amount: float, payment_type: str, su
 async def notify_system(title: str, message: str, severity: str = "info"):
     """Quick system notification"""
     return await telegram_service.send_system_alert(title, message, severity)
+
+async def notify_error(error_type: str, error_message: str, error_location: str, 
+                      error_details: Optional[Dict[str, Any]] = None, 
+                      stack_trace: Optional[str] = None,
+                      user_info: Optional[Dict[str, Any]] = None,
+                      request_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Send detailed error notification to Telegram"""
+    return await telegram_service.send_error_report(
+        error_type=error_type,
+        error_message=error_message,
+        error_location=error_location,
+        error_details=error_details,
+        stack_trace=stack_trace,
+        user_info=user_info,
+        request_info=request_info
+    )
+
+async def notify_warning(warning_type: str, warning_message: str, warning_location: str,
+                        warning_details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Send detailed warning notification to Telegram"""
+    return await telegram_service.send_warning_report(
+        warning_type=warning_type,
+        warning_message=warning_message,
+        warning_location=warning_location,
+        warning_details=warning_details
+    )

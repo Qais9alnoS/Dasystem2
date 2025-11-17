@@ -259,7 +259,7 @@ async def update_student_academic(
 # Search functionality
 @router.get("/search/", response_model=List[StudentResponse])
 async def search_students(
-    q: str = Query(..., min_length=3, description="Search query (minimum 3 characters)"),
+    q: str = Query(..., min_length=1, description="Search query (minimum 1 character)"),
     academic_year_id: Optional[int] = Query(None),
     session_type: Optional[str] = Query(None),
     limit: int = Query(20, le=100),

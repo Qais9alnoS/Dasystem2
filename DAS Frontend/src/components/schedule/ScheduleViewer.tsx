@@ -17,8 +17,7 @@ import {
   Search,
   Loader2
 } from 'lucide-react';
-import { schedulesApi } from '@/services/api';
-import { classesApi, teachersApi } from '@/services/api';
+import { schedulesApi, classesApi, teachersApi, subjectsApi } from '@/services/api';
 import { Class, Teacher } from '@/types/school';
 
 interface ScheduleEntry {
@@ -99,56 +98,133 @@ export const ScheduleViewer: React.FC<{
       setLoadingSchedules(true);
       try {
         if (selectedView === 'classes' && selectedClass) {
-          // Fetch class schedule
+          // Fetch class schedule with real data
           const response = await schedulesApi.getWeeklyView(
             academicYearId, 
             sessionType, 
             parseInt(selectedClass)
           );
-          // Process response to match our UI structure
-          // For now using mock data placeholder - will be replaced with real data
-          const mockSchedules: ClassSchedule[] = [
-            {
-              className: "الصف الأول الابتدائي - أ",
-              gradeLevel: "ابتدائي",
-              division: "أ",
-              totalHours: 20,
-              schedule: [
-                { day: "الأحد", period: 1, subject: "قرآن كريم", teacher: "فاطمة أحمد" },
-                { day: "الأحد", period: 2, subject: "لغة عربية", teacher: "محمد علي" },
-                { day: "الأحد", period: 3, subject: "رياضيات", teacher: "أحمد محمد" },
-                { day: "الأحد", period: 4, subject: "تربية فنية", teacher: "نادية حسن" },
-                { day: "الاثنين", period: 1, subject: "لغة عربية", teacher: "محمد علي" },
-                { day: "الاثنين", period: 2, subject: "رياضيات", teacher: "أحمد محمد" },
-                { day: "الاثنين", period: 3, subject: "تربية إسلامية", teacher: "فاطمة أحمد" },
-                { day: "الاثنين", period: 4, subject: "تربية رياضية", teacher: "عمر السيد" },
-              ]
-            }
-          ];
-          setClassSchedules(mockSchedules);
+          
+          if (response.success && response.data) {
+            // Process real API response
+            const weeklyData = response.data.data || {};
+            const scheduleEntries: ScheduleEntry[] = [];
+            
+            // Fetch subjects and teachers for lookups
+            const subjectsResponse = await subjectsApi.getAll();
+            const teachersData = teachers.length > 0 ? teachers : (await teachersApi.getAll({ academic_year_id: academicYearId })).data || [];
+            
+            const subjectsMap = new Map((subjectsResponse.data || []).map((s: any) => [s.id, s.subject_name]));
+            const teachersMap = new Map(teachersData.map((t: any) => [t.id, t.full_name]));
+            
+            // Map day numbers to Arabic day names
+            const dayNames: { [key: number]: string } = {
+              1: "الأحد",
+              2: "الاثنين",
+              3: "الثلاثاء",
+              4: "الأربعاء",
+              5: "الخميس",
+              6: "الجمعة",
+              7: "السبت"
+            };
+            
+            // Process the weekly data
+            Object.entries(weeklyData).forEach(([dayNum, periods]: [string, any]) => {
+              Object.entries(periods).forEach(([periodNum, entry]: [string, any]) => {
+                scheduleEntries.push({
+                  day: dayNames[parseInt(dayNum)] || dayNum,
+                  period: parseInt(periodNum),
+                  subject: subjectsMap.get(entry.subject_id) || `مادة ${entry.subject_id}`,
+                  teacher: teachersMap.get(entry.teacher_id) || `معلم ${entry.teacher_id}`
+                });
+              });
+            });
+            
+            // Find the selected class info
+            const selectedClassInfo = classes.find(c => c.id?.toString() === selectedClass);
+            const gradeLevel = selectedClassInfo?.grade_level === 'primary' ? 'ابتدائي' 
+              : selectedClassInfo?.grade_level === 'intermediate' ? 'متوسط' 
+              : 'ثانوي';
+            
+            const classSchedule: ClassSchedule = {
+              className: `الصف ${selectedClassInfo?.grade_number} ${gradeLevel} - شعبة 1`,
+              gradeLevel: gradeLevel,
+              division: "1",
+              totalHours: scheduleEntries.length,
+              schedule: scheduleEntries
+            };
+            
+            setClassSchedules([classSchedule]);
+          } else {
+            // No schedules found
+            setClassSchedules([]);
+          }
         } else if (selectedView === 'teachers' && selectedTeacher) {
-          // Fetch teacher schedule
+          // Fetch teacher schedule with real data
           const response = await schedulesApi.getWeeklyView(
             academicYearId, 
             sessionType, 
             undefined, 
             parseInt(selectedTeacher)
           );
-          // Process response to match our UI structure
-          // For now using mock data placeholder - will be replaced with real data
-          const mockSchedules: TeacherSchedule[] = [
-            {
-              teacherName: "أحمد محمد",
-              totalHours: 24,
-              subjects: ["رياضيات"],
-              schedule: [
-                { day: "الأحد", period: 3, subject: "رياضيات", teacher: "أحمد محمد", className: "الصف الأول الابتدائي - أ" },
-                { day: "الاثنين", period: 2, subject: "رياضيات", teacher: "أحمد محمد", className: "الصف الأول الابتدائي - أ" },
-                { day: "الاثنين", period: 4, subject: "رياضيات", teacher: "أحمد محمد", className: "الصف الثاني الابتدائي - أ" },
-              ]
-            }
-          ];
-          setTeacherSchedules(mockSchedules);
+          
+          if (response.success && response.data) {
+            // Process real API response
+            const weeklyData = response.data.data || {};
+            const scheduleEntries: (ScheduleEntry & { className: string })[] = [];
+            
+            // Fetch subjects and classes for lookups
+            const subjectsResponse = await subjectsApi.getAll();
+            const classesData = classes.length > 0 ? classes : (await classesApi.getAll({ academic_year_id: academicYearId })).data || [];
+            
+            const subjectsMap = new Map((subjectsResponse.data || []).map((s: any) => [s.id, s.subject_name]));
+            const classesMap = new Map(classesData.map((c: any) => [
+              c.id, 
+              `الصف ${c.grade_number} ${c.grade_level === 'primary' ? 'ابتدائي' : c.grade_level === 'intermediate' ? 'متوسط' : 'ثانوي'}`
+            ]));
+            
+            // Map day numbers to Arabic day names
+            const dayNames: { [key: number]: string } = {
+              1: "الأحد",
+              2: "الاثنين",
+              3: "الثلاثاء",
+              4: "الأربعاء",
+              5: "الخميس",
+              6: "الجمعة",
+              7: "السبت"
+            };
+            
+            // Process the weekly data
+            Object.entries(weeklyData).forEach(([dayNum, periods]: [string, any]) => {
+              Object.entries(periods).forEach(([periodNum, entry]: [string, any]) => {
+                scheduleEntries.push({
+                  day: dayNames[parseInt(dayNum)] || dayNum,
+                  period: parseInt(periodNum),
+                  subject: subjectsMap.get(entry.subject_id) || `مادة ${entry.subject_id}`,
+                  teacher: teachers.find(t => t.id === entry.teacher_id)?.full_name || `معلم ${entry.teacher_id}`,
+                  className: classesMap.get(entry.class_id) || `صف ${entry.class_id}`
+                });
+              });
+            });
+            
+            // Get unique subjects
+            const uniqueSubjects = Array.from(new Set(scheduleEntries.map(e => e.subject)));
+            
+            // Find the selected teacher info
+            const selectedTeacherInfo = teachers.find(t => t.id?.toString() === selectedTeacher);
+            
+            const teacherSchedule: TeacherSchedule = {
+              teacherName: selectedTeacherInfo?.full_name || `معلم ${selectedTeacher}`,
+              totalHours: scheduleEntries.length,
+              subjects: uniqueSubjects,
+              schedule: scheduleEntries
+            };
+            
+            setTeacherSchedules([teacherSchedule]);
+          } else {
+            // No schedules found
+            setTeacherSchedules([]);
+          }
         }
       } catch (error: any) {
         console.error('Error fetching schedules:', error);
@@ -157,13 +233,20 @@ export const ScheduleViewer: React.FC<{
           description: error.message || "حدث خطأ أثناء تحميل الجداول",
           variant: "destructive"
         });
+        
+        // Clear schedules on error
+        if (selectedView === 'classes') {
+          setClassSchedules([]);
+        } else {
+          setTeacherSchedules([]);
+        }
       } finally {
         setLoadingSchedules(false);
       }
     };
 
     fetchSchedules();
-  }, [academicYearId, sessionType, selectedView, selectedClass, selectedTeacher]);
+  }, [academicYearId, sessionType, selectedView, selectedClass, selectedTeacher, classes, teachers]);
 
   const renderClassScheduleTable = (classSchedule: ClassSchedule) => {
     const scheduleGrid: { [key: string]: ScheduleEntry | null } = {};

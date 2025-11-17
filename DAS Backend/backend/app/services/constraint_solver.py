@@ -403,6 +403,11 @@ class ConstraintSolver:
             if violation:
                 violations.append(violation)
         
+        elif constraint.constraint_type == "subject_per_day":
+            violation = self._check_subject_per_day_with_priority(constraint, schedule_assignments, severity, can_override)
+            if violation:
+                violations.append(violation)
+        
         return violations
     
     def _check_forbidden_with_priority(
@@ -421,29 +426,49 @@ class ConstraintSolver:
                 violated_assignments.append(assignment)
         
         if violated_assignments:
-            # Get subject/class names from database if available
-            subject_name = "المادة"
-            class_name = "الصف"
-            
-            if self.db and constraint.subject_id:
-                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
-                if subject:
-                    subject_name = subject.subject_name
-            
-            if self.db and constraint.class_id:
-                class_obj = self.db.query(Class).filter(Class.id == constraint.class_id).first()
-                if class_obj:
-                    class_name = f"الصف {class_obj.grade_number}"
-            
-            day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
-            day_name = day_names[constraint.day_of_week] if constraint.day_of_week and constraint.day_of_week < len(day_names) else "اليوم المحدد"
+            # Use constraint description if available, otherwise build one
+            if constraint.description:
+                description = constraint.description
+            else:
+                # Get subject/class names from database if available
+                subject_name = "المادة"
+                class_name = "الصف"
+                
+                if self.db and constraint.subject_id:
+                    subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                    if subject:
+                        subject_name = subject.subject_name
+                
+                if self.db and constraint.class_id:
+                    class_obj = self.db.query(Class).filter(Class.id == constraint.class_id).first()
+                    if class_obj:
+                        class_name = f"الصف {class_obj.grade_number}"
+                
+                # Build time specification string
+                time_spec_parts = []
+                if constraint.day_of_week:
+                    day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+                    if constraint.day_of_week < len(day_names):
+                        time_spec_parts.append(day_names[constraint.day_of_week])
+                
+                if constraint.period_number:
+                    time_spec_parts.append(f"الحصة {constraint.period_number}")
+                elif constraint.time_range_start and constraint.time_range_end:
+                    time_spec_parts.append(f"الحصص {constraint.time_range_start}-{constraint.time_range_end}")
+                
+                if time_spec_parts:
+                    time_spec = " في " + " ".join(time_spec_parts)
+                else:
+                    time_spec = " في أي وقت"
+                
+                description = f"القيد الممنوع: {subject_name} في {class_name} لا يمكن أن تكون{time_spec}"
             
             return ViolationReport(
                 constraint_id=constraint.id,
                 constraint_type="forbidden",
                 severity=severity,
                 priority_level=constraint.priority_level,
-                description=f"القيد الممنوع: {subject_name} في {class_name} لا يمكن أن تكون في {day_name} الحصة {constraint.period_number}",
+                description=description,
                 affected_entities={
                     "constraint_id": constraint.id,
                     "subject_id": constraint.subject_id,
@@ -452,7 +477,7 @@ class ConstraintSolver:
                     "period_number": constraint.period_number,
                     "violated_assignments": [a.get("id") for a in violated_assignments if a.get("id")]
                 },
-                suggested_resolution=f"قم بنقل حصة {subject_name} إلى يوم أو حصة أخرى",
+                suggested_resolution=f"قم بنقل حصة {subject_name if constraint.subject_id and self.db else 'المادة'} إلى يوم أو حصة أخرى",
                 can_override=can_override
             )
         
@@ -643,6 +668,66 @@ class ConstraintSolver:
         
         return None
     
+    def _check_subject_per_day_with_priority(
+        self,
+        constraint: ScheduleConstraint,
+        schedule_assignments: List[Dict[str, Any]],
+        severity: str,
+        can_override: bool
+    ) -> Optional[ViolationReport]:
+        """Check subject_per_day constraint - ensures a subject appears at most once per day"""
+        
+        if not constraint.subject_id:
+            return None
+        
+        # Group assignments by day and subject
+        daily_subject_counts = {}
+        for assignment in schedule_assignments:
+            if assignment.get('subject_id') == constraint.subject_id:
+                day = assignment.get('day_of_week')
+                if day:
+                    if day not in daily_subject_counts:
+                        daily_subject_counts[day] = []
+                    daily_subject_counts[day].append(assignment)
+        
+        # Check for violations (more than 1 occurrence per day)
+        violations_found = []
+        for day, assignments in daily_subject_counts.items():
+            max_per_day = constraint.max_consecutive_periods if constraint.max_consecutive_periods else 1
+            if len(assignments) > max_per_day:
+                violations_found.append((day, len(assignments), assignments))
+        
+        if violations_found:
+            subject_name = "المادة"
+            if self.db and constraint.subject_id:
+                subject = self.db.query(Subject).filter(Subject.id == constraint.subject_id).first()
+                if subject:
+                    subject_name = subject.subject_name
+            
+            day_names = ["", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+            violation_details = []
+            for day, count, _ in violations_found:
+                day_name = day_names[day] if day < len(day_names) else f"اليوم {day}"
+                max_allowed = constraint.max_consecutive_periods if constraint.max_consecutive_periods else 1
+                violation_details.append(f"{day_name}: {count} حصص (المسموح: {max_allowed})")
+            
+            return ViolationReport(
+                constraint_id=constraint.id,
+                constraint_type="subject_per_day",
+                severity=severity,
+                priority_level=constraint.priority_level,
+                description=f"قيد الحد الأقصى للمادة في اليوم: {subject_name} تظهر أكثر من المسموح - {', '.join(violation_details)}",
+                affected_entities={
+                    "constraint_id": constraint.id,
+                    "subject_id": constraint.subject_id,
+                    "violations": violation_details
+                },
+                suggested_resolution=f"قلل عدد حصص {subject_name} في الأيام المتأثرة",
+                can_override=can_override
+            )
+        
+        return None
+    
     def _matches_constraint_criteria(self, assignment: Dict[str, Any], constraint: ScheduleConstraint) -> bool:
         """Check if an assignment matches the constraint criteria"""
         
@@ -670,6 +755,19 @@ class ConstraintSolver:
         if constraint.time_range_start and constraint.time_range_end:
             period = assignment.get("period_number")
             if period and not (constraint.time_range_start <= period <= constraint.time_range_end):
+                return False
+        
+        # For forbidden constraints, ensure at least one time specification is provided
+        # to prevent matching all assignments (which would be a configuration error)
+        if constraint.constraint_type == "forbidden":
+            has_time_spec = (
+                constraint.day_of_week is not None or
+                constraint.period_number is not None or
+                (constraint.time_range_start is not None and constraint.time_range_end is not None)
+            )
+            # If no time specification, this constraint would match everything for the subject/class
+            # which is likely a configuration error. Only match if there's at least one time spec.
+            if not has_time_spec:
                 return False
         
         return True

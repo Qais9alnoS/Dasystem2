@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Calendar, Edit2, ChevronUp, ChevronDown } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Save, Calendar, Edit2, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { api } from '@/services/api';
 import type { Student, StudentAcademic, Class, AcademicYear, Subject } from '@/types/school';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 type GradeType =
   | 'board_grades'
@@ -27,6 +30,9 @@ type AbsenceData = {
 };
 
 const StudentAcademicInfoPage = () => {
+  const { refreshToken } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -43,6 +49,8 @@ const StudentAcademicInfoPage = () => {
   const [newAbsenceDate, setNewAbsenceDate] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState<boolean>(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   
   // Max grades for each type (default 100)
   const [maxGrades, setMaxGrades] = useState<Record<GradeType, number>>({
@@ -56,9 +64,42 @@ const StudentAcademicInfoPage = () => {
     activity_grade: 100,
   });
   
+  // Passing thresholds for each type (default 50% - can be percentage or absolute value)
+  const [passingThresholds, setPassingThresholds] = useState<Record<GradeType, number>>({
+    board_grades: 50,
+    recitation_grades: 50,
+    first_exam_grades: 50,
+    midterm_grades: 50,
+    second_exam_grades: 50,
+    final_exam_grades: 50,
+    behavior_grade: 50,
+    activity_grade: 50,
+  });
+  
+  // Threshold type: 'percentage' or 'absolute'
+  const [thresholdTypes, setThresholdTypes] = useState<Record<GradeType, 'percentage' | 'absolute'>>({
+    board_grades: 'percentage',
+    recitation_grades: 'percentage',
+    first_exam_grades: 'percentage',
+    midterm_grades: 'percentage',
+    second_exam_grades: 'percentage',
+    final_exam_grades: 'percentage',
+    behavior_grade: 'percentage',
+    activity_grade: 'percentage',
+  });
+  
+  // Overall percentage threshold (default 50%)
+  const [overallPercentageThreshold, setOverallPercentageThreshold] = useState<number>(50);
+  
   // Dialog state
   const [editingGradeType, setEditingGradeType] = useState<GradeType | null>(null);
   const [tempMaxGrade, setTempMaxGrade] = useState<number>(100);
+  const [tempPassingThreshold, setTempPassingThreshold] = useState<number>(50);
+  const [tempThresholdType, setTempThresholdType] = useState<'percentage' | 'absolute'>('percentage');
+  
+  // Dialog state for overall percentage threshold
+  const [editingOverallPercentage, setEditingOverallPercentage] = useState<boolean>(false);
+  const [tempOverallPercentageThreshold, setTempOverallPercentageThreshold] = useState<number>(50);
   
   // Refs for keyboard navigation
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -74,6 +115,30 @@ const StudentAcademicInfoPage = () => {
     { value: 'activity_grade', label: 'النشاط' },
   ];
 
+  // دالة مساعدة لإعادة المحاولة مع تحديث التوكن
+  const retryWithTokenRefresh = async <T,>(
+    apiCall: () => Promise<T>,
+    retries: number = 1
+  ): Promise<T> => {
+    try {
+      return await apiCall();
+    } catch (error: any) {
+      // إذا كان الخطأ 401 (غير مصرح) ولدينا محاولات متبقية
+      if (error?.status === 401 && retries > 0) {
+        try {
+          // محاولة تحديث التوكن
+          await refreshToken();
+          // إعادة المحاولة بعد تحديث التوكن
+          return await apiCall();
+        } catch (refreshError) {
+          // إذا فشل تحديث التوكن، رمي الخطأ الأصلي
+          throw error;
+        }
+      }
+      throw error;
+    }
+  };
+
   const loadClasses = async (academicYearId: number) => {
     try {
       setClassesLoading(true);
@@ -82,7 +147,7 @@ const StudentAcademicInfoPage = () => {
       console.log('Academic Year ID:', academicYearId);
       console.log('Academic Year ID Type:', typeof academicYearId);
       
-      const response = await api.academic.getClasses(academicYearId);
+      const response = await retryWithTokenRefresh(() => api.academic.getClasses(academicYearId));
       console.log('Raw API Response:', response);
       console.log('Response Type:', typeof response);
       console.log('Is Array:', Array.isArray(response));
@@ -172,31 +237,63 @@ const StudentAcademicInfoPage = () => {
     }
   }, [students, subjects]);
 
-  // حفظ تلقائي كل دقيقة (60000 مللي ثانية)
+  // إظهار تحذير عند وجود تغييرات غير محفوظة
   useEffect(() => {
-    const autoSaveInterval = setInterval(() => {
-      if (pendingGrades.size > 0 && !isSaving) {
-        console.log('Auto-saving pending grades...');
-        saveAllPendingGrades();
-      }
-    }, 60000); // 60 ثانية = 1 دقيقة
+    if (hasUnsavedChanges && pendingGrades.size > 0) {
+      // إظهار toast تحذيري كل 30 ثانية كتذكير
+      const warningInterval = setInterval(() => {
+        toast({
+          title: '⚠️ تغييرات غير محفوظة',
+          description: `لديك ${pendingGrades.size} تغيير غير محفوظ. يرجى الحفظ قبل مغادرة الصفحة.`,
+          variant: 'default',
+          duration: 5000,
+        });
+      }, 30000); // كل 30 ثانية
 
-    return () => clearInterval(autoSaveInterval);
-  }, [pendingGrades, isSaving]);
+      return () => clearInterval(warningInterval);
+    }
+  }, [hasUnsavedChanges, pendingGrades.size]);
 
-  // تحذير قبل مغادرة الصفحة مع تغييرات غير محفوظة
+
+  // تحذير قبل مغادرة الصفحة مع تغييرات غير محفوظة (لإغلاق المتصفح/التبويب)
+  // ملاحظة: المتصفحات الحديثة لا تسمح بتخصيص الرسالة، لكن يمكننا إظهار تحذير
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
+      if (hasUnsavedChanges && pendingGrades.size > 0) {
+        // المتصفحات الحديثة تظهر رسالة افتراضية فقط
+        // لكن يمكننا إجبار المتصفح على إظهار التحذير
         e.preventDefault();
-        e.returnValue = 'لديك تغييرات غير محفوظة. هل أنت متأكد من المغادرة؟';
-        return e.returnValue;
+        // في المتصفحات الحديثة، يجب أن يكون returnValue سلسلة غير فارغة
+        e.returnValue = '';
+        return '';
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, pendingGrades.size]);
+
+  // منع التنقل داخل التطبيق عند وجود تغييرات غير محفوظة
+  useEffect(() => {
+    if (!hasUnsavedChanges || pendingGrades.size === 0) return;
+
+    // إضافة state للتاريخ لمنع التنقل بالرجوع
+    const currentPath = location.pathname;
+    window.history.pushState(null, '', currentPath);
+
+    const handlePopState = () => {
+      if (hasUnsavedChanges && pendingGrades.size > 0) {
+        window.history.pushState(null, '', currentPath);
+        setShowUnsavedChangesDialog(true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [hasUnsavedChanges, pendingGrades.size, location.pathname]);
 
   const loadStudents = async () => {
     if (!selectedAcademicYear || !selectedClass || !selectedSection) return;
@@ -205,11 +302,11 @@ const StudentAcademicInfoPage = () => {
       setLoading(true);
       const selectedClassData = classes.find(c => c.id === selectedClass);
 
-      const response = await api.students.getAll({
+      const response = await retryWithTokenRefresh(() => api.students.getAll({
         academic_year_id: selectedAcademicYear,
         grade_level: selectedClassData?.grade_level,
         grade_number: selectedClassData?.grade_number,
-      });
+      }));
 
       // Handle both direct array and wrapped response
       const allStudents = Array.isArray(response) ? response : (response?.data || []);
@@ -237,7 +334,7 @@ const StudentAcademicInfoPage = () => {
     if (!selectedClass) return;
 
     try {
-      const response = await api.academic.getSubjects({ class_id: selectedClass });
+      const response = await retryWithTokenRefresh(() => api.academic.getSubjects({ class_id: selectedClass }));
       // Handle both direct array and wrapped response
       const classSubjects = Array.isArray(response) ? response : (response?.data || []);
       setSubjects(classSubjects);
@@ -271,7 +368,7 @@ const StudentAcademicInfoPage = () => {
           console.log(`📖 Loading academics for student ${student.id} (${student.full_name}), year:`, yearId);
           
           // API expects separate parameters, not an object
-          const response = await api.students.getAcademics(student.id, yearId);
+          const response = await retryWithTokenRefresh(() => api.students.getAcademics(student.id, yearId));
 
           console.log(`✅ Raw response for student ${student.id}:`, response);
 
@@ -374,10 +471,10 @@ const StudentAcademicInfoPage = () => {
       // التحقق من وجود السجل وأن له ID صالح (أكبر من 0)
       if (existingRecord && existingRecord.id && existingRecord.id > 0) {
         console.log('🔄 Updating existing record:', existingRecord.id);
-        savedRecord = await api.students.updateAcademics(studentId, existingRecord.id, academicData);
+        savedRecord = await retryWithTokenRefresh(() => api.students.updateAcademics(studentId, existingRecord.id, academicData));
       } else {
         console.log('✨ Creating new record');
-        savedRecord = await api.students.createAcademics(studentId, academicData);
+        savedRecord = await retryWithTokenRefresh(() => api.students.createAcademics(studentId, academicData));
       }
 
       console.log('✅ Saved record response:', savedRecord);
@@ -479,9 +576,9 @@ const StudentAcademicInfoPage = () => {
 
           let savedRecord;
           if (existingRecord && existingRecord.id && existingRecord.id > 0) {
-            savedRecord = await api.students.updateAcademics(studentId, existingRecord.id, academicData);
+            savedRecord = await retryWithTokenRefresh(() => api.students.updateAcademics(studentId, existingRecord.id, academicData));
           } else {
-            savedRecord = await api.students.createAcademics(studentId, academicData);
+            savedRecord = await retryWithTokenRefresh(() => api.students.createAcademics(studentId, academicData));
           }
 
           console.log('✅ Saved successfully for student', studentId);
@@ -568,9 +665,9 @@ const StudentAcademicInfoPage = () => {
       };
 
       if (existingRecord) {
-        await api.students.updateAcademics(studentId, existingRecord.id, academicData);
+        await retryWithTokenRefresh(() => api.students.updateAcademics(studentId, existingRecord.id, academicData));
       } else {
-        await api.students.createAcademics(studentId, academicData);
+        await retryWithTokenRefresh(() => api.students.createAcademics(studentId, academicData));
       }
 
       toast({
@@ -669,21 +766,76 @@ const StudentAcademicInfoPage = () => {
     return totalPercentages / countGrades;
   };
 
+  // دالة للتحقق من أن العلامة راسبة بناءً على الحد المخصص
+  const isFailingGrade = (grade: number | undefined, maxGrade: number, gradeType: GradeType): boolean => {
+    if (grade === undefined || grade === null || maxGrade === 0) return false;
+    
+    const threshold = passingThresholds[gradeType];
+    const thresholdType = thresholdTypes[gradeType];
+    
+    if (thresholdType === 'absolute') {
+      // إذا كان الحد مطلق (علامة مباشرة)
+      return grade < threshold;
+    } else {
+      // إذا كان الحد نسبة مئوية
+      const percentage = (grade / maxGrade) * 100;
+      return percentage < threshold;
+    }
+  };
+
   const openMaxGradeDialog = (gradeType: GradeType) => {
     setEditingGradeType(gradeType);
     setTempMaxGrade(maxGrades[gradeType]);
+    setTempPassingThreshold(passingThresholds[gradeType]);
+    setTempThresholdType(thresholdTypes[gradeType]);
   };
 
   const saveMaxGrade = () => {
     if (editingGradeType) {
+      // التحقق من صحة القيم
+      if (tempMaxGrade <= 0) {
+        toast({
+          title: 'خطأ',
+          description: 'العلامة القصوى يجب أن تكون أكبر من صفر',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (tempThresholdType === 'absolute' && tempPassingThreshold > tempMaxGrade) {
+        toast({
+          title: 'خطأ',
+          description: 'حد الرسوب (علامة مباشرة) يجب أن يكون أقل من أو يساوي العلامة القصوى',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (tempThresholdType === 'percentage' && (tempPassingThreshold < 0 || tempPassingThreshold > 100)) {
+        toast({
+          title: 'خطأ',
+          description: 'حد الرسوب (نسبة مئوية) يجب أن يكون بين 0 و 100',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
       setMaxGrades({
         ...maxGrades,
         [editingGradeType]: tempMaxGrade,
       });
+      setPassingThresholds({
+        ...passingThresholds,
+        [editingGradeType]: tempPassingThreshold,
+      });
+      setThresholdTypes({
+        ...thresholdTypes,
+        [editingGradeType]: tempThresholdType,
+      });
       setEditingGradeType(null);
       toast({
         title: 'نجح',
-        description: 'تم تحديث العلامة القصوى',
+        description: 'تم تحديث العلامة القصوى وحد الرسوب',
       });
     }
   };
@@ -778,7 +930,8 @@ const StudentAcademicInfoPage = () => {
     gradeType,
     studentIndex,
     gradeIndex,
-    placeholder = '--'
+    placeholder = '--',
+    isFailing = false
   }: { 
     initialValue: number | undefined, 
     onSave: (value: number) => void,
@@ -788,7 +941,8 @@ const StudentAcademicInfoPage = () => {
     gradeType: string,
     studentIndex: number,
     gradeIndex: number,
-    placeholder?: string
+    placeholder?: string,
+    isFailing?: boolean
   }) => {
     // تحويل القيمة الأولية وإزالة .00 إذا كان رقم صحيح
     const getDisplayValue = (value: number | undefined): string => {
@@ -889,7 +1043,7 @@ const StudentAcademicInfoPage = () => {
         onFocus={handleFocus}
         onKeyDown={(e) => handleKeyDown(e, studentIndex, gradeIndex, saveValue)}
         placeholder={placeholder}
-        className="w-24 text-center rounded-lg"
+        className={`w-24 text-center rounded-lg ${isFailing ? 'text-red-800 dark:text-red-400 font-semibold' : ''}`}
         autoComplete="off"
       />
     );
@@ -898,6 +1052,37 @@ const StudentAcademicInfoPage = () => {
   return (
     <div className="min-h-screen bg-background p-6" dir="rtl">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Warning Banner for Unsaved Changes */}
+        {hasUnsavedChanges && pendingGrades.size > 0 && (
+          <Card className="border-orange-500 bg-orange-50 dark:bg-orange-900/20 rounded-3xl shadow-lg">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-orange-900 dark:text-orange-100 text-base">
+                      ⚠️ لديك {pendingGrades.size} تغيير غير محفوظ
+                    </p>
+                    <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                      إذا قمت بإعادة تحميل الصفحة أو مغادرتها، سيتم فقدان جميع التغييرات غير المحفوظة
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={saveAllPendingGrades}
+                  disabled={isSaving}
+                  className="rounded-xl gap-2 bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'جاري الحفظ...' : 'حفظ الآن'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -905,16 +1090,6 @@ const StudentAcademicInfoPage = () => {
             <p className="text-muted-foreground mt-1">إدارة العلامات والحضور للطلاب</p>
           </div>
           <div className="flex items-center gap-3">
-            {hasUnsavedChanges && (
-              <div className="flex flex-col items-end">
-                <span className="text-sm text-orange-500 font-medium">
-                  {pendingGrades.size} تغيير غير محفوظ
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  الحفظ التلقائي كل دقيقة
-                </span>
-              </div>
-            )}
             <Button
               onClick={saveAllPendingGrades}
               disabled={isSaving || pendingGrades.size === 0}
@@ -1042,8 +1217,20 @@ const StudentAcademicInfoPage = () => {
                             </div>
                           </th>
                         ))}
-                        <th className="px-2 py-3 text-center text-sm font-semibold bg-primary/10 last:rounded-tl-2xl">
-                          النسبة المئوية
+                        <th 
+                          className="px-2 py-3 text-center text-sm font-semibold bg-primary/10 last:rounded-tl-2xl cursor-pointer hover:bg-primary/20 transition-colors group rounded-lg"
+                          onClick={() => {
+                            setTempOverallPercentageThreshold(overallPercentageThreshold);
+                            setEditingOverallPercentage(true);
+                          }}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <span>النسبة المئوية</span>
+                            <span className="text-xs text-muted-foreground">
+                              (حد الرسوب: {overallPercentageThreshold}%)
+                            </span>
+                            <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
                         </th>
                       </tr>
                     </thead>
@@ -1071,6 +1258,8 @@ const StudentAcademicInfoPage = () => {
                               // استخدام العلامة المعلقة إذا كانت موجودة، وإلا استخدام المحفوظة
                               const currentGrade = pendingGrade?.grade ?? savedGrade;
                               const maxGrade = maxGrades[gt];
+                              // التحقق من أن العلامة راسبة بناءً على الحد المخصص
+                              const failing = isFailingGrade(currentGrade, maxGrade, gt);
 
                               return (
                                 <td key={gradeType.value} className="px-2 py-3">
@@ -1096,12 +1285,13 @@ const StudentAcademicInfoPage = () => {
                                     studentIndex={studentIndex}
                                     gradeIndex={gradeIndex}
                                     placeholder="--"
+                                    isFailing={failing}
                                   />
                                 </td>
                               );
                             })}
                             <td className="px-2 py-3 text-center bg-primary/5">
-                              <span className="text-lg font-bold text-primary">
+                              <span className={`text-lg font-bold ${percentage < overallPercentageThreshold ? 'text-red-800 dark:text-red-400' : 'text-primary'}`}>
                                 {Number.isInteger(percentage) ? Math.round(percentage) : percentage.toFixed(1)}%
                               </span>
                             </td>
@@ -1116,13 +1306,134 @@ const StudentAcademicInfoPage = () => {
           </Card>
         )}
 
+        {/* Unsaved Changes Alert Dialog */}
+        <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
+          <AlertDialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <AlertDialogTitle className="text-xl font-bold">
+                  تغييرات غير محفوظة
+                </AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="text-base space-y-3 pt-2">
+                <p className="font-medium text-foreground">
+                  لديك <span className="text-orange-600 dark:text-orange-400 font-bold">{pendingGrades.size}</span> تغيير غير محفوظ
+                </p>
+                <p className="text-muted-foreground">
+                  إذا غادرت الصفحة الآن، سيتم فقدان جميع التغييرات غير المحفوظة.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  هل تريد المتابعة والمغادرة دون حفظ؟
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2 mt-4">
+              <AlertDialogCancel 
+                onClick={() => setShowUnsavedChangesDialog(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  setShowUnsavedChangesDialog(false);
+                  await saveAllPendingGrades();
+                }}
+                className="rounded-xl gap-2"
+              >
+                <Save className="h-4 w-4" />
+                حفظ والمغادرة
+              </Button>
+              <AlertDialogAction
+                onClick={() => {
+                  setHasUnsavedChanges(false);
+                  setPendingGrades(new Map());
+                  setShowUnsavedChangesDialog(false);
+                  if (pendingNavigation) {
+                    navigate(pendingNavigation);
+                    setPendingNavigation(null);
+                  }
+                }}
+                className="rounded-xl bg-destructive hover:bg-destructive/90"
+              >
+                مغادرة دون حفظ
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Overall Percentage Threshold Dialog */}
+        <Dialog open={editingOverallPercentage} onOpenChange={() => setEditingOverallPercentage(false)}>
+          <DialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>تعديل حد الرسوب للنسبة المئوية الإجمالية</DialogTitle>
+              <DialogDescription>
+                قم بتعديل حد الرسوب للنسبة المئوية الإجمالية للطلاب
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="overallPercentageThreshold">حد الرسوب (نسبة مئوية)</Label>
+                <Input
+                  id="overallPercentageThreshold"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={tempOverallPercentageThreshold}
+                  onChange={(e) => setTempOverallPercentageThreshold(parseFloat(e.target.value) || 50)}
+                  className="text-center text-lg rounded-2xl"
+                  placeholder="50"
+                />
+                <p className="text-xs text-muted-foreground text-center mt-1">
+                  أي نسبة مئوية إجمالية أقل من {tempOverallPercentageThreshold}% تعتبر راسبة
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditingOverallPercentage(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (tempOverallPercentageThreshold < 0 || tempOverallPercentageThreshold > 100) {
+                    toast({
+                      title: 'خطأ',
+                      description: 'حد الرسوب يجب أن يكون بين 0 و 100',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setOverallPercentageThreshold(tempOverallPercentageThreshold);
+                  setEditingOverallPercentage(false);
+                  toast({
+                    title: 'نجح',
+                    description: 'تم تحديث حد الرسوب للنسبة المئوية الإجمالية',
+                  });
+                }} 
+                className="rounded-xl"
+              >
+                حفظ
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Max Grade Dialog */}
         <Dialog open={editingGradeType !== null} onOpenChange={() => setEditingGradeType(null)}>
           <DialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
             <DialogHeader>
-              <DialogTitle>تعديل العلامة القصوى</DialogTitle>
+              <DialogTitle>تعديل العلامة القصوى وحد الرسوب</DialogTitle>
               <DialogDescription>
-                قم بتعديل العلامة القصوى لـ{' '}
+                قم بتعديل العلامة القصوى وحد الرسوب لـ{' '}
                 {editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label}
               </DialogDescription>
             </DialogHeader>
@@ -1135,9 +1446,76 @@ const StudentAcademicInfoPage = () => {
                   min="1"
                   max="1000"
                   value={tempMaxGrade}
-                  onChange={(e) => setTempMaxGrade(parseInt(e.target.value) || 100)}
+                  onChange={(e) => {
+                    const newMax = parseInt(e.target.value) || 100;
+                    setTempMaxGrade(newMax);
+                    // إذا كان الحد المطلق أكبر من العلامة القصوى الجديدة، نحدّثه
+                    if (tempThresholdType === 'absolute' && tempPassingThreshold > newMax) {
+                      setTempPassingThreshold(newMax);
+                    }
+                  }}
                   className="text-center text-lg rounded-2xl"
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="thresholdType">نوع حد الرسوب</Label>
+                <Select
+                  value={tempThresholdType}
+                  onValueChange={(value: 'percentage' | 'absolute') => {
+                    // عند تغيير النوع، نحول القيمة تلقائياً
+                    if (value === 'percentage' && tempThresholdType === 'absolute') {
+                      // من علامة مباشرة إلى نسبة مئوية
+                      const percentage = tempMaxGrade > 0 ? (tempPassingThreshold / tempMaxGrade) * 100 : 50;
+                      setTempPassingThreshold(Math.min(100, Math.max(0, percentage)));
+                    } else if (value === 'absolute' && tempThresholdType === 'percentage') {
+                      // من نسبة مئوية إلى علامة مباشرة
+                      const absolute = (tempPassingThreshold / 100) * tempMaxGrade;
+                      setTempPassingThreshold(Math.min(tempMaxGrade, Math.max(0, Math.round(absolute))));
+                    }
+                    setTempThresholdType(value);
+                  }}
+                >
+                  <SelectTrigger className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">نسبة مئوية (%)</SelectItem>
+                    <SelectItem value="absolute">علامة مباشرة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="passingThreshold">
+                  {tempThresholdType === 'percentage' ? 'حد الرسوب (نسبة مئوية)' : 'حد الرسوب (علامة مباشرة)'}
+                </Label>
+                <Input
+                  id="passingThreshold"
+                  type="number"
+                  min="0"
+                  max={tempThresholdType === 'percentage' ? 100 : tempMaxGrade}
+                  step={tempThresholdType === 'percentage' ? 0.1 : 1}
+                  value={tempPassingThreshold}
+                  onChange={(e) => {
+                    const value = tempThresholdType === 'percentage' 
+                      ? parseFloat(e.target.value) || 50
+                      : parseInt(e.target.value) || 50;
+                    setTempPassingThreshold(value);
+                  }}
+                  className="text-center text-lg rounded-2xl"
+                  placeholder={tempThresholdType === 'percentage' ? '50' : '50'}
+                />
+                {tempThresholdType === 'absolute' && (
+                  <p className="text-xs text-muted-foreground text-center mt-1">
+                    يجب أن تكون أقل من أو تساوي {tempMaxGrade}
+                  </p>
+                )}
+                {tempThresholdType === 'percentage' && (
+                  <p className="text-xs text-muted-foreground text-center mt-1">
+                    أي علامة أقل من {tempPassingThreshold}% من العلامة القصوى تعتبر راسبة
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter className="gap-2">

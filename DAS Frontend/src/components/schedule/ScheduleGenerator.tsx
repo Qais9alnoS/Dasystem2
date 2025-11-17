@@ -1,25 +1,29 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { toast } from '@/hooks/use-toast';
-import { 
-  Play, 
-  CheckCircle, 
-  AlertTriangle, 
+import React, { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "@/hooks/use-toast";
+import {
+  Play,
+  CheckCircle,
+  AlertTriangle,
   Clock,
   Calendar,
   Users,
   BookOpen,
   Loader2,
   RefreshCw,
-  Download,
-  Eye
-} from 'lucide-react';
-import { schedulesApi } from '@/services/api';
-import { ScheduleGenerationResult } from '@/types/backend';
+} from "lucide-react";
+import { schedulesApi } from "@/services/api";
+import { ScheduleGenerationResult } from "@/types/backend";
 
 interface IncompleteClassInfo {
   className: string;
@@ -29,261 +33,309 @@ interface IncompleteClassInfo {
 }
 
 interface ConflictInfo {
-  type: 'teacher_conflict' | 'constraint_violation' | 'resource_conflict';
+  type: "teacher_conflict" | "constraint_violation" | "resource_conflict";
   description: string;
   affectedItems: string[];
-  severity: 'high' | 'medium' | 'low';
+  severity: "high" | "medium" | "low";
   suggestion: string;
 }
 
 interface ScheduleGeneratorProps {
   projectId: string;
   academicYearId: number;
-  sessionType: 'morning' | 'evening';
+  sessionType: "morning" | "evening";
   classId?: number;
   section?: string;
-  onScheduleGenerated?: (result: ScheduleGenerationResult) => void;
+  onScheduleGenerated?: (payload: {
+    apiResponse: any;
+    previewData?: any[] | null;
+    generationRequest: any;
+  }) => void;
 }
 
-export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({ 
+export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   projectId,
   academicYearId,
   sessionType,
   classId,
   section,
-  onScheduleGenerated 
+  onScheduleGenerated,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
-  const [currentStep, setCurrentStep] = useState('');
-  const [lastResult, setLastResult] = useState<ScheduleGenerationResult | null>(null);
+  const [currentStep, setCurrentStep] = useState("");
+  const [lastResult, setLastResult] = useState<ScheduleGenerationResult | null>(
+    null
+  );
 
   // Generation steps based on backend process
   const generationSteps = [
-    'تحليل البيانات المدخلة',
-    'التحقق من صحة القيود',
-    'تحديد المتطلبات لكل صف',
-    'توزيع المعلمين على المواد',
-    'إنشاء الجداول الأساسية',
-    'تطبيق القيود والشروط',
-    'حل التعارضات',
-    'تحسين التوزيع',
-    'التحقق النهائي',
-    'حفظ النتائج'
+    "تحليل البيانات المدخلة",
+    "التحقق من صحة القيود",
+    "تحديد المتطلبات لكل صف",
+    "توزيع المعلمين على المواد",
+    "إنشاء الجداول الأساسية",
+    "تطبيق القيود والشروط",
+    "حل التعارضات",
+    "تحسين التوزيع",
+    "التحقق النهائي",
+    "حفظ النتائج",
   ];
 
   const handleGenerateSchedules = async () => {
     setIsGenerating(true);
     setGenerationProgress(0);
-    setCurrentStep('');
+    setCurrentStep("");
 
     try {
       // Prepare the request with required fields for schedule generation
       const currentDate = new Date();
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 6, 0);
+      const startDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+      const endDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 6,
+        0
+      );
 
       const generationRequest = {
         academic_year_id: academicYearId,
         session_type: sessionType,
-        class_id: classId,  // Add class_id
-        section: section,   // Add section
-        name: `${sessionType === 'morning' ? 'جدول الفترة الصباحية' : 'جدول الفترة المسائية'} - ${new Date().getFullYear()}`,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
+        class_id: classId, // Add class_id
+        section: section, // Add section
+        name: `${
+          sessionType === "morning"
+            ? "جدول الفترة الصباحية"
+            : "جدول الفترة المسائية"
+        } - ${new Date().getFullYear()}`,
+        start_date: startDate.toISOString().split("T")[0],
+        end_date: endDate.toISOString().split("T")[0],
         periods_per_day: 6,
         break_periods: [3],
         break_duration: 15,
-        working_days: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'],
-        session_start_time: sessionType === 'morning' ? '08:00:00' : '14:00:00',
+        working_days: ["sunday", "monday", "tuesday", "wednesday", "thursday"],
+        session_start_time: sessionType === "morning" ? "08:00:00" : "14:00:00",
         period_duration: 45,
         auto_assign_teachers: true,
         balance_teacher_load: true,
         avoid_teacher_conflicts: true,
-        prefer_subject_continuity: true
+        prefer_subject_continuity: true,
+        preview_only: true, // Generate preview only, don't save to database
       };
 
-      console.log('Sending generation request:', generationRequest);
+      console.log("Sending generation request:", generationRequest);
 
       // Call the backend API to generate schedules
       const response = await schedulesApi.generate(generationRequest);
-      
-      console.log('Generation response:', response);
+
+      console.log("Generation response:", response);
 
       if (response.success && response.data) {
         // Check if generation actually created schedules
         const totalCreated = response.data.total_assignments_created || 0;
-        
-        if (totalCreated === 0 && response.data.warnings && response.data.warnings.length > 0) {
+
+        if (
+          totalCreated === 0 &&
+          response.data.warnings &&
+          response.data.warnings.length > 0
+        ) {
           // Generation failed - show detailed error
           const firstWarnings = response.data.warnings.slice(0, 5);
-          const warningsText = firstWarnings.join('\n• ');
-          
+          const warningsText = firstWarnings.join("\n• ");
+
           toast({
             title: "فشل في إنشاء الجدول",
             description: `تم اكتشاف ${response.data.warnings.length} مشكلة. أول 5 مشاكل:\n• ${warningsText}`,
-            variant: "destructive"
+            variant: "destructive",
           });
-          
+
           // Show diagnostic info
           try {
-            console.log('Fetching diagnostics with:', { academicYearId, sessionType });
-            const diagnostics = await schedulesApi.getDiagnostics(academicYearId, sessionType);
+            console.log("Fetching diagnostics with:", {
+              academicYearId,
+              sessionType,
+            });
+            const diagnostics = await schedulesApi.getDiagnostics(
+              academicYearId,
+              sessionType
+            );
             if (diagnostics.success && diagnostics.data) {
               const issues = diagnostics.data.issues;
-              const recommendations = diagnostics.data.recommendations.filter((r: string | null) => r !== null);
-              
-              console.log('Diagnostics:', diagnostics.data);
-              
+              const recommendations = diagnostics.data.recommendations.filter(
+                (r: string | null) => r !== null
+              );
+
+              console.log("Diagnostics:", diagnostics.data);
+
               if (recommendations.length > 0) {
                 toast({
                   title: "تشخيص المشكلة",
-                  description: `${recommendations.join('\n')}\n\nالمواد الناقصة: ${issues.missing_subjects.length}\nالمعلمين غير المكلفين: ${issues.missing_teacher_assignments.length}`,
+                  description: `${recommendations.join(
+                    "\n"
+                  )}\n\nالمواد الناقصة: ${
+                    issues.missing_subjects.length
+                  }\nالمعلمين غير المكلفين: ${
+                    issues.missing_teacher_assignments.length
+                  }`,
                   variant: "destructive",
-                  duration: 10000 // Show for 10 seconds
+                  duration: 10000, // Show for 10 seconds
                 });
               }
             }
           } catch (diagError: any) {
-            console.error('Error fetching diagnostics:', diagError);
-            console.error('Diagnostics error details:', {
+            console.error("Error fetching diagnostics:", diagError);
+            console.error("Diagnostics error details:", {
               academicYearId,
               sessionType,
-              error: diagError.message || diagError
+              error: diagError.message || diagError,
             });
             // Continue even if diagnostics fail - don't show error to user
           }
-          
+
           setIsGenerating(false);
           return;
         }
-        
+
         // Simulate step-by-step generation process for UI feedback
         for (let i = 0; i < generationSteps.length; i++) {
           setCurrentStep(generationSteps[i]);
           setGenerationProgress(((i + 1) / generationSteps.length) * 100);
-          
+
           // Simulate processing time
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
 
         // Process the response data to match our UI structure
         const processedResult: ScheduleGenerationResult = {
-          success: response.data.generation_status === 'completed',
+          success: response.data.generation_status === "completed",
           generated_schedules: [],
           missing_data: [],
           conflicts: [],
           total_grades: response.data.summary?.classes_scheduled || 0,
           completed_grades: response.data.summary?.classes_scheduled || 0,
-          message: `تم إنشاء ${response.data.total_assignments_created} حصة بنجاح`
+          message: `تم إنشاء ${response.data.total_assignments_created} حصة بنجاح`,
         };
 
         setLastResult(processedResult);
+
         if (onScheduleGenerated) {
-          onScheduleGenerated(response.data);
+          onScheduleGenerated({
+            apiResponse: response.data,
+            previewData: response.data.preview_data || null,
+            generationRequest
+          });
         }
 
-        const classesScheduled = response.data.summary?.classes_scheduled || 0;
-        const classWord = classesScheduled === 1 ? 'صف' : 'صفوف';
-        
         toast({
           title: "تم إنشاء الجدول بنجاح",
-          description: `تم إنشاء ${response.data.total_assignments_created} حصة لـ ${classesScheduled} ${classWord}`,
+          description: "تم إنشاء معاينة للجدول. تابع للخطوة التالية لمراجعته ونشره.",
         });
       } else {
-        throw new Error(response.message || 'فشل في إنشاء الجدول');
+        throw new Error(response.message || "فشل في إنشاء الجدول");
       }
     } catch (error: any) {
-      console.error('Error generating schedules:', error);
-      
+      console.error("Error generating schedules:", error);
+
       // More detailed error message
       let errorMessage = "حدث خطأ أثناء إنشاء الجدول";
-      
-      if (error.message) {
+      let errorTitle = "خطأ في إنشاء الجدول";
+
+      // Check if error is about duplicate schedule name
+      const errorDetail = error.response?.data?.detail || error.message || '';
+      const isDuplicateName = errorDetail.includes('يوجد بالفعل جدول باسم') || 
+                             errorDetail.includes('already exists') ||
+                             errorDetail.includes('جدول باسم');
+
+      if (isDuplicateName) {
+        errorTitle = "⚠️ جدول مكرر";
+        errorMessage = errorDetail || "يوجد بالفعل جدول بنفس الاسم للصف المحدد. يرجى اختيار اسم آخر.";
+      } else if (error.message) {
         errorMessage = error.message;
       }
-      
-      if (error.details) {
-        console.log('Error details:', error.details);
+
+      if (error.details && !isDuplicateName) {
+        console.log("Error details:", error.details);
         errorMessage += `\n\nالتفاصيل: ${JSON.stringify(error.details)}`;
       }
-      
+
       toast({
-        title: "خطأ في إنشاء الجدول",
+        title: errorTitle,
         description: errorMessage,
         variant: "destructive",
-        duration: 10000
+        duration: 6000,
       });
-      
+
       // Try to get diagnostics even on error
       try {
-        console.log('Fetching diagnostics after error with:', { academicYearId, sessionType });
-        const diagnostics = await schedulesApi.getDiagnostics(academicYearId, sessionType);
+        console.log("Fetching diagnostics after error with:", {
+          academicYearId,
+          sessionType,
+        });
+        const diagnostics = await schedulesApi.getDiagnostics(
+          academicYearId,
+          sessionType
+        );
         if (diagnostics.success && diagnostics.data) {
-          console.log('System diagnostics:', diagnostics.data);
-          
+          console.log("System diagnostics:", diagnostics.data);
+
           if (!diagnostics.data.is_ready_for_generation) {
-            const recommendations = diagnostics.data.recommendations.filter((r: string | null) => r !== null);
+            const recommendations = diagnostics.data.recommendations.filter(
+              (r: string | null) => r !== null
+            );
             if (recommendations.length > 0) {
               toast({
                 title: "النظام غير جاهز لإنشاء الجدول",
-                description: recommendations.join('\n'),
+                description: recommendations.join("\n"),
                 variant: "destructive",
-                duration: 10000
+                duration: 10000,
               });
             }
           }
         }
       } catch (diagError: any) {
-        console.error('Error fetching diagnostics after generation error:', diagError);
-        console.error('Diagnostics error details:', {
+        console.error(
+          "Error fetching diagnostics after generation error:",
+          diagError
+        );
+        console.error("Diagnostics error details:", {
           academicYearId,
           sessionType,
-          error: diagError.message || diagError
+          error: diagError.message || diagError,
         });
         // Don't show error to user - diagnostics is optional
       }
     } finally {
       setIsGenerating(false);
-      setCurrentStep('');
+      setCurrentStep("");
     }
-  };
-
-  const handleViewSchedules = () => {
-    // Navigate to schedule viewer or pass data to parent
-    if (onScheduleGenerated && lastResult) {
-      toast({
-        title: "فتح عارض الجدول",
-        description: "جاري تحميل الجدول المُنشأ...",
-      });
-      // The parent component should handle navigation to view page
-    }
-  };
-
-  const handleExportSchedules = () => {
-    toast({
-      title: "تصدير الجدول",
-      description: "جاري تجهيز ملف التصدير...",
-    });
-    // TODO: Implement export functionality
-    // This would typically call an API endpoint to generate Excel/PDF
   };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'high': return 'destructive';
-      case 'medium': return 'default';
-      case 'low': return 'secondary';
-      default: return 'outline';
+      case "high":
+        return "destructive";
+      case "medium":
+        return "default";
+      case "low":
+        return "secondary";
+      default:
+        return "outline";
     }
   };
 
   const getConflictIcon = (type: string) => {
     switch (type) {
-      case 'teacher_conflict': return Users;
-      case 'constraint_violation': return AlertTriangle;
-      case 'resource_conflict': return Calendar;
-      default: return AlertTriangle;
+      case "teacher_conflict":
+        return Users;
+      case "constraint_violation":
+        return AlertTriangle;
+      case "resource_conflict":
+        return Calendar;
+      default:
+        return AlertTriangle;
     }
   };
 
@@ -308,7 +360,11 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               <p className="text-muted-foreground mb-4">
                 انقر على الزر أدناه لبدء عملية إنشاء الجدول الدراسي
               </p>
-              <Button onClick={handleGenerateSchedules} size="lg" className="gap-2">
+              <Button
+                onClick={handleGenerateSchedules}
+                size="lg"
+                className="gap-2"
+              >
                 <Play className="h-5 w-5" />
                 بدء إنشاء الجدول
               </Button>
@@ -319,10 +375,12 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             <div className="space-y-4">
               <div className="text-center">
                 <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
-                <h3 className="text-lg font-medium mb-2">جاري إنشاء الجدول...</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  جاري إنشاء الجدول...
+                </h3>
                 <p className="text-muted-foreground">{currentStep}</p>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>التقدم</span>
@@ -330,7 +388,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                 </div>
                 <Progress value={generationProgress} className="w-full" />
               </div>
-              
+
               <div className="text-center text-sm text-muted-foreground">
                 يرجى الانتظار، قد تستغرق العملية عدة دقائق...
               </div>
@@ -339,30 +397,31 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
           {!isGenerating && lastResult && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-8 w-8 text-green-500" />
                   <div>
-                    <h3 className="text-lg font-medium">تم إنشاء الجدول بنجاح</h3>
+                    <h3 className="text-lg font-medium">
+                      تم إنشاء معاينة الجدول
+                    </h3>
                     <p className="text-sm text-muted-foreground">
-                      {lastResult.message}
+                      {lastResult.message || 'يمكنك الآن الانتقال للخطوة التالية لمراجعة الجدول.'}
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleGenerateSchedules}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateSchedules}
+                  >
                     <RefreshCw className="h-4 w-4 ml-1" />
                     إعادة إنشاء
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleExportSchedules}>
-                    <Download className="h-4 w-4 ml-1" />
-                    تصدير
-                  </Button>
-                  <Button size="sm" onClick={handleViewSchedules}>
-                    <Eye className="h-4 w-4 ml-1" />
-                    عرض الجدول
-                  </Button>
                 </div>
+              </div>
+              <div className="p-4 border border-dashed rounded-lg bg-blue-50 text-sm text-blue-900">
+                تم إنشاء الجدول في وضع المعاينة فقط. لن يتم حفظ أي بيانات قبل الوصول إلى مرحلة "التصدير" والنشر.
               </div>
             </div>
           )}
@@ -376,11 +435,11 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             <Card>
               <CardContent className="p-4 text-center">
                 <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                <p className="text-2xl font-bold">{lastResult.generated_schedules.length}</p>
+                <p className="text-2xl font-bold">{lastResult.completed_grades}</p>
                 <p className="text-sm text-muted-foreground">جداول مُنشأة</p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4 text-center">
                 <Calendar className="h-8 w-8 mx-auto mb-2 text-blue-500" />
@@ -388,19 +447,23 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                 <p className="text-sm text-muted-foreground">إجمالي الصفوف</p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4 text-center">
                 <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-orange-500" />
-                <p className="text-2xl font-bold">{lastResult.missing_data.length}</p>
+                <p className="text-2xl font-bold">
+                  {lastResult.missing_data.length}
+                </p>
                 <p className="text-sm text-muted-foreground">صفوف ناقصة</p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4 text-center">
                 <Clock className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-                <p className="text-2xl font-bold">{lastResult.conflicts.length}</p>
+                <p className="text-2xl font-bold">
+                  {lastResult.conflicts.length}
+                </p>
                 <p className="text-sm text-muted-foreground">تعارضات</p>
               </CardContent>
             </Card>
@@ -421,29 +484,49 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               <CardContent>
                 <div className="space-y-4">
                   {lastResult.missing_data.map((missingInfo, index) => (
-                    <div key={index} className="p-4 border rounded-lg bg-orange-50">
+                    <div
+                      key={index}
+                      className="p-4 border rounded-lg bg-orange-50"
+                    >
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
-                          <h4 className="font-medium text-orange-800">{missingInfo.grade} - {missingInfo.division}</h4>
-                          <p className="text-sm text-orange-700 mt-1">{missingInfo.reason}</p>
-                          
+                          <h4 className="font-medium text-orange-800">
+                            {missingInfo.grade} - {missingInfo.division}
+                          </h4>
+                          <p className="text-sm text-orange-700 mt-1">
+                            {missingInfo.reason}
+                          </p>
+
                           <div className="mt-2">
-                            <p className="text-xs font-medium text-orange-800 mb-1">المطلوب:</p>
+                            <p className="text-xs font-medium text-orange-800 mb-1">
+                              المطلوب:
+                            </p>
                             <div className="flex flex-wrap gap-1">
-                              {missingInfo.required_actions.map((action, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs text-orange-700 border-orange-300">
-                                  {action}
-                                </Badge>
-                              ))}
+                              {missingInfo.required_actions.map(
+                                (action, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs text-orange-700 border-orange-300"
+                                  >
+                                    {action}
+                                  </Badge>
+                                )
+                              )}
                             </div>
                           </div>
-                          
+
                           <div className="mt-2 p-2 bg-orange-100 rounded text-xs text-orange-800">
-                            <strong>الحل المقترح:</strong> {missingInfo.suggestion}
+                            <strong>الحل المقترح:</strong>{" "}
+                            {missingInfo.suggestion}
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" className="text-orange-700 border-orange-300">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-orange-700 border-orange-300"
+                        >
                           إصلاح
                         </Button>
                       </div>
@@ -469,37 +552,53 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               <CardContent>
                 <div className="space-y-4">
                   {lastResult.conflicts.map((conflict, index) => {
-                    const ConflictIcon = getConflictIcon(conflict.constraint_type);
+                    const ConflictIcon = getConflictIcon(
+                      conflict.constraint_type
+                    );
                     return (
                       <div key={index} className="p-4 border rounded-lg">
                         <div className="flex items-start gap-3">
                           <ConflictIcon className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium">{conflict.description}</h4>
-                              <Badge variant={getSeverityColor(conflict.priority) as any} className="text-xs">
+                              <h4 className="font-medium">
+                                {conflict.description}
+                              </h4>
+                              <Badge
+                                variant={
+                                  getSeverityColor(conflict.priority) as any
+                                }
+                                className="text-xs"
+                              >
                                 {conflict.priority}
                               </Badge>
                             </div>
-                            
+
                             <div className="text-sm text-muted-foreground mb-2">
-                              <strong>المتأثر:</strong> {conflict.affected_items.join(', ')}
+                              <strong>المتأثر:</strong>{" "}
+                              {conflict.affected_items.join(", ")}
                             </div>
-                            
+
                             <div className="p-2 bg-blue-50 rounded text-sm text-blue-800">
-                              <strong>الحل المقترح:</strong> {conflict.suggestion}
+                              <strong>الحل المقترح:</strong>{" "}
+                              {conflict.suggestion}
                             </div>
-                            
-                            {conflict.detailed_steps && conflict.detailed_steps.length > 0 && (
-                              <div className="mt-2">
-                                <strong className="text-xs">خطوات الحل:</strong>
-                                <ul className="list-disc list-inside text-xs text-gray-600 mt-1">
-                                  {conflict.detailed_steps.map((step, idx) => (
-                                    <li key={idx}>{step}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
+
+                            {conflict.detailed_steps &&
+                              conflict.detailed_steps.length > 0 && (
+                                <div className="mt-2">
+                                  <strong className="text-xs">
+                                    خطوات الحل:
+                                  </strong>
+                                  <ul className="list-disc list-inside text-xs text-gray-600 mt-1">
+                                    {conflict.detailed_steps.map(
+                                      (step, idx) => (
+                                        <li key={idx}>{step}</li>
+                                      )
+                                    )}
+                                  </ul>
+                                </div>
+                              )}
                           </div>
                           <Button variant="outline" size="sm">
                             حل

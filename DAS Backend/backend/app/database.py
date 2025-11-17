@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import MetaData  # Added import
 from typing import TYPE_CHECKING
-from app.config import settings
+from .config import settings
 import os
 
 if TYPE_CHECKING:

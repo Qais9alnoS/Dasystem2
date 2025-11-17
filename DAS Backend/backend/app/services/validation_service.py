@@ -206,6 +206,16 @@ class ValidationService:
             teacher, assignment = subject_assignment_map[subject.id]
             teacher_avail = teacher_availability_cache.get(teacher.id, {})
             
+            # Check if teacher has free slots for specific time periods
+            teacher_free_slots = self.availability_service.get_teacher_availability(teacher.id)
+            missing_timeslots = []
+            
+            # Check each day and period to find if teacher is available
+            # This is a simplified check - in reality we'd need to know the exact schedule requirements
+            # For now, just check if teacher has ANY free slots
+            if teacher_free_slots["total_free"] == 0:
+                missing_timeslots.append("جميع الأوقات محجوزة")
+            
             subject_detail = {
                 "subject_id": subject.id,
                 "subject_name": subject.subject_name,
@@ -217,7 +227,9 @@ class ValidationService:
                 "teacher_total_required": teacher_avail.get("total_required", subject.weekly_hours),
                 "teacher_subjects_count": teacher_avail.get("subjects_count", 1),
                 "is_sufficient": teacher_avail.get("is_sufficient", False),
-                "teacher_availability": "sufficient" if teacher_avail.get("is_sufficient", False) else "insufficient"
+                "teacher_availability": "sufficient" if teacher_avail.get("is_sufficient", False) else "insufficient",
+                "teacher_has_free_slots_per_timeslot": teacher_free_slots["total_free"] > 0,
+                "missing_timeslots": missing_timeslots if missing_timeslots else None
             }
             
             if not teacher_avail.get("is_sufficient", False):
@@ -254,8 +266,65 @@ class ValidationService:
         total_sufficient = len([s for s in subject_details if s.get("is_sufficient", False)])
         total_periods_needed = sum(s.weekly_hours for s in subjects)
         
+        # Calculate required periods (6 periods × 5 days = 30)
+        required_periods = 30  # Standard full week schedule
+        
+        # Check if total subject hours match required periods
+        if total_periods_needed < required_periods:
+            errors.append(
+                f"إجمالي ساعات المواد ({total_periods_needed}) أقل من المطلوب ({required_periods}). "
+                f"يجب إضافة مواد أو زيادة ساعات المواد الحالية."
+            )
+            suggestions.append(f"أضف مواد جديدة أو زد ساعات المواد الحالية لتصل إلى {required_periods} حصة أسبوعياً")
+        elif total_periods_needed > required_periods:
+            warnings.append(
+                f"إجمالي ساعات المواد ({total_periods_needed}) أكبر من المتاح ({required_periods}). "
+                f"سيتم تجاهل الساعات الزائدة."
+            )
+        
+        # NEW: Check if at least one teacher is free for each required time slot
+        periods_without_teachers = []
+        working_days = 5  # Sunday to Thursday
+        periods_per_day = 6
+        
+        for day in range(working_days):
+            for period in range(periods_per_day):
+                # Check if ANY teacher assigned to ANY subject for this class is free at this time
+                has_free_teacher = False
+                
+                for teacher_id in teacher_info_map.keys():
+                    teacher_avail = self.availability_service.get_teacher_availability(teacher_id)
+                    slot_index = day * periods_per_day + period
+                    
+                    if slot_index < len(teacher_avail["slots"]):
+                        slot = teacher_avail["slots"][slot_index]
+                        if slot.get("status") == "free" or slot.get("is_free", False):
+                            has_free_teacher = True
+                            break
+                
+                if not has_free_teacher and len(teacher_info_map) > 0:
+                    day_names = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+                    periods_without_teachers.append(f"{day_names[day]} - الحصة {period + 1}")
+        
+        if periods_without_teachers:
+            # This is a critical error
+            if len(periods_without_teachers) <= 5:
+                errors.append(
+                    f"⚠️ الفترات التالية لا يوجد بها معلم متاح: {', '.join(periods_without_teachers[:5])}"
+                )
+            else:
+                errors.append(
+                    f"⚠️ يوجد {len(periods_without_teachers)} فترة زمنية لا يوجد بها أي معلم متاح. "
+                    f"أمثلة: {', '.join(periods_without_teachers[:3])}"
+                )
+            suggestions.append("قم بتحديث أوقات الفراغ للمعلمين لتغطية جميع الفترات المطلوبة")
+        
         # Determine if we can proceed
-        can_proceed = len(unassigned_subjects) == 0
+        can_proceed = (
+            len(unassigned_subjects) == 0 and 
+            total_periods_needed >= required_periods and
+            len(periods_without_teachers) == 0  # NEW: Must have teachers for all periods
+        )
         is_valid = can_proceed and len(insufficient_availability) == 0
         
         return {

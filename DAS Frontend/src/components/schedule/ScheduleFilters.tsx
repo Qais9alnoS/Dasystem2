@@ -4,9 +4,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { classesApi } from '@/services/api';
+import { classesApi, schedulesApi } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Class } from '@/types/school';
 
 interface ScheduleFiltersProps {
@@ -32,6 +33,10 @@ const SESSIONS = [
 ];
 
 export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) => {
+  // Get user info from AuthContext
+  const { state } = useAuth();
+  const userRole = state.user?.role || '';
+
   // State
   const [academicYearId, setAcademicYearId] = useState<number | null>(null);
   const [sessionType, setSessionType] = useState<string>('');
@@ -39,7 +44,6 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
   const [gradeNumber, setGradeNumber] = useState<number | null>(null);
   const [section, setSection] = useState<string>('');
   const [classId, setClassId] = useState<number | null>(null);
-  const [userRole, setUserRole] = useState<string>('');
 
   // Data
   const [classes, setClasses] = useState<Class[]>([]);
@@ -50,14 +54,35 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
   const [loading, setLoading] = useState(false);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
+  // Existing schedule detection
+  const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
+  const [existingScheduleInfo, setExistingScheduleInfo] = useState<{ totalPeriods: number } | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
+  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
+
   // Validation
   const [isValid, setIsValid] = useState(false);
+  const [autoCompleted, setAutoCompleted] = useState(false);
 
-  // Load academic year and user role from localStorage on mount
+  // Load academic year on mount
   useEffect(() => {
     loadSelectedAcademicYear();
-    loadUserRole();
   }, []);
+
+  // Auto-set session type based on user role
+  useEffect(() => {
+    if (!userRole) return;
+    
+    // Morning supervisors: auto-set to morning
+    if (userRole === 'morning_supervisor' || userRole === 'morning_school') {
+      setSessionType('morning');
+    } 
+    // Evening supervisors: auto-set to evening
+    else if (userRole === 'evening_supervisor' || userRole === 'evening_school') {
+      setSessionType('evening');
+    }
+    // For director, sessionType remains empty so they can choose manually
+  }, [userRole]);
 
   const loadSelectedAcademicYear = async () => {
     setLoading(true);
@@ -82,25 +107,6 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadUserRole = () => {
-    try {
-      const storedUser = localStorage.getItem('das_user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        setUserRole(user.role);
-        
-        // Auto-set session type based on user role
-        if (user.role === 'morning_school') {
-          setSessionType('morning');
-        } else if (user.role === 'evening_school') {
-          setSessionType('evening');
-        }
-      }
-    } catch (error) {
-      console.error('Error loading user role:', error);
     }
   };
 
@@ -205,15 +211,54 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
     }
   }, [academicYearId, sessionType, gradeLevel, gradeNumber, section, classes]);
 
-  const handleContinue = () => {
-    if (!isValid || !academicYearId || !classId || !gradeNumber) {
-      toast({
-        title: 'تنبيه',
-        description: 'يرجى إكمال جميع الاختيارات',
-        variant: 'destructive'
-      });
+  // Check if there is already a saved schedule for this class/section
+  useEffect(() => {
+    // Reset state when selection changes
+    setHasExistingSchedule(false);
+    setExistingScheduleInfo(null);
+    setReplaceConfirmed(false);
+    setAutoCompleted(false);
+
+    if (!academicYearId || !sessionType || !classId || !section) {
       return;
     }
+
+    const checkExisting = async () => {
+      setCheckingExisting(true);
+      try {
+        const response = await schedulesApi.getAll({
+          academic_year_id: academicYearId,
+          session_type: sessionType,
+          class_id: classId
+        });
+
+        if (response.success && response.data) {
+          const matching = (response.data as any[]).filter((s: any) => s.section === section);
+          if (matching.length > 0) {
+            setHasExistingSchedule(true);
+            setExistingScheduleInfo({
+              totalPeriods: matching.length
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking existing schedules:', error);
+      } finally {
+        setCheckingExisting(false);
+      }
+    };
+
+    checkExisting();
+  }, [academicYearId, sessionType, classId, section]);
+
+  // Auto-complete step when selections are valid and overwrite (if any) is confirmed
+  useEffect(() => {
+    if (!isValid || !academicYearId || !classId || !gradeNumber) return;
+
+    // If there is an existing schedule, wait until user confirms replacement
+    if (hasExistingSchedule && !replaceConfirmed) return;
+
+    if (autoCompleted) return;
 
     onComplete({
       academicYearId,
@@ -223,23 +268,37 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
       classId,
       section
     });
-  };
+    setAutoCompleted(true);
+  }, [
+    isValid,
+    academicYearId,
+    sessionType,
+    gradeLevel,
+    gradeNumber,
+    classId,
+    section,
+    hasExistingSchedule,
+    replaceConfirmed,
+    autoCompleted,
+    onComplete
+  ]);
 
   const availableGrades = gradeLevel ? GRADE_LEVELS[gradeLevel as keyof typeof GRADE_LEVELS]?.grades || [] : [];
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Session Type Selection - Only show for director, auto-set for others */}
+      {/* Session Type Selection - Only show for director, auto-set for supervisors */}
       {userRole === 'director' ? (
         <div className="space-y-2">
-          <Label htmlFor="session-type">الفترة</Label>
+          <Label htmlFor="session-type">الفترة *</Label>
           <Select
             value={sessionType}
             onValueChange={setSessionType}
             disabled={!academicYearId}
+            required
           >
             <SelectTrigger id="session-type">
-              <SelectValue placeholder="اختر الفترة" />
+              <SelectValue placeholder="اختر الفترة (صباحي أو مسائي)" />
             </SelectTrigger>
             <SelectContent>
               {SESSIONS.map((session) => (
@@ -249,12 +308,17 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
               ))}
             </SelectContent>
           </Select>
+          {!sessionType && (
+            <p className="text-xs text-muted-foreground">
+              يرجى اختيار الفترة (صباحي أو مسائي)
+            </p>
+          )}
         </div>
       ) : (
-        <Alert className="bg-blue-50 border-blue-200">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            الفترة المحددة: <strong>{sessionType === 'morning' ? 'صباحي' : 'مسائي'}</strong>
+        <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-800 dark:text-blue-100">
+            الفترة المحددة تلقائياً: <strong>{sessionType === 'morning' ? 'صباحي' : sessionType === 'evening' ? 'مسائي' : 'غير محدد'}</strong>
           </AlertDescription>
         </Alert>
       )}
@@ -350,75 +414,82 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
 
       {/* Validation Status */}
       {isValid && classId && (
-        <Alert className="bg-green-50 border-green-200">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
+        <Alert className="bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-800">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="text-green-800 dark:text-green-100">
             تم اختيار الصف بنجاح. يمكنك المتابعة للخطوة التالية.
           </AlertDescription>
         </Alert>
       )}
 
       {gradeLevel && gradeNumber && section && !classId && (
-        <Alert className="bg-yellow-50 border-yellow-200">
-          <AlertCircle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
+        <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
+          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <AlertDescription className="text-yellow-800 dark:text-yellow-100">
             لم يتم العثور على صف مطابق للاختيارات. يرجى التحقق من البيانات.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Existing schedule warning */}
+      {isValid && classId && section && hasExistingSchedule && (
+        <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
+          <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <AlertDescription className="text-yellow-800 dark:text-yellow-100">
+            يوجد بالفعل جدول محفوظ لهذا الصف والشعبة. سيتم استبدال جميع حصص الجدول القديم
+            عند إنشاء وحفظ جدول جديد.
+            {existingScheduleInfo && (
+              <>
+                {' '}حاليًا يحتوي الجدول على{' '}
+                <strong>{existingScheduleInfo.totalPeriods}</strong> حصة.
+              </>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReplaceConfirmed(true)}
+                disabled={replaceConfirmed}
+              >
+                {replaceConfirmed ? 'تم تأكيد الاستبدال' : 'تأكيد استبدال الجدول'}
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}
 
       {/* Summary Card */}
       {academicYearId && sessionType && gradeLevel && gradeNumber && section && (
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
           <CardContent className="p-4">
-            <h4 className="font-medium text-blue-900 mb-3">ملخص الاختيار:</h4>
-            <div className="space-y-2 text-sm text-blue-800">
+            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">ملخص الاختيار:</h4>
+            <div className="space-y-2 text-sm text-blue-800 dark:text-blue-100">
               <div className="flex justify-between">
-                <span className="text-blue-600">الفترة:</span>
-                <span className="font-medium">
+                <span className="text-blue-600 dark:text-blue-300">الفترة:</span>
+                <span className="font-medium text-blue-900 dark:text-blue-100">
                   {SESSIONS.find(s => s.value === sessionType)?.label}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-600">المرحلة:</span>
-                <span className="font-medium">
+                <span className="text-blue-600 dark:text-blue-300">المرحلة:</span>
+                <span className="font-medium text-blue-900 dark:text-blue-100">
                   {GRADE_LEVELS[gradeLevel as keyof typeof GRADE_LEVELS]?.label}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-600">الصف:</span>
-                <span className="font-medium">الصف {gradeNumber}</span>
+                <span className="text-blue-600 dark:text-blue-300">الصف:</span>
+                <span className="font-medium text-blue-900 dark:text-blue-100">الصف {gradeNumber}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-600">الشعبة:</span>
-                <span className="font-medium">شعبة {section}</span>
+                <span className="text-blue-600 dark:text-blue-300">الشعبة:</span>
+                <span className="font-medium text-blue-900 dark:text-blue-100">شعبة {section}</span>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Continue Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleContinue}
-          disabled={!isValid || loading || loadingClasses}
-          size="lg"
-          className="min-w-[200px]"
-        >
-          {loading || loadingClasses ? (
-            <>
-              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-              جاري التحميل...
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-4 w-4 ml-2" />
-              المتابعة للتحقق
-            </>
-          )}
-        </Button>
-      </div>
+      {/* لا يوجد زر متابعة هنا؛ الانتقال يتم عبر زر "التالي" في الـ Wizard بعد اكتمال هذه الخطوة */}
     </div>
   );
 };

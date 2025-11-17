@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.query import Query
+from sqlalchemy import and_
 from typing import List, Optional, cast
 
 from app.database import get_db
@@ -351,6 +352,21 @@ async def create_subject(
     current_user: User = Depends(get_current_user)
 ):
     """Create new subject"""
+    # Check if a subject with the same name already exists for this class
+    existing_subject = db.query(Subject).filter(
+        and_(
+            Subject.class_id == subject_data.class_id,
+            Subject.subject_name == subject_data.subject_name,
+            Subject.is_active == True
+        )
+    ).first()
+    
+    if existing_subject:
+        raise HTTPException(
+            status_code=400,
+            detail=f"يوجد بالفعل مادة باسم '{subject_data.subject_name}' في هذا الصف. يرجى اختيار اسم آخر."
+        )
+    
     new_subject = Subject(**subject_data.dict())
     db.add(new_subject)
     db.commit()
@@ -374,6 +390,23 @@ async def update_subject(
             detail="Subject not found"
         )
     
+    # Check if updating to a name that already exists for another subject in the same class
+    if subject_data.subject_name and subject_data.subject_name != subject.subject_name:
+        existing_subject = db.query(Subject).filter(
+            and_(
+                Subject.class_id == subject_data.class_id,
+                Subject.subject_name == subject_data.subject_name,
+                Subject.id != subject_id,  # Exclude the current subject
+                Subject.is_active == True
+            )
+        ).first()
+        
+        if existing_subject:
+            raise HTTPException(
+                status_code=400,
+                detail=f"يوجد بالفعل مادة باسم '{subject_data.subject_name}' في هذا الصف. يرجى اختيار اسم آخر."
+            )
+    
     for field, value in subject_data.dict(exclude_unset=True).items():
         setattr(subject, field, value)
     
@@ -388,13 +421,25 @@ async def delete_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete subject"""
+    """Delete subject - only if it has no teacher assignments"""
     # Using type: ignore to suppress basedpyright error for working query pattern
     subject = db.query(Subject).filter(Subject.id == subject_id).first()  
     if not subject:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subject not found"
+        )
+    
+    # Check if subject has any teacher assignments
+    from app.models.teachers import TeacherAssignment
+    assignments = db.query(TeacherAssignment).filter(
+        TeacherAssignment.subject_id == subject_id
+    ).first()
+    
+    if assignments:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"لا يمكن حذف المادة '{subject.subject_name}' لأنها مرتبطة بتوزيعات للأساتذة. يرجى إزالة التوزيعات أولاً أو تعطيل المادة بدلاً من حذفها."
         )
     
     db.delete(subject)

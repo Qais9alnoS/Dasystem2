@@ -4,25 +4,40 @@ Handles automatic schedule creation with conflict detection and optimization
 """
 
 import time
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, Any
 from datetime import datetime, date, time as dt_time, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 from ..models.schedules import Schedule, ScheduleAssignment, ScheduleConflict, ScheduleConstraint, TimeSlot, ScheduleGenerationHistory
-from ..models.academic import Class, Subject
+from ..models.academic import Class, Subject, AcademicYear
 from ..models.teachers import Teacher, TeacherAssignment
 from ..schemas.schedules import (
     ScheduleGenerationRequest, ScheduleGenerationResponse,
     DayOfWeek, SessionType, ScheduleStatistics
 )
 from ..services.telegram_service import telegram_service
+from ..services.teacher_availability_service import TeacherAvailabilityService
+from ..services.validation_service import ValidationService
+from ..services.schedule_optimizer import GeneticScheduleOptimizer, OptimizationConstraint
+from ..services.constraint_solver import ConstraintSolver
+from ..core.exceptions import (
+    ScheduleValidationError,
+    TeacherAvailabilityError,
+    ScheduleConflictError,
+    ConstraintViolationError,
+    InsufficientDataError
+)
 
 class ScheduleGenerationService:
     """Advanced schedule generation with AI-like optimization"""
     
     def __init__(self, db: Session):
         self.db = db
+        self.availability_service = TeacherAvailabilityService(db)
+        self.validation_service = ValidationService(db)
+        self.genetic_optimizer = GeneticScheduleOptimizer(db)
+        self.constraint_solver = ConstraintSolver(db)
         self.conflicts = []
         self.warnings = []
         self.generation_stats = {
@@ -32,15 +47,682 @@ class ScheduleGenerationService:
             'optimization_rounds': 0
         }
     
-    def generate_schedule(self, request: ScheduleGenerationRequest) -> ScheduleGenerationResponse:
-        """Main schedule generation method"""
+    def _print_database_data(
+        self,
+        academic_year_id: int,
+        session_type: str,
+        class_id: int,
+        section: Optional[str],
+        classes: List[Class],
+        subjects: List[Subject],
+        teachers: List[Teacher],
+        validation_results: Optional[Dict] = None
+    ):
+        """
+        Print all database data being used for schedule generation
+        
+        Args:
+            academic_year_id: Academic year ID
+            session_type: morning or evening
+            class_id: Target class ID
+            section: Target section
+            classes: List of classes
+            subjects: List of subjects
+            teachers: List of teachers
+            validation_results: Optional validation results
+        """
+        import json
+        from datetime import datetime
+        
+        print("\n" + "="*80)
+        print("=== بيانات قاعدة البيانات المستخدمة ===")
+        print(f"التاريخ والوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("="*80)
+        
+        # Section 1: Academic Year Info
+        print(f"\n📚 السنة الدراسية:")
+        academic_year = self.db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first()
+        if academic_year:
+            print(f"  - المعرف: {academic_year.id}")
+            print(f"  - الاسم: {academic_year.year_name}")
+            print(f"  - نشطة: {'نعم' if academic_year.is_active else 'لا'}")
+        else:
+            print(f"  - لم يتم العثور على السنة الدراسية (ID: {academic_year_id})")
+        
+        # Section 2: Classes
+        print(f"\n🏫 الصفوف (عدد: {len(classes)}):")
+        for cls in classes:
+            print(f"  - المعرف: {cls.id}, الاسم: الصف {cls.grade_number} {cls.grade_level}, الفترة: {cls.session_type}")
+        
+        # Section 3: Subjects
+        print(f"\n📖 المواد (عدد: {len(subjects)}):")
+        for subject in subjects:
+            weekly_hours = getattr(subject, 'weekly_hours', 0) or getattr(subject, 'periods_per_week', 0)
+            print(f"  - المعرف: {subject.id}, الاسم: {subject.subject_name}, الحصص المطلوبة: {weekly_hours}")
+        
+        # Section 4: Teachers
+        print(f"\n👨‍🏫 المعلمين (عدد: {len(teachers)}):")
+        for teacher in teachers:
+            print(f"\n  المعرف: {teacher.id}, الاسم: {teacher.full_name}")
+            
+            # Parse and display free_time_slots
+            try:
+                if teacher.free_time_slots:
+                    slots = json.loads(teacher.free_time_slots)
+                    # Count free slots
+                    free_count = sum(1 for s in slots if s.get('status') == 'free' or s.get('is_free', False))
+                    assigned_count = sum(1 for s in slots if s.get('status') == 'assigned')
+                    unavailable_count = sum(1 for s in slots if s.get('status') == 'unavailable')
+                    
+                    print(f"    أوقات الفراغ: حرة={free_count}, مشغولة={assigned_count}, غير متاحة={unavailable_count}")
+                    
+                    # Show free slots by day
+                    day_names = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+                    for day_idx in range(5):
+                        day_slots = [s for s in slots if s.get('day') == day_idx]
+                        free_periods = [s.get('period') + 1 for s in day_slots if s.get('status') == 'free' or s.get('is_free', False)]
+                        if free_periods:
+                            print(f"    - {day_names[day_idx]}: {free_periods}")
+                else:
+                    print("    أوقات الفراغ: غير محددة")
+            except Exception as e:
+                print(f"    خطأ في قراءة أوقات الفراغ: {e}")
+        
+        # Section 5: Time Slots Available
+        print(f"\n⏰ الفترات الزمنية المتاحة:")
+        print(f"  - الأيام: الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس (5 أيام)")
+        print(f"  - الحصص: 1-6 (6 حصص في اليوم)")
+        print(f"  - المجموع: 30 فترة زمنية في الأسبوع")
+        
+        # Section 6: Active Constraints
+        print(f"\n⚠️ القيود النشطة:")
+        try:
+            constraints = self.db.query(ScheduleConstraint).filter(
+                ScheduleConstraint.academic_year_id == academic_year_id,
+                ScheduleConstraint.is_active == True
+            ).all()
+            
+            if constraints:
+                print(f"  (عدد: {len(constraints)})")
+                for constraint in constraints:
+                    priority_names = {1: "منخفض", 2: "متوسط", 3: "عالي", 4: "حرج"}
+                    priority = priority_names.get(constraint.priority_level, str(constraint.priority_level))
+                    print(f"  - النوع: {constraint.constraint_type}, الأولوية: {priority}")
+                    if constraint.description:
+                        print(f"    الوصف: {constraint.description}")
+            else:
+                print("  - لا توجد قيود نشطة")
+        except Exception as e:
+            print(f"  - خطأ في قراءة القيود: {e}")
+        
+        # Section 7: Validation Results
+        if validation_results:
+            print(f"\n✅ نتائج التحقق:")
+            print(f"  - صالح: {'نعم' if validation_results.get('is_valid') else 'لا'}")
+            print(f"  - يمكن المتابعة: {'نعم' if validation_results.get('can_proceed') else 'لا'}")
+            
+            summary = validation_results.get('summary', {})
+            if summary:
+                print(f"  - إجمالي المواد: {summary.get('total_subjects', 0)}")
+                print(f"  - المواد مع معلمين: {summary.get('subjects_with_teachers', 0)}")
+                print(f"  - المعلمين بأوقات كافية: {summary.get('teachers_with_sufficient_time', 0)}")
+            
+            errors = validation_results.get('errors', [])
+            if errors:
+                print(f"\n  ⚠️ الأخطاء ({len(errors)}):")
+                for error in errors:
+                    print(f"    - {error}")
+            
+            warnings = validation_results.get('warnings', [])
+            if warnings:
+                print(f"\n  ⚠️ التحذيرات ({len(warnings)}):")
+                for warning in warnings:
+                    print(f"    - {warning}")
+        
+        print("\n" + "="*80 + "\n")
+    
+    def _print_generated_schedule_markdown(
+        self,
+        schedule_entries: List[Schedule],
+        class_info: Dict[str, any],
+        save_to_file: bool = False
+    ):
+        """
+        Generate and print schedule in markdown table format
+        
+        Args:
+            schedule_entries: List of schedule entries
+            class_info: Class information dictionary
+            save_to_file: Whether to save to file (default: False, just print)
+        """
+        from datetime import datetime
+        import os
+        
+        # Get class and teacher info
+        class_name = class_info.get('class_name', 'Unknown')
+        section = class_info.get('section', '1')
+        
+        # Build markdown output
+        markdown = []
+        markdown.append(f"# جدول الصف: {class_name} - شعبة {section}")
+        markdown.append(f"\n**التاريخ:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        
+        # Create schedule grid
+        day_names = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+        periods = list(range(1, 7))  # 1-6
+        
+        # Organize entries by day and period
+        schedule_grid = {}
+        for entry in schedule_entries:
+            key = (entry.day_of_week, entry.period_number)
+            schedule_grid[key] = entry
+        
+        # Get subject and teacher names
+        subject_cache = {}
+        teacher_cache = {}
+        
+        for entry in schedule_entries:
+            if entry.subject_id not in subject_cache:
+                subject = self.db.query(Subject).filter(Subject.id == entry.subject_id).first()
+                subject_cache[entry.subject_id] = subject.subject_name if subject else f"مادة {entry.subject_id}"
+            
+            if entry.teacher_id not in teacher_cache:
+                teacher = self.db.query(Teacher).filter(Teacher.id == entry.teacher_id).first()
+                teacher_cache[entry.teacher_id] = teacher.full_name if teacher else f"معلم {entry.teacher_id}"
+        
+        # Build table header
+        markdown.append("| الحصة | " + " | ".join(day_names) + " |")
+        markdown.append("|-------|" + "|".join(["-------"] * 5) + "|")
+        
+        # Build table rows
+        for period in periods:
+            row = [f"| {period} "]
+            for day_idx, day_name in enumerate(day_names, start=1):
+                key = (day_idx, period)
+                if key in schedule_grid:
+                    entry = schedule_grid[key]
+                    subject_name = subject_cache.get(entry.subject_id, "---")
+                    teacher_name = teacher_cache.get(entry.teacher_id, "---")
+                    cell = f"**{subject_name}**<br>{teacher_name}"
+                else:
+                    cell = "---"
+                row.append(f" {cell} ")
+            row.append("|")
+            markdown.append("|".join(row))
+        
+        # Add summary section
+        markdown.append("\n## ملخص الجدول\n")
+        
+        # Count statistics
+        total_periods = len(schedule_entries)
+        unique_subjects = len(set(e.subject_id for e in schedule_entries))
+        unique_teachers = len(set(e.teacher_id for e in schedule_entries))
+        
+        # Check for conflicts
+        conflicts = []
+        teacher_schedule = {}
+        for entry in schedule_entries:
+            key = (entry.teacher_id, entry.day_of_week, entry.period_number)
+            if key in teacher_schedule:
+                conflicts.append({
+                    'teacher_id': entry.teacher_id,
+                    'day': entry.day_of_week,
+                    'period': entry.period_number
+                })
+            else:
+                teacher_schedule[key] = entry
+        
+        markdown.append(f"- **إجمالي الحصص:** {total_periods}")
+        markdown.append(f"- **عدد المواد:** {unique_subjects}")
+        markdown.append(f"- **عدد المعلمين:** {unique_teachers}")
+        markdown.append(f"- **التعارضات:** {len(conflicts)}")
+        markdown.append(f"- **التحذيرات:** 0")
+        markdown.append(f"- **حالة التحقق:** {'✅ مقبول' if len(conflicts) == 0 else '❌ فشل - توجد تعارضات'}")
+        
+        # Print conflicts if any
+        if conflicts:
+            markdown.append("\n### ⚠️ التعارضات المكتشفة:\n")
+            for conflict in conflicts:
+                teacher_name = teacher_cache.get(conflict['teacher_id'], f"معلم {conflict['teacher_id']}")
+                day_name = day_names[conflict['day'] - 1] if 1 <= conflict['day'] <= 5 else f"يوم {conflict['day']}"
+                markdown.append(f"- المعلم **{teacher_name}** معين لأكثر من صف في {day_name} الحصة {conflict['period']}")
+        
+        # Join all markdown lines
+        markdown_text = "\n".join(markdown)
+        
+        # Print to console
+        print("\n" + "="*80)
+        print(markdown_text)
+        print("="*80 + "\n")
+        
+        # Save to file if requested
+        if save_to_file:
+            try:
+                # Create directory if it doesn't exist
+                output_dir = "generated_schedules"
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # Generate filename
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"{output_dir}/{class_name.replace(' ', '_')}_{section}_{timestamp}.md"
+                
+                # Write to file
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(markdown_text)
+                
+                print(f"✅ تم حفظ الجدول في: {filename}")
+            except Exception as e:
+                print(f"⚠️ فشل حفظ الملف: {e}")
+        
+        # Return validation status
+        return len(conflicts) == 0
+    
+    def _validate_generated_schedule(
+        self,
+        schedule_entries: List[Schedule],
+        expected_total_periods: int
+    ) -> tuple[bool, List[str], List[str]]:
+        """
+        Comprehensive validation of generated schedule
+        
+        Args:
+            schedule_entries: List of generated schedule entries
+            expected_total_periods: Expected number of periods
+            
+        Returns:
+            Tuple of (is_valid, errors, warnings)
+        """
+        errors = []
+        warnings = []
+        
+        if not schedule_entries:
+            errors.append("لا توجد حصص في الجدول المُنشأ")
+            return False, errors, warnings
+        
+        # Check 1: Verify total periods
+        if len(schedule_entries) != expected_total_periods:
+            warnings.append(
+                f"عدد الحصص المُنشأة ({len(schedule_entries)}) لا يتطابق مع المتوقع ({expected_total_periods})"
+            )
+        
+        # Check 2: Teacher conflicts (same teacher, same time)
+        teacher_schedule = {}
+        teacher_conflicts = []
+        for entry in schedule_entries:
+            key = (entry.teacher_id, entry.day_of_week, entry.period_number)
+            if key in teacher_schedule:
+                teacher = self.db.query(Teacher).filter(Teacher.id == entry.teacher_id).first()
+                teacher_name = teacher.full_name if teacher else f"معلم {entry.teacher_id}"
+                teacher_conflicts.append({
+                    'teacher': teacher_name,
+                    'day': entry.day_of_week,
+                    'period': entry.period_number,
+                    'classes': [teacher_schedule[key], entry.class_id]
+                })
+                errors.append(
+                    f"تعارض: المعلم {teacher_name} معين لصفين في نفس الوقت (يوم {entry.day_of_week} حصة {entry.period_number})"
+                )
+            else:
+                teacher_schedule[key] = entry.class_id
+        
+        # Check 3: Subject weekly hours satisfaction
+        subject_hours = {}
+        for entry in schedule_entries:
+            key = (entry.class_id, entry.subject_id)
+            subject_hours[key] = subject_hours.get(key, 0) + 1
+        
+        for (class_id, subject_id), actual_hours in subject_hours.items():
+            subject = self.db.query(Subject).filter(Subject.id == subject_id).first()
+            if subject:
+                expected_hours = getattr(subject, 'weekly_hours', 0)
+                if expected_hours and actual_hours != expected_hours:
+                    warnings.append(
+                        f"المادة {subject.subject_name} للصف {class_id}: حصص فعلية ({actual_hours}) != مطلوبة ({expected_hours})"
+                    )
+        
+        # Check 4: Class double-booking
+        class_schedule = {}
+        class_conflicts = []
+        for entry in schedule_entries:
+            key = (entry.class_id, entry.day_of_week, entry.period_number)
+            if key in class_schedule:
+                errors.append(
+                    f"تعارض: الصف {entry.class_id} لديه حصتان في نفس الوقت (يوم {entry.day_of_week} حصة {entry.period_number})"
+                )
+                class_conflicts.append(key)
+            else:
+                class_schedule[key] = entry.id
+        
+        # Check 5: Teacher availability (within free_time_slots)
+        availability_violations = []
+        for entry in schedule_entries:
+            try:
+                availability = self.availability_service.get_teacher_availability(entry.teacher_id)
+                slots = availability.get('slots', [])
+                
+                # Convert to 0-based indexing
+                day_idx = entry.day_of_week - 1
+                period_idx = entry.period_number - 1
+                slot_idx = day_idx * 6 + period_idx
+                
+                if 0 <= slot_idx < len(slots):
+                    slot = slots[slot_idx]
+                    if slot.get('status') not in ['free', 'assigned']:
+                        teacher = self.db.query(Teacher).filter(Teacher.id == entry.teacher_id).first()
+                        teacher_name = teacher.full_name if teacher else f"معلم {entry.teacher_id}"
+                        availability_violations.append(
+                            f"المعلم {teacher_name} معين في وقت غير متاح (يوم {entry.day_of_week} حصة {entry.period_number})"
+                        )
+            except Exception as e:
+                print(f"Error checking teacher availability: {e}")
+        
+        if availability_violations:
+            warnings.extend(availability_violations)
+        
+        # Determine if valid
+        is_valid = len(errors) == 0
+        
+        # Print validation summary
+        print("\n" + "="*80)
+        print("=== نتيجة التحقق من صحة الجدول ===")
+        print(f"الحالة: {'✅ صالح' if is_valid else '❌ غير صالح'}")
+        print(f"إجمالي الحصص: {len(schedule_entries)}")
+        print(f"الأخطاء: {len(errors)}")
+        print(f"التحذيرات: {len(warnings)}")
+        
+        if errors:
+            print("\n❌ الأخطاء:")
+            for error in errors:
+                print(f"  - {error}")
+        
+        if warnings:
+            print("\n⚠️ التحذيرات:")
+            for warning in warnings:
+                print(f"  - {warning}")
+        
+        print("="*80 + "\n")
+        
+        return is_valid, errors, warnings
+    
+    def _distribute_subjects_evenly(
+        self,
+        subjects: List[Subject],
+        num_days: int,
+        periods_per_day: int
+    ) -> List[List[Optional[Subject]]]:
+        """
+        Distribute subjects evenly across the week to avoid clustering
+        
+        Args:
+            subjects: List of subjects with weekly_hours
+            num_days: Number of days in the week (typically 5)
+            periods_per_day: Number of periods per day (typically 6)
+            
+        Returns:
+            2D list representing the week's schedule [day][period]
+        """
+        import random
+        
+        # Initialize empty schedule grid
+        schedule_grid = [[None for _ in range(periods_per_day)] for _ in range(num_days)]
+        
+        # Build list of subject slots - must fill exactly total_slots (30)
+        total_slots = num_days * periods_per_day
+        subject_slots = []
+        
+        # First, add all subjects according to their weekly_hours
+        for subject in subjects:
+            weekly_hours = getattr(subject, 'weekly_hours', 1)
+            if not weekly_hours or weekly_hours < 1:
+                weekly_hours = 1
+            
+            for _ in range(weekly_hours):
+                subject_slots.append(subject)
+        
+        total_hours = len(subject_slots)
+        
+        # Critical check: Must have EXACTLY total_slots periods
+        if total_hours < total_slots:
+            # This should have been caught by validation, but enforce here too
+            raise InsufficientDataError(
+                f"إجمالي ساعات المواد ({total_hours}) أقل من المطلوب ({total_slots}). "
+                f"لا يمكن إنشاء جدول كامل."
+            )
+        elif total_hours > total_slots:
+            # Trim excess hours - take only what fits
+            print(f"⚠️ إجمالي الساعات ({total_hours}) يتجاوز المتاح ({total_slots}). سيتم استخدام {total_slots} حصة فقط.")
+            subject_slots = subject_slots[:total_slots]
+            total_hours = total_slots
+        
+        print(f"\n📊 Subject Distribution:")
+        print(f"  - Total slots required: {total_slots}")
+        print(f"  - Total hours to assign: {total_hours}")
+        print(f"  - Status: {'✅ Exact match' if total_hours == total_slots else '⚠️ Adjusted'}")
+        
+        # Create a subject tracker for even distribution
+        subject_counts_per_day = {subject.id: [0] * num_days for subject in subjects}
+        
+        # Shuffle to randomize initial distribution
+        random.shuffle(subject_slots)
+        
+        # Place subjects using even distribution algorithm
+        for subject in subject_slots:
+            # Find day with least occurrences of this subject
+            subject_id = subject.id
+            min_count = min(subject_counts_per_day[subject_id])
+            candidate_days = [d for d in range(num_days) if subject_counts_per_day[subject_id][d] == min_count]
+            
+            # Try to place in one of the candidate days
+            placed = False
+            random.shuffle(candidate_days)  # Randomize to avoid bias
+            
+            for day in candidate_days:
+                # Find first available period in this day
+                for period in range(periods_per_day):
+                    if schedule_grid[day][period] is None:
+                        # Check if previous or next period has the same subject (avoid consecutive)
+                        prev_same = period > 0 and schedule_grid[day][period-1] is not None and schedule_grid[day][period-1].id == subject_id
+                        next_same = period < periods_per_day - 1 and schedule_grid[day][period+1] is not None and schedule_grid[day][period+1].id == subject_id
+                        
+                        # Allow maximum 2 consecutive periods of the same subject
+                        if period > 1:
+                            two_prev_same = (schedule_grid[day][period-2] is not None and 
+                                           schedule_grid[day][period-2].id == subject_id and
+                                           schedule_grid[day][period-1] is not None and 
+                                           schedule_grid[day][period-1].id == subject_id)
+                            if two_prev_same:
+                                continue
+                        
+                        # Place the subject
+                        schedule_grid[day][period] = subject
+                        subject_counts_per_day[subject_id][day] += 1
+                        placed = True
+                        break
+                
+                if placed:
+                    break
+            
+            # If couldn't place with constraints, place anywhere available
+            if not placed:
+                for day in range(num_days):
+                    for period in range(periods_per_day):
+                        if schedule_grid[day][period] is None:
+                            schedule_grid[day][period] = subject
+                            subject_counts_per_day[subject_id][day] += 1
+                            placed = True
+                            break
+                    if placed:
+                        break
+        
+        return schedule_grid
+    
+    def _save_teacher_states(self, teacher_ids: List[int]) -> Dict[int, str]:
+        """
+        Save current free_time_slots for teachers before generation
+        
+        Args:
+            teacher_ids: List of teacher IDs to save states for
+            
+        Returns:
+            Dictionary mapping teacher_id to free_time_slots JSON string
+        """
+        teacher_states = {}
+        for teacher_id in teacher_ids:
+            teacher = self.db.query(Teacher).filter(Teacher.id == teacher_id).first()
+            if teacher:
+                teacher_states[teacher_id] = teacher.free_time_slots
+                print(f"Saved state for teacher {teacher.full_name} (ID: {teacher_id})")
+        return teacher_states
+    
+    def _restore_teacher_states(self, teacher_states: Dict[int, str]):
+        """
+        Restore teacher free_time_slots from saved states (rollback)
+        
+        Args:
+            teacher_states: Dictionary mapping teacher_id to free_time_slots JSON string
+        """
+        for teacher_id, slots_json in teacher_states.items():
+            teacher = self.db.query(Teacher).filter(Teacher.id == teacher_id).first()
+            if teacher:
+                teacher.free_time_slots = slots_json
+                print(f"Restored state for teacher {teacher.full_name} (ID: {teacher_id})")
+        try:
+            self.db.commit()
+            print("Successfully restored all teacher states")
+        except Exception as e:
+            print(f"Error restoring teacher states: {e}")
+            self.db.rollback()
+    
+    def _retry_with_exponential_backoff(
+        self,
+        func,
+        max_retries: int = 3,
+        initial_delay: float = 0.1,
+        *args,
+        **kwargs
+    ):
+        """
+        Retry a function with exponential backoff
+        
+        Args:
+            func: Function to retry
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay between retries in seconds
+            *args, **kwargs: Arguments to pass to the function
+            
+        Returns:
+            Result of the function call
+            
+        Raises:
+            Last exception if all retries fail
+        """
+        import time
+        
+        last_exception = None
+        for attempt in range(max_retries + 1):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    print(f"⚠️ Attempt {attempt + 1} failed: {str(e)[:100]}")
+                    print(f"   Retrying in {delay:.2f} seconds...")
+                    time.sleep(delay)
+                else:
+                    print(f"❌ All {max_retries + 1} attempts failed")
+        
+        raise last_exception
+    
+    def generate_schedule(
+        self, 
+        request: ScheduleGenerationRequest,
+        validation_results: Optional[Dict] = None
+    ) -> ScheduleGenerationResponse:
+        """
+        Main schedule generation method with transaction-based rollback
+        
+        Args:
+            request: Schedule generation parameters
+            validation_results: Optional pre-computed validation results
+            
+        Returns:
+            Generation response with status and statistics
+        """
         start_time = time.time()
+        teacher_states = {}  # Store teacher states for rollback
         
         try:
-            # Step 1: Get available resources
+            # Step 1: Validate prerequisites if not provided
+            if validation_results is None:
+                print("\n=== Running Validation Check ===")
+                validation_results = self.validation_service.validate_schedule_prerequisites(
+                    academic_year_id=request.academic_year_id,
+                    class_id=request.class_id,
+                    section=request.section,
+                    session_type=request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type)
+                )
+                print(f"Validation result: can_proceed={validation_results.get('can_proceed')}, is_valid={validation_results.get('is_valid')}")
+            
+            # Step 2: Check if we can proceed based on validation
+            if not validation_results.get('can_proceed', False):
+                print("Cannot proceed with generation - validation failed")
+                errors = validation_results.get('errors', [])
+                error_message = " | ".join(errors) if errors else "فشل التحقق من متطلبات إنشاء الجدول"
+                raise ScheduleValidationError(
+                    detail=error_message,
+                    errors=errors
+                )
+            
+            # Step 3: Get available resources
             classes = self._get_classes_for_academic_year(request.academic_year_id, request.session_type, request.class_id)
             subjects = self._get_subjects()
             teachers = self._get_available_teachers(request.session_type)
+            
+            # Step 4: Filter teachers based on validation results
+            # Only use teachers with sufficient availability
+            subject_details = validation_results.get('subject_details', [])
+            valid_teacher_ids = set()
+            subject_teacher_map = {}  # Map subject_id to teacher_id for validated assignments
+            
+            for detail in subject_details:
+                if detail.get('has_teacher') and detail.get('is_sufficient'):
+                    teacher_id = detail.get('teacher_id')
+                    subject_id = detail.get('subject_id')
+                    if teacher_id and subject_id:
+                        valid_teacher_ids.add(teacher_id)
+                        subject_teacher_map[subject_id] = teacher_id
+                        print(f"Validated teacher {detail.get('teacher_name')} for subject {detail.get('subject_name')}")
+            
+            # Filter the teachers list to only include validated teachers
+            if valid_teacher_ids:
+                teachers = [t for t in teachers if t.id in valid_teacher_ids]
+                print(f"Filtered to {len(teachers)} validated teachers with sufficient availability")
+            else:
+                print("Warning: No teachers with sufficient availability found, using all available teachers")
+                # Add validation warnings
+                for detail in subject_details:
+                    if detail.get('has_teacher') and not detail.get('is_sufficient'):
+                        self.warnings.append(
+                            f"المعلم {detail.get('teacher_name')} لديه أوقات فراغ غير كافية للمادة {detail.get('subject_name')}"
+                        )
+            
+            # Step 5: Print database data for debugging
+            self._print_database_data(
+                academic_year_id=request.academic_year_id,
+                session_type=request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type),
+                class_id=request.class_id,
+                section=request.section,
+                classes=classes,
+                subjects=subjects,
+                teachers=teachers,
+                validation_results=validation_results
+            )
+            
+            # Step 6: Save teacher states before generation (for rollback)
+            teacher_ids = [t.id for t in teachers]
+            teacher_states = self._save_teacher_states(teacher_ids)
+            print(f"Saved states for {len(teacher_states)} teachers")
             
             # Debug logging
             print(f"\n=== Schedule Generation Started ===")
@@ -54,15 +736,8 @@ class ScheduleGenerationService:
             print(f"Teachers: {[t.full_name for t in teachers]}")
             
             if not classes:
-                return ScheduleGenerationResponse(
-                    schedule_id=0,
-                    generation_status="failed",
-                    total_periods_created=0,
-                    total_assignments_created=0,
-                    conflicts_detected=0,
-                    warnings=["No classes found for the specified academic year and session type"],
-                    generation_time=time.time() - start_time,
-                    summary={}
+                raise InsufficientDataError(
+                    detail="لا توجد صفوف للسنة الدراسية والفترة المحددة"
                 )
             
             # Step 2: Generate schedules for each class
@@ -98,44 +773,43 @@ class ScheduleGenerationService:
                         'wednesday': 4, 'thursday': 5, 'friday': 6, 'saturday': 7
                     }
                     
-                    # Build subject distribution based on weekly_hours
-                    subject_schedule = []
-                    for subject in class_subjects:
-                        # Use weekly_hours attribute (not weekly_periods)
-                        weekly_hours = getattr(subject, 'weekly_hours', 1)
-                        if not weekly_hours or weekly_hours < 1:
-                            weekly_hours = 1
-                        for _ in range(weekly_hours):
-                            subject_schedule.append(subject)
+                    # Use even distribution algorithm to avoid clustering
+                    schedule_grid = self._distribute_subjects_evenly(
+                        subjects=class_subjects,
+                        num_days=len(request.working_days),
+                        periods_per_day=request.periods_per_day
+                    )
                     
-                    # If we don't have enough subjects, repeat them
-                    total_periods_needed = request.periods_per_day * len(request.working_days)
-                    while len(subject_schedule) < total_periods_needed:
-                        subject_schedule.extend(class_subjects)
-                    
-                    period_counter = 0
+                    day_idx = 0
                     for day_name in request.working_days:
                         day_num = day_mapping.get(day_name.lower() if isinstance(day_name, str) else day_name.value, 1)
                         
                         for period in range(1, request.periods_per_day + 1):
-                            # Check if this is a break period - if so, skip it (don't create entry)
-                            # But we still want to create entries for all other periods
-                            # Note: We'll create ALL periods to get 30 entries total
+                            # Get the subject from the evenly distributed schedule grid
+                            subject = schedule_grid[day_idx][period - 1]  # period is 1-based, array is 0-based
                             
-                            # Get the subject for this period
-                            if period_counter < len(subject_schedule):
-                                subject = subject_schedule[period_counter]
-                            else:
-                                # Fallback to round-robin if we run out
-                                subject = class_subjects[period_counter % len(class_subjects)]
+                            # Skip if no subject assigned (shouldn't happen with our algorithm)
+                            if not subject:
+                                continue
                             
-                            period_counter += 1
-                            
-                            # Find a teacher for this subject
-                            teacher = self._find_teacher_for_subject(subject.id, teachers)
+                            # Find an available teacher for this subject at this specific time slot
+                            teacher = self._find_available_teacher_for_subject_and_slot(
+                                subject.id, 
+                                day_num, 
+                                period, 
+                                teachers,
+                                all_schedules  # Pass existing schedules to check conflicts
+                            )
                             
                             if not teacher:
-                                self.warnings.append(f"No teacher found for subject {subject.subject_name}")
+                                # NO FALLBACK - If no teacher is free, add to conflicts and skip this period
+                                error_msg = (
+                                    f"خطأ: لا يوجد معلم متاح للمادة {subject.subject_name} "
+                                    f"في اليوم {day_num} الحصة {period}. "
+                                    f"جميع المعلمين المكلفين بهذه المادة إما غير متاحين أو مشغولين في هذا الوقت."
+                                )
+                                self.conflicts.append(error_msg)
+                                print(f"CRITICAL: {error_msg}")
                                 continue
                             
                             # Create schedule entry for ALL periods (including breaks)
@@ -158,18 +832,210 @@ class ScheduleGenerationService:
                             all_schedules.append(schedule_entry)
                             total_created += 1
                             self.generation_stats['assignments_created'] += 1
+                            
+                            # Update teacher's free_time_slots to mark this slot as assigned
+                            try:
+                                self.availability_service.mark_slot_as_assigned(
+                                    teacher_id=teacher.id,
+                                    day=day_num - 1,  # Convert to 0-based for service
+                                    period=period - 1,  # Convert to 0-based for service
+                                    subject_id=subject.id,
+                                    class_id=cls.id,
+                                    section=str(section_num),
+                                    schedule_id=None  # Will be set after commit
+                                )
+                                print(f"Marked teacher {teacher.full_name} as assigned for day {day_num} period {period}")
+                            except Exception as e:
+                                print(f"Warning: Failed to update teacher availability: {e}")
+                                self.warnings.append(f"فشل تحديث توفر المعلم {teacher.full_name}")
+                        
+                        # Increment day index after processing all periods of the day
+                        day_idx += 1
             
-            # Commit all schedule entries
-            self.db.commit()
+            # Step 7: Apply Constraint Solver to check violations
+            print("\n=== Applying Constraint Solver ===")
+            active_constraints = self.db.query(ScheduleConstraint).filter(
+                ScheduleConstraint.academic_year_id == request.academic_year_id,
+                ScheduleConstraint.is_active == True
+            ).all()
+            print(f"Found {len(active_constraints)} active constraints")
+            
+            # Convert schedules to dict format for constraint checking
+            schedule_assignments = []
+            for schedule in all_schedules:
+                schedule_assignments.append({
+                    'subject_id': schedule.subject_id,
+                    'teacher_id': schedule.teacher_id,
+                    'class_id': schedule.class_id,
+                    'section': schedule.section,
+                    'day_of_week': schedule.day_of_week,
+                    'period_number': schedule.period_number
+                })
+            
+            # Check each constraint
+            all_violations = []
+            for constraint in active_constraints:
+                violations = self.constraint_solver.validate_constraint_with_priority(
+                    constraint, schedule_assignments
+                )
+                all_violations.extend(violations)
+            
+            # Report violations
+            if all_violations:
+                print(f"⚠️ Found {len(all_violations)} constraint violations:")
+                for violation in all_violations:
+                    print(f"  - {violation.severity.upper()}: {violation.description}")
+                    if violation.severity == "critical":
+                        self.conflicts.append(violation.description)
+                    else:
+                        self.warnings.append(violation.description)
+                
+                # If critical violations exist and can't be overridden, raise error
+                critical_violations = [v for v in all_violations if v.severity == "critical" and not v.can_override]
+                if critical_violations:
+                    error_message = " | ".join([v.description for v in critical_violations])
+                    raise ConstraintViolationError(detail=error_message)
+            else:
+                print("✅ No constraint violations found")
+            
+            # Step 8: Apply Genetic Algorithm Optimization (if requested)
+            if len(all_schedules) > 0:
+                print("\n=== Applying Genetic Algorithm Optimization ===")
+                try:
+                    # Create ScheduleAssignment objects for optimization
+                    assignments_for_optimization = []
+                    time_slots = []
+                    
+                    for idx, schedule in enumerate(all_schedules):
+                        # Create time slot
+                        time_slot = TimeSlot()
+                        time_slot.id = idx + 1
+                        time_slot.day_of_week = schedule.day_of_week
+                        time_slot.period_number = schedule.period_number
+                        time_slots.append(time_slot)
+                        
+                        # Create assignment
+                        assignment = ScheduleAssignment()
+                        assignment.id = idx + 1
+                        assignment.schedule_id = 1
+                        assignment.time_slot_id = time_slot.id
+                        assignment.subject_id = schedule.subject_id
+                        assignment.teacher_id = schedule.teacher_id
+                        assignment.class_id = schedule.class_id
+                        assignment.section = schedule.section
+                        assignments_for_optimization.append(assignment)
+                    
+                    # Create optimization constraints
+                    optimization_constraints = []
+                    for constraint in active_constraints:
+                        opt_constraint = OptimizationConstraint(
+                            constraint_type=constraint.constraint_type,
+                            weight=float(constraint.priority_level) / 4.0,  # Normalize priority to 0-1
+                            parameters={
+                                'subject_id': constraint.subject_id,
+                                'teacher_id': constraint.teacher_id,
+                                'class_id': constraint.class_id,
+                                'day_of_week': constraint.day_of_week,
+                                'period_number': constraint.period_number,
+                                'max_consecutive_periods': constraint.max_consecutive_periods,
+                                'min_consecutive_periods': constraint.min_consecutive_periods
+                            },
+                            violation_penalty=2.0 if constraint.priority_level >= 3 else 1.0
+                        )
+                        optimization_constraints.append(opt_constraint)
+                    
+                    # Run optimization with reduced generations for speed
+                    self.genetic_optimizer.generations = 30  # Reduce for performance
+                    optimized_assignments = self.genetic_optimizer.optimize_schedule(
+                        assignments_for_optimization,
+                        optimization_constraints,
+                        time_slots
+                    )
+                    
+                    # Update schedule entries with optimized assignments
+                    # Only update teacher_id and subject_id, keep day/period fixed
+                    for i, optimized in enumerate(optimized_assignments):
+                        if i < len(all_schedules):
+                            # Validate that optimized assignment has valid IDs
+                            if optimized.teacher_id and optimized.subject_id:
+                                # Only update teacher and subject, NOT the time slots
+                                # to avoid conflicts
+                                all_schedules[i].teacher_id = optimized.teacher_id
+                                all_schedules[i].subject_id = optimized.subject_id
+                            # Keep original day_of_week and period_number unchanged
+                    
+                    print(f"✅ Optimization completed successfully")
+                    self.generation_stats['optimization_rounds'] = 30
+                    
+                except Exception as e:
+                    print(f"⚠️ Optimization failed: {e}, continuing with unoptimized schedule")
+                    self.warnings.append(f"فشل تحسين الجدول: {str(e)}")
+            
+            # Validate generated schedule before committing
+            expected_total = sum(
+                len(request.working_days) * request.periods_per_day  
+                for _ in classes
+            )
+            is_valid, val_errors, val_warnings = self._validate_generated_schedule(
+                schedule_entries=all_schedules,
+                expected_total_periods=expected_total
+            )
+            
+            # Add validation warnings to overall warnings
+            self.warnings.extend(val_warnings)
+            
+            # If critical errors found, raise exception and trigger rollback
+            if not is_valid:
+                error_message = " | ".join(val_errors) if val_errors else "فشل التحقق من صحة الجدول المُنشأ"
+                raise ScheduleConflictError(detail=error_message)
             
             # Calculate statistics
             generation_time = time.time() - start_time
+            
+            # If preview_only, return preview data without saving to database
+            if request.preview_only:
+                # Convert schedule entries to dictionaries for preview
+                preview_data = []
+                for schedule in all_schedules:
+                    preview_data.append({
+                        'class_id': schedule.class_id,
+                        'section': schedule.section,
+                        'day_of_week': schedule.day_of_week,
+                        'period_number': schedule.period_number,
+                        'subject_id': schedule.subject_id,
+                        'teacher_id': schedule.teacher_id
+                    })
+                
+                # Rollback the transaction to not save anything
+                self.db.rollback()
+                
+                # Restore teacher states since we're not saving
+                self._restore_teacher_states(teacher_states)
+                
+                return ScheduleGenerationResponse(
+                    schedule_id=0,  # No schedule ID in preview mode
+                    generation_status='preview',
+                    total_periods_created=len(all_schedules),
+                    total_assignments_created=len(all_schedules),
+                    conflicts_detected=len(self.conflicts),
+                    warnings=self.warnings,
+                    generation_time=generation_time,
+                    summary={
+                        'classes_scheduled': len(classes),
+                        'total_periods': len(all_schedules),
+                        'preview_mode': True
+                    },
+                    preview_data=preview_data
+                )
+            
+            # Commit all schedule entries (only if not preview mode)
+            self.db.commit()
             
             # Create generation history record
             history = ScheduleGenerationHistory()
             history.academic_year_id = request.academic_year_id
             history.session_type = request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type)
-            history.generation_algorithm = "simple_round_robin"
+            history.generation_algorithm = "genetic_algorithm_with_constraints"
             history.generation_parameters = {
                 "periods_per_day": request.periods_per_day,
                 "working_days": [str(d) for d in request.working_days]
@@ -181,6 +1047,28 @@ class ScheduleGenerationService:
             history.status = "success"
             self.db.add(history)
             self.db.commit()
+            
+            # Print generated schedule in markdown format for review
+            print("\n=== Generated Schedule Output ===")
+            for cls in classes:
+                class_schedules = [s for s in all_schedules if s.class_id == cls.id]
+                if class_schedules:
+                    # Group by section
+                    sections = set(s.section for s in class_schedules)
+                    for section in sections:
+                        section_schedules = [s for s in class_schedules if s.section == section]
+                        if section_schedules:
+                            class_info = {
+                                'class_name': f"الصف {cls.grade_number} {cls.grade_level}",
+                                'section': section or '1'
+                            }
+                            is_valid = self._print_generated_schedule_markdown(
+                                schedule_entries=section_schedules,
+                                class_info=class_info,
+                                save_to_file=True  # Save to file for review
+                            )
+                            if not is_valid:
+                                print(f"⚠️ تحذير: الجدول يحتوي على تعارضات!")
             
             return ScheduleGenerationResponse(
                 schedule_id=history.id if history.id else 0,
@@ -199,6 +1087,16 @@ class ScheduleGenerationService:
             )
             
         except Exception as e:
+            # Rollback database transaction
+            print(f"\n!!! Generation failed with error: {str(e)}")
+            print("Rolling back database transaction...")
+            self.db.rollback()
+            
+            # Restore teacher states
+            if teacher_states:
+                print(f"Restoring states for {len(teacher_states)} teachers...")
+                self._restore_teacher_states(teacher_states)
+            
             # Send error notification
             try:
                 import asyncio
@@ -211,6 +1109,10 @@ class ScheduleGenerationService:
                 )
             except:
                 pass  # Ignore notification errors
+            
+            # Print full traceback for debugging
+            import traceback
+            print(f"Full traceback:\n{traceback.format_exc()}")
                 
             return ScheduleGenerationResponse(
                 schedule_id=0,
@@ -218,10 +1120,327 @@ class ScheduleGenerationService:
                 total_periods_created=0,
                 total_assignments_created=0,
                 conflicts_detected=0,
-                warnings=[f"Generation failed: {str(e)}"],
+                warnings=[f"فشل إنشاء الجدول: {str(e)}"],
                 generation_time=time.time() - start_time,
-                summary={}
+                summary={
+                    'error': str(e),
+                    'rollback_performed': True
+                }
             )
+    
+    def save_preview_schedule(
+        self,
+        request: ScheduleGenerationRequest,
+        preview_data: List[Dict[str, Any]]
+    ) -> ScheduleGenerationResponse:
+        """
+        Save a preview schedule to the database.
+        
+        Args:
+            request: Original generation request
+            preview_data: List of schedule entries from preview generation
+            
+        Returns:
+            Generation response with saved schedule ID
+        """
+        start_time = time.time()
+        teacher_states = {}
+        
+        try:
+            # Get classes and validate
+            classes = self._get_classes_for_academic_year(request.academic_year_id, request.session_type, request.class_id)
+            if not classes:
+                raise InsufficientDataError(detail="لا توجد صفوف للسنة الدراسية والفترة المحددة")
+            
+            # Ensure only one schedule per class/section by removing existing entries
+            session_type_value = request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type)
+            base_query = self.db.query(Schedule).filter(
+                Schedule.academic_year_id == request.academic_year_id,
+                Schedule.session_type == session_type_value,
+                Schedule.class_id == request.class_id
+            )
+            # If section is specified in the request, restrict deletion to that section
+            if hasattr(request, 'section') and request.section is not None:
+                base_query = base_query.filter(Schedule.section == request.section)
+            
+            existing_schedules = base_query.all()
+            if existing_schedules:
+                print(f"Deleting existing schedules for class {request.class_id}, section {getattr(request, 'section', None)}: {len(existing_schedules)} rows")
+                for existing in existing_schedules:
+                    self.db.delete(existing)
+                # Apply deletions before inserting new rows
+                self.db.flush()
+            
+            # Save teacher states for rollback
+            teacher_ids = set()
+            for entry in preview_data:
+                if entry.get('teacher_id'):
+                    teacher_ids.add(entry['teacher_id'])
+            teacher_states = self._save_teacher_states(list(teacher_ids))
+            
+            # Create Schedule objects from preview data
+            all_schedules = []
+            for entry in preview_data:
+                schedule_entry = Schedule()
+                schedule_entry.academic_year_id = request.academic_year_id
+                schedule_entry.session_type = request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type)
+                schedule_entry.class_id = entry['class_id']
+                schedule_entry.section = entry['section']
+                schedule_entry.day_of_week = entry['day_of_week']
+                schedule_entry.period_number = entry['period_number']
+                schedule_entry.subject_id = entry['subject_id']
+                schedule_entry.teacher_id = entry['teacher_id']
+                self.db.add(schedule_entry)
+                all_schedules.append(schedule_entry)
+            
+            # Update teacher availability
+            for schedule in all_schedules:
+                if schedule.teacher_id:
+                    teacher = self.db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
+                    if teacher:
+                        availability = teacher.availability or {}
+                        day_key = str(schedule.day_of_week)
+                        if day_key not in availability:
+                            availability[day_key] = []
+                        if schedule.period_number not in availability[day_key]:
+                            availability[day_key].append(schedule.period_number)
+                        teacher.availability = availability
+            
+            # Commit all schedule entries
+            self.db.commit()
+            
+            # Create generation history record
+            generation_time = time.time() - start_time
+            history = ScheduleGenerationHistory()
+            history.academic_year_id = request.academic_year_id
+            history.session_type = request.session_type.value if hasattr(request.session_type, 'value') else str(request.session_type)
+            history.generation_algorithm = "preview_save"
+            history.generation_parameters = {
+                "periods_per_day": request.periods_per_day,
+                "working_days": [str(d) for d in request.working_days]
+            }
+            history.constraints_count = 0
+            history.conflicts_resolved = 0
+            history.generation_time_seconds = int(generation_time)
+            history.quality_score = 85.0
+            history.status = "success"
+            self.db.add(history)
+            self.db.commit()
+            
+            return ScheduleGenerationResponse(
+                schedule_id=history.id if history.id else 0,
+                generation_status="saved",
+                total_periods_created=len(all_schedules),
+                total_assignments_created=len(all_schedules),
+                conflicts_detected=0,
+                warnings=[],
+                generation_time=generation_time,
+                summary={
+                    'classes_scheduled': len(classes),
+                    'total_periods': len(all_schedules),
+                    'preview_saved': True
+                }
+            )
+            
+        except Exception as e:
+            # Rollback on error
+            self.db.rollback()
+            if teacher_states:
+                self._restore_teacher_states(teacher_states)
+            
+            return ScheduleGenerationResponse(
+                schedule_id=0,
+                generation_status="failed",
+                total_periods_created=0,
+                total_assignments_created=0,
+                conflicts_detected=0,
+                warnings=[f"فشل حفظ الجدول: {str(e)}"],
+                generation_time=time.time() - start_time,
+                summary={
+                    'error': str(e),
+                    'rollback_performed': True
+                }
+            )
+    
+    def generate_schedules_for_all_classes(
+        self,
+        academic_year_id: int,
+        session_type: str,
+        periods_per_day: int = 6,
+        working_days: Optional[List[str]] = None
+    ) -> Dict[str, any]:
+        """
+        Generate schedules for all classes in batch
+        
+        Args:
+            academic_year_id: Academic year ID
+            session_type: morning or evening
+            periods_per_day: Number of periods per day (default 6)
+            working_days: List of working days (default Sunday-Thursday)
+            
+        Returns:
+            Dictionary with results for each class
+        """
+        import time
+        
+        start_time = time.time()
+        
+        if working_days is None:
+            working_days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+        
+        print("\n" + "="*80)
+        print("=== بدء إنشاء الجداول لجميع الصفوف ===")
+        print(f"السنة الدراسية: {academic_year_id}, الفترة: {session_type}")
+        print("="*80 + "\n")
+        
+        # Get all classes for this academic year and session
+        classes = self._get_classes_for_academic_year(academic_year_id, session_type, None)
+        
+        if not classes:
+            return {
+                'success': False,
+                'error': 'لا توجد صفوف للسنة الدراسية والفترة المحددة',
+                'results': {}
+            }
+        
+        print(f"عدد الصفوف المراد إنشاء جداول لها: {len(classes)}\n")
+        
+        # Step 1: Check data sufficiency for all classes
+        print("=== التحقق من كفاية البيانات لكل صف ===\n")
+        
+        sufficiency_results = {}
+        classes_can_proceed = []
+        
+        for cls in classes:
+            print(f"التحقق من الصف {cls.grade_number} {cls.grade_level}...")
+            
+            # Get subjects for this class
+            subjects = self.db.query(Subject).filter(
+                Subject.class_id == cls.id,
+                Subject.is_active == True
+            ).all()
+            
+            # Calculate total periods needed
+            total_periods = sum(getattr(s, 'weekly_hours', 0) for s in subjects)
+            
+            # Check if we have enough periods (30 = 6 periods × 5 days)
+            max_periods = periods_per_day * len(working_days)
+            has_enough_periods = total_periods >= max_periods * 0.8  # At least 80% utilization
+            
+            # Run validation
+            validation_result = self.validation_service.validate_schedule_prerequisites(
+                academic_year_id=academic_year_id,
+                class_id=cls.id,
+                session_type=session_type
+            )
+            
+            can_proceed = validation_result.get('can_proceed', False)
+            is_valid = validation_result.get('is_valid', False)
+            
+            sufficiency_results[cls.id] = {
+                'class_id': cls.id,
+                'class_name': f"الصف {cls.grade_number} {cls.grade_level}",
+                'total_subjects': len(subjects),
+                'total_periods': total_periods,
+                'max_periods': max_periods,
+                'utilization': round((total_periods / max_periods * 100) if max_periods > 0 else 0, 1),
+                'has_enough_periods': has_enough_periods,
+                'can_proceed': can_proceed,
+                'is_valid': is_valid,
+                'errors': validation_result.get('errors', []),
+                'warnings': validation_result.get('warnings', [])
+            }
+            
+            if can_proceed:
+                classes_can_proceed.append(cls)
+                print(f"  ✅ يمكن المتابعة ({total_periods} حصة من أصل {max_periods})")
+            else:
+                print(f"  ❌ لا يمكن المتابعة - {', '.join(validation_result.get('errors', ['خطأ غير معروف']))}")
+            
+            print()
+        
+        # Step 2: Generate schedules for classes that can proceed
+        print(f"\n=== إنشاء الجداول ({len(classes_can_proceed)} صف) ===\n")
+        
+        generation_results = {}
+        successful_count = 0
+        failed_count = 0
+        
+        for cls in classes_can_proceed:
+            print(f"\nإنشاء جدول الصف {cls.grade_number} {cls.grade_level}...")
+            
+            try:
+                # Create generation request
+                request = ScheduleGenerationRequest(
+                    academic_year_id=academic_year_id,
+                    session_type=session_type,
+                    class_id=cls.id,
+                    section='1',  # Default section
+                    periods_per_day=periods_per_day,
+                    working_days=working_days,
+                    name=f"جدول الصف {cls.grade_number} {cls.grade_level}",
+                    start_date=date.today(),
+                    end_date=date.today() + timedelta(days=180)
+                )
+                
+                # Use existing validation result
+                validation_result = self.validation_service.validate_schedule_prerequisites(
+                    academic_year_id=academic_year_id,
+                    class_id=cls.id,
+                    session_type=session_type
+                )
+                
+                # Generate schedule
+                response = self.generate_schedule(request, validation_results=validation_result)
+                
+                if response.generation_status == "completed":
+                    successful_count += 1
+                    print(f"  ✅ نجح - تم إنشاء {response.total_periods_created} حصة")
+                else:
+                    failed_count += 1
+                    print(f"  ❌ فشل - {', '.join(response.warnings)}")
+                
+                generation_results[cls.id] = {
+                    'status': response.generation_status,
+                    'schedule_id': response.schedule_id,
+                    'periods_created': response.total_periods_created,
+                    'warnings': response.warnings,
+                    'generation_time': response.generation_time
+                }
+                
+            except Exception as e:
+                failed_count += 1
+                print(f"  ❌ خطأ: {str(e)}")
+                generation_results[cls.id] = {
+                    'status': 'failed',
+                    'schedule_id': 0,
+                    'periods_created': 0,
+                    'error': str(e),
+                    'warnings': []
+                }
+        
+        # Step 3: Summary
+        total_time = time.time() - start_time
+        
+        print("\n" + "="*80)
+        print("=== ملخص إنشاء الجداول ===")
+        print(f"إجمالي الصفوف: {len(classes)}")
+        print(f"الصفوف التي يمكن المتابعة: {len(classes_can_proceed)}")
+        print(f"الجداول الناجحة: {successful_count}")
+        print(f"الجداول الفاشلة: {failed_count}")
+        print(f"الوقت الإجمالي: {round(total_time, 2)} ثانية")
+        print("="*80 + "\n")
+        
+        return {
+            'success': True,
+            'total_classes': len(classes),
+            'classes_can_proceed': len(classes_can_proceed),
+            'successful_count': successful_count,
+            'failed_count': failed_count,
+            'total_time': total_time,
+            'sufficiency_results': sufficiency_results,
+            'generation_results': generation_results
+        }
     
     def _create_base_schedule(self, request: ScheduleGenerationRequest) -> Schedule:
         """Create the base schedule record"""
@@ -562,7 +1781,7 @@ class ScheduleGenerationService:
         dt += timedelta(minutes=minutes)
         return dt.time()
     
-    def _get_classes_for_academic_year(self, academic_year_id: int, session_type: SessionType, class_id: Optional[int] = None) -> List[Class]:
+    def _get_classes_for_academic_year(self, academic_year_id: int, session_type, class_id: Optional[int] = None) -> List[Class]:
         """Get classes for the academic year and session"""
         try:
             # Build the query step by step
@@ -573,9 +1792,15 @@ class ScheduleGenerationService:
             # Apply filters
             filters = [Class.academic_year_id == academic_year_id]
             
+            # Handle both string and SessionType enum inputs
+            if session_type:
+                session_value = session_type.value if hasattr(session_type, 'value') else str(session_type)
+            else:
+                session_value = "both"
+            
             # Add session type filter
             filters.append(
-                or_(Class.session_type == (session_type.value if session_type else "both"), Class.session_type == "both")
+                or_(Class.session_type == session_value, Class.session_type == "both")
             )
             
             # Add class_id filter if specified
@@ -635,6 +1860,115 @@ class ScheduleGenerationService:
         print(f"Warning: No specific teacher found for subject {subject_id}, returning first available")
         # If no specific assignment found, return first available teacher
         return teachers[0] if teachers else None
+    
+    def _find_available_teacher_for_subject_and_slot(
+        self, 
+        subject_id: int, 
+        day: int, 
+        period: int, 
+        teachers: List[Teacher],
+        existing_schedules: List[Schedule]
+    ) -> Optional[Teacher]:
+        """
+        Find an available teacher for a subject at a specific day/period
+        Checks free_time_slots and existing schedule conflicts
+        
+        Args:
+            subject_id: Subject to teach
+            day: Day of week (1-7, Sunday=1)
+            period: Period number (1-6)
+            teachers: List of teachers to check
+            existing_schedules: Current schedule entries to check for conflicts
+            
+        Returns:
+            Teacher with most available slots, or None if none available
+        """
+        if not teachers:
+            print(f"Warning: No teachers available")
+            return None
+        
+        # Get teachers assigned to this subject
+        suitable_teachers = []
+        for teacher in teachers:
+            try:
+                assignment = self.db.query(TeacherAssignment).filter(
+                    and_(
+                        TeacherAssignment.teacher_id == teacher.id,
+                        TeacherAssignment.subject_id == subject_id
+                    )
+                ).first()
+                
+                if assignment:
+                    suitable_teachers.append(teacher)
+            except Exception as e:
+                print(f"Error checking teacher {teacher.id}: {e}")
+                continue
+        
+        if not suitable_teachers:
+            print(f"Warning: No teachers assigned to subject {subject_id}")
+            return None
+        
+        # Check availability for each suitable teacher
+        available_teachers = []
+        for teacher in suitable_teachers:
+            try:
+                # Get teacher's availability
+                availability = self.availability_service.get_teacher_availability(teacher.id)
+                slots = availability.get('slots', [])
+                
+                # Convert day/period to slot index (day is 1-based, period is 1-based)
+                # free_time_slots uses 0-based indexing: day 0-4 (Sunday-Thursday), period 0-5
+                slot_day = day - 1  # Convert 1-based to 0-based
+                slot_period = period - 1  # Convert 1-based to 0-based
+                slot_index = slot_day * 6 + slot_period
+                
+                # Check if slot index is valid
+                if slot_index < 0 or slot_index >= len(slots):
+                    print(f"Invalid slot index {slot_index} for teacher {teacher.full_name}")
+                    continue
+                
+                # Check if slot is free
+                slot = slots[slot_index]
+                is_free = slot.get('status') == 'free' or slot.get('is_free', False)
+                
+                print(f"DEBUG: Teacher {teacher.full_name}, day={day}, period={period}, slot_index={slot_index}")
+                print(f"  Slot data: {slot}")
+                print(f"  is_free: {is_free}")
+                
+                if not is_free:
+                    print(f"  -> Teacher {teacher.full_name} NOT FREE at day {day} period {period}")
+                    continue
+                
+                print(f"  -> Teacher {teacher.full_name} IS FREE at day {day} period {period}")
+                
+                # Check for conflicts in existing schedules
+                has_conflict = False
+                for schedule in existing_schedules:
+                    if (schedule.teacher_id == teacher.id and 
+                        schedule.day_of_week == day and 
+                        schedule.period_number == period):
+                        has_conflict = True
+                        print(f"Teacher {teacher.full_name} has conflict at day {day} period {period}")
+                        break
+                
+                if not has_conflict:
+                    available_teachers.append({
+                        'teacher': teacher,
+                        'available_slots': availability.get('total_free', 0)
+                    })
+                    print(f"Teacher {teacher.full_name} is available at day {day} period {period}")
+            except Exception as e:
+                print(f"Error checking availability for teacher {teacher.id}: {e}")
+                continue
+        
+        # Return teacher with most available slots
+        if available_teachers:
+            best_teacher = max(available_teachers, key=lambda x: x['available_slots'])
+            print(f"Selected teacher {best_teacher['teacher'].full_name} with {best_teacher['available_slots']} free slots")
+            return best_teacher['teacher']
+        
+        print(f"No available teachers found for subject {subject_id} at day {day} period {period}")
+        return None
     
     def _get_available_teachers(self, session_type: SessionType) -> List[Teacher]:
         """Get teachers available for the session"""
