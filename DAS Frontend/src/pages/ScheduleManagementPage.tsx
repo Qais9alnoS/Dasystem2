@@ -184,6 +184,10 @@ export const ScheduleManagementPage: React.FC = () => {
     markStepCompleted('validate');
   };
 
+  const handleValidationChange = (canProceed: boolean) => {
+    setStepStatus(prev => ({ ...prev, validate: canProceed }));
+  };
+
   const handleConstraintsComplete = () => {
     markStepCompleted('constraints');
   };
@@ -485,6 +489,7 @@ export const ScheduleManagementPage: React.FC = () => {
                 <ValidationFeedback
                   data={scheduleData}
                   onContinue={handleValidationComplete}
+                  onValidationChange={handleValidationChange}
                 />
               )}
 

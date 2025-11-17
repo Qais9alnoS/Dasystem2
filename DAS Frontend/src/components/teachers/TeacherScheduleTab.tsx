@@ -75,10 +75,20 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             if (teacher.free_time_slots.length > 0 && Array.isArray(teacher.free_time_slots[0])) {
                 // It's a 2D array, flatten it
                 const flatSlots = (teacher.free_time_slots as any).flat();
-                setFreeTimeSlots(flatSlots);
+                // Ensure status field exists
+                const slotsWithStatus = flatSlots.map((slot: FreeTimeSlot) => ({
+                    ...slot,
+                    status: slot.status || (slot.is_free ? 'free' : 'unavailable')
+                }));
+                setFreeTimeSlots(slotsWithStatus);
             } else if (teacher.free_time_slots.length === 30) {
                 // Already a proper 1D array with 30 slots (5 days x 6 periods)
-                setFreeTimeSlots(teacher.free_time_slots as FreeTimeSlot[]);
+                // Ensure status field exists on all slots
+                const slotsWithStatus = (teacher.free_time_slots as FreeTimeSlot[]).map(slot => ({
+                    ...slot,
+                    status: slot.status || (slot.is_free ? 'free' : 'unavailable')
+                }));
+                setFreeTimeSlots(slotsWithStatus);
             } else {
                 // Invalid data, reinitialize
                 initializeEmptyFreeTimeSlots();
@@ -97,8 +107,13 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
     const initializeEmptyFreeTimeSlots = () => {
         const slots: FreeTimeSlot[] = [];
         for (let day = 0; day < 5; day++) { // Sunday to Thursday (0-4)
-            for (let period = 1; period <= 6; period++) { // Periods 1-6
-                slots.push({ day: day, period: period, is_free: false });
+            for (let period = 0; period < 6; period++) { // Periods 0-5 (0-based indexing)
+                slots.push({ 
+                    day: day, 
+                    period: period, 
+                    is_free: false,
+                    status: 'unavailable'
+                });
             }
         }
         console.log('Initialized empty slots:', slots.length, 'slots');
@@ -119,7 +134,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 // Map schedule entries to occupied slots format
                 const occupied = scheduleData.map((entry: any) => ({
                     day: entry.day_of_week - 1, // Convert from 1-5 to 0-4
-                    period: entry.period_number,
+                    period: entry.period_number - 1, // Convert from 1-6 to 0-5
                     className: `${entry.grade_level}/${entry.grade_number}-${entry.section}`,
                     subject: entry.subject_name || 'مادة'
                 }));

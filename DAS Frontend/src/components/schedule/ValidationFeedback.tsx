@@ -25,6 +25,7 @@ interface ValidationFeedbackProps {
     sessionType: string;
   };
   onContinue: () => void;
+  onValidationChange?: (canProceed: boolean) => void;
 }
 
 interface SubjectDetail {
@@ -63,7 +64,7 @@ interface ValidationResult {
   subject_details: SubjectDetail[];
 }
 
-export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, onContinue }) => {
+export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, onContinue, onValidationChange }) => {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasSignaledReady, setHasSignaledReady] = useState(false);
@@ -98,14 +99,33 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
     }
   };
 
+  // Notify parent whenever validation status changes
+  useEffect(() => {
+    if (!validationResult) return;
+    
+    // Always notify parent of current validation status
+    if (onValidationChange) {
+      onValidationChange(validationResult.can_proceed);
+    }
+  }, [validationResult, onValidationChange]);
+
   // Automatically notify parent when validation allows proceeding
   useEffect(() => {
     if (!validationResult) return;
-    if (!validationResult.can_proceed) return;
-    if (hasSignaledReady) return;
-
-    onContinue();
-    setHasSignaledReady(true);
+    
+    // If validation fails, reset the ready state
+    if (!validationResult.can_proceed) {
+      if (hasSignaledReady) {
+        setHasSignaledReady(false);
+      }
+      return;
+    }
+    
+    // If validation passes and we haven't signaled yet, notify parent
+    if (!hasSignaledReady) {
+      onContinue();
+      setHasSignaledReady(true);
+    }
   }, [validationResult, hasSignaledReady, onContinue]);
 
   const getStatusIcon = (status: string) => {

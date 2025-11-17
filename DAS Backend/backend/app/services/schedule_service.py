@@ -451,7 +451,9 @@ class ScheduleGenerationService:
         periods_per_day: int
     ) -> List[List[Optional[Subject]]]:
         """
-        Distribute subjects evenly across the week to avoid clustering
+        Distribute subjects evenly across the week BASED ON TEACHER AVAILABILITY
+        
+        This ensures subjects are only placed in slots where their assigned teacher is actually free.
         
         Args:
             subjects: List of subjects with weekly_hours
@@ -462,6 +464,8 @@ class ScheduleGenerationService:
             2D list representing the week's schedule [day][period]
         """
         import random
+        import json
+        from app.models.teachers import Teacher, TeacherAssignment
         
         # Initialize empty schedule grid
         schedule_grid = [[None for _ in range(periods_per_day)] for _ in range(num_days)]
@@ -499,60 +503,109 @@ class ScheduleGenerationService:
         print(f"  - Total hours to assign: {total_hours}")
         print(f"  - Status: {'✅ Exact match' if total_hours == total_slots else '⚠️ Adjusted'}")
         
+        # Get teacher-subject assignments
+        teacher_assignments = self.db.query(TeacherAssignment).all()
+        subject_teacher_map = {}  # subject_id -> teacher_id
+        for assignment in teacher_assignments:
+            subject_teacher_map[assignment.subject_id] = assignment.teacher_id
+        
+        # Get all teachers with their availability
+        teachers = self.db.query(Teacher).filter(Teacher.is_active == True).all()
+        teacher_map = {t.id: t for t in teachers}
+        
+        # Build teacher availability matrix: (teacher_id, day, period) -> is_free
+        teacher_availability = {}
+        for teacher in teachers:
+            if not teacher.free_time_slots:
+                continue
+            
+            slots = json.loads(teacher.free_time_slots)
+            for slot in slots:
+                day = slot.get('day')  # 0-based
+                period = slot.get('period')  # 0-based
+                status = slot.get('status')
+                is_free = slot.get('is_free')
+                
+                # Teacher is available if status='free' AND is_free=True
+                if status == 'free' and is_free == True:
+                    teacher_availability[(teacher.id, day, period)] = True
+        
+        print(f"\n📋 Teacher-aware placement:")
+        print(f"  - Loaded {len(teacher_map)} teachers")
+        print(f"  - Total teacher-slot availability: {len(teacher_availability)}")
+        
+        # Calculate scarcity matrix: how many teachers are free at each (day, period)
+        scarcity_matrix = {}
+        for day in range(num_days):
+            for period in range(periods_per_day):
+                count = sum(1 for (t_id, d, p) in teacher_availability if d == day and p == period)
+                scarcity_matrix[(day, period)] = count
+        
+        print(f"  - Scarcity matrix calculated (will prioritize scarce slots)")
+        
         # Create a subject tracker for even distribution
         subject_counts_per_day = {subject.id: [0] * num_days for subject in subjects}
         
         # Shuffle to randomize initial distribution
         random.shuffle(subject_slots)
         
-        # Place subjects using even distribution algorithm
+        # Place subjects using TEACHER-AWARE algorithm
         for subject in subject_slots:
-            # Find day with least occurrences of this subject
             subject_id = subject.id
-            min_count = min(subject_counts_per_day[subject_id])
-            candidate_days = [d for d in range(num_days) if subject_counts_per_day[subject_id][d] == min_count]
             
-            # Try to place in one of the candidate days
-            placed = False
-            random.shuffle(candidate_days)  # Randomize to avoid bias
+            # Find the teacher assigned to this subject
+            teacher_id = subject_teacher_map.get(subject_id)
+            if not teacher_id:
+                print(f"⚠️  No teacher assigned to subject {subject.subject_name}")
+                continue
             
-            for day in candidate_days:
-                # Find first available period in this day
+            # Find all valid slots where:
+            # 1. Grid slot is empty
+            # 2. Teacher is actually free
+            valid_slots = []
+            for day in range(num_days):
                 for period in range(periods_per_day):
-                    if schedule_grid[day][period] is None:
-                        # Check if previous or next period has the same subject (avoid consecutive)
-                        prev_same = period > 0 and schedule_grid[day][period-1] is not None and schedule_grid[day][period-1].id == subject_id
-                        next_same = period < periods_per_day - 1 and schedule_grid[day][period+1] is not None and schedule_grid[day][period+1].id == subject_id
-                        
-                        # Allow maximum 2 consecutive periods of the same subject
-                        if period > 1:
-                            two_prev_same = (schedule_grid[day][period-2] is not None and 
-                                           schedule_grid[day][period-2].id == subject_id and
-                                           schedule_grid[day][period-1] is not None and 
-                                           schedule_grid[day][period-1].id == subject_id)
-                            if two_prev_same:
-                                continue
-                        
-                        # Place the subject
-                        schedule_grid[day][period] = subject
-                        subject_counts_per_day[subject_id][day] += 1
-                        placed = True
-                        break
-                
-                if placed:
-                    break
+                    # Check if grid slot is empty
+                    if schedule_grid[day][period] is not None:
+                        continue
+                    
+                    # Check if teacher is free at this day/period
+                    if (teacher_id, day, period) not in teacher_availability:
+                        continue
+                    
+                    # Calculate preference score (LOWER = BETTER):
+                    # 1. Scarcity bonus: Prefer slots where fewer teachers are available
+                    scarcity_count = scarcity_matrix.get((day, period), 1)
+                    scarcity_score = scarcity_count * 10  # Slots with 1 teacher = 10, 4 teachers = 40
+                    
+                    # 2. Even distribution: Prefer days with fewer instances of this subject
+                    day_count = subject_counts_per_day[subject_id][day]
+                    distribution_score = day_count * 5
+                    
+                    # 3. Avoid 3+ consecutive periods of same subject
+                    consecutive_penalty = 0
+                    if period > 1:
+                        if (schedule_grid[day][period-1] and schedule_grid[day][period-1].id == subject_id and
+                            schedule_grid[day][period-2] and schedule_grid[day][period-2].id == subject_id):
+                            consecutive_penalty = 100  # High penalty
+                    
+                    # Total score: prioritize scarce slots, then even distribution
+                    score = scarcity_score + distribution_score + consecutive_penalty
+                    valid_slots.append((day, period, score))
             
-            # If couldn't place with constraints, place anywhere available
-            if not placed:
-                for day in range(num_days):
-                    for period in range(periods_per_day):
-                        if schedule_grid[day][period] is None:
-                            schedule_grid[day][period] = subject
-                            subject_counts_per_day[subject_id][day] += 1
-                            placed = True
-                            break
-                    if placed:
-                        break
+            # Sort by score (lowest = best) and place in best valid slot
+            if valid_slots:
+                valid_slots.sort(key=lambda x: x[2])
+                best_day, best_period, _ = valid_slots[0]
+                
+                schedule_grid[best_day][best_period] = subject
+                subject_counts_per_day[subject_id][best_day] += 1
+                
+                # Update scarcity matrix: one teacher is now occupied at this slot
+                if (best_day, best_period) in scarcity_matrix:
+                    scarcity_matrix[(best_day, best_period)] -= 1
+            else:
+                print(f"⚠️  Could not find valid slot for {subject.subject_name} (teacher {teacher_map[teacher_id].full_name if teacher_id in teacher_map else 'unknown'})")
         
         return schedule_grid
     
@@ -692,7 +745,7 @@ class ScheduleGenerationService:
                     if teacher_id and subject_id:
                         valid_teacher_ids.add(teacher_id)
                         subject_teacher_map[subject_id] = teacher_id
-                        print(f"Validated teacher {detail.get('teacher_name')} for subject {detail.get('subject_name')}")
+                        # Skip printing Arabic names to avoid Windows console encoding errors
             
             # Filter the teachers list to only include validated teachers
             if valid_teacher_ids:
@@ -1190,6 +1243,11 @@ class ScheduleGenerationService:
                 schedule_entry.period_number = entry['period_number']
                 schedule_entry.subject_id = entry['subject_id']
                 schedule_entry.teacher_id = entry['teacher_id']
+                schedule_entry.name = request.name  # Add schedule name
+                schedule_entry.start_date = request.start_date  # Add start date
+                schedule_entry.end_date = request.end_date  # Add end date
+                schedule_entry.is_active = True  # Mark as active
+                schedule_entry.status = "published"  # Set status
                 self.db.add(schedule_entry)
                 all_schedules.append(schedule_entry)
             
@@ -1929,11 +1987,18 @@ class ScheduleGenerationService:
                 
                 # Check if slot is free
                 slot = slots[slot_index]
-                is_free = slot.get('status') == 'free' or slot.get('is_free', False)
+                # A slot is free ONLY if status is 'free' AND (is_free is True OR not present) AND no assignment
+                slot_status = slot.get('status', 'unavailable')
+                slot_is_free = slot.get('is_free', slot_status == 'free')
+                slot_has_assignment = slot.get('assignment') is not None
+                
+                # Teacher is available only if: status is 'free' AND is_free is True AND no assignment
+                is_free = (slot_status == 'free' and slot_is_free and not slot_has_assignment)
                 
                 print(f"DEBUG: Teacher {teacher.full_name}, day={day}, period={period}, slot_index={slot_index}")
                 print(f"  Slot data: {slot}")
-                print(f"  is_free: {is_free}")
+                print(f"  status={slot_status}, is_free={slot_is_free}, has_assignment={slot_has_assignment}")
+                print(f"  RESULT: is_free={is_free}")
                 
                 if not is_free:
                     print(f"  -> Teacher {teacher.full_name} NOT FREE at day {day} period {period}")

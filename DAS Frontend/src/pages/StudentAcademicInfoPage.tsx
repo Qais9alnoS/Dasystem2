@@ -39,11 +39,14 @@ const StudentAcademicInfoPage = () => {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
+  const [isTotalView, setIsTotalView] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState<string | null>(null);
   const [academicRecords, setAcademicRecords] = useState<Map<number, StudentAcademic>>(new Map());
   const [absenceRecords, setAbsenceRecords] = useState<Map<number, AbsenceData>>(new Map());
+  const [totalAcademicRecords, setTotalAcademicRecords] = useState<Map<number, StudentAcademic>>(new Map());
   const [grades, setGrades] = useState<Map<string, string>>(new Map());
   const [pendingGrades, setPendingGrades] = useState<Map<string, { studentId: number, subjectId: number, gradeType: GradeType, grade: number }>>(new Map());
   const [newAbsenceDate, setNewAbsenceDate] = useState<string>('');
@@ -147,7 +150,7 @@ const StudentAcademicInfoPage = () => {
       console.log('Academic Year ID:', academicYearId);
       console.log('Academic Year ID Type:', typeof academicYearId);
       
-      const response = await retryWithTokenRefresh(() => api.academic.getClasses(academicYearId));
+      const response = await retryWithTokenRefresh(() => api.academic.getClasses({ academic_year_id: academicYearId }));
       console.log('Raw API Response:', response);
       console.log('Response Type:', typeof response);
       console.log('Is Array:', Array.isArray(response));
@@ -233,9 +236,13 @@ const StudentAcademicInfoPage = () => {
 
   useEffect(() => {
     if (students.length > 0 && subjects.length > 0) {
-      loadAcademicRecords();
+      if (isTotalView) {
+        loadTotalAcademicRecords();
+      } else if (selectedSubject) {
+        loadAcademicRecords();
+      }
     }
-  }, [students, subjects]);
+  }, [students, subjects, selectedSubject, isTotalView]);
 
   // إظهار تحذير عند وجود تغييرات غير محفوظة
   useEffect(() => {
@@ -350,7 +357,7 @@ const StudentAcademicInfoPage = () => {
   };
 
   const loadAcademicRecords = async () => {
-    if (!selectedAcademicYear || students.length === 0) return;
+    if (!selectedAcademicYear || students.length === 0 || !selectedSubject) return;
 
     try {
       const records = new Map<number, StudentAcademic>();
@@ -365,10 +372,10 @@ const StudentAcademicInfoPage = () => {
             ? selectedAcademicYear 
             : parseInt(String(selectedAcademicYear), 10);
             
-          console.log(`📖 Loading academics for student ${student.id} (${student.full_name}), year:`, yearId);
+          console.log(`📖 Loading academics for student ${student.id} (${student.full_name}), year:`, yearId, 'subject:', selectedSubject);
           
           // API expects separate parameters, not an object
-          const response = await retryWithTokenRefresh(() => api.students.getAcademics(student.id, yearId));
+          const response = await retryWithTokenRefresh(() => api.students.getAcademics(student.id, yearId, selectedSubject));
 
           console.log(`✅ Raw response for student ${student.id}:`, response);
 
@@ -419,6 +426,116 @@ const StudentAcademicInfoPage = () => {
       setAbsenceRecords(absences);
     } catch (error) {
       console.error('❌ Failed to load academic records:', error);
+    }
+  };
+
+  const loadTotalAcademicRecords = async () => {
+    if (!selectedAcademicYear || students.length === 0 || subjects.length === 0) return;
+
+    try {
+      const totalRecords = new Map<number, StudentAcademic>();
+
+      console.log('🔄 Loading total academic records for', students.length, 'students across', subjects.length, 'subjects');
+
+      for (const student of students) {
+        try {
+          const yearId = typeof selectedAcademicYear === 'number' 
+            ? selectedAcademicYear 
+            : parseInt(String(selectedAcademicYear), 10);
+            
+          console.log(`📖 Loading total academics for student ${student.id} (${student.full_name})`);
+          
+          // Load all subjects for this student
+          const response = await retryWithTokenRefresh(() => api.students.getAcademics(student.id, yearId));
+
+          let studentRecords: any[] = [];
+          if (Array.isArray(response)) {
+            studentRecords = response;
+          } else if (response && typeof response === 'object') {
+            if ('data' in response && Array.isArray(response.data)) {
+              studentRecords = response.data;
+            } else if ('id' in response) {
+              studentRecords = [response];
+            }
+          }
+
+          console.log(`✅ Found ${studentRecords.length} subject records for student ${student.id}`);
+
+          // Calculate totals across all subjects
+          if (studentRecords.length > 0) {
+            const totalRecord: any = {
+              id: 0, // Dummy ID for total view
+              student_id: student.id,
+              academic_year_id: yearId,
+              subject_id: 0, // No specific subject
+              board_grades: 0,
+              recitation_grades: 0,
+              first_exam_grades: 0,
+              midterm_grades: 0,
+              second_exam_grades: 0,
+              final_exam_grades: 0,
+              behavior_grade: 0,
+              activity_grade: 0,
+              absence_days: 0,
+              absence_dates: '[]'
+            };
+
+            // Sum up all grades from all subjects
+            studentRecords.forEach((record: any) => {
+              totalRecord.board_grades += record.board_grades || 0;
+              totalRecord.recitation_grades += record.recitation_grades || 0;
+              totalRecord.first_exam_grades += record.first_exam_grades || 0;
+              totalRecord.midterm_grades += record.midterm_grades || 0;
+              totalRecord.second_exam_grades += record.second_exam_grades || 0;
+              totalRecord.final_exam_grades += record.final_exam_grades || 0;
+              totalRecord.behavior_grade += record.behavior_grade || 0;
+              totalRecord.activity_grade += record.activity_grade || 0;
+            });
+
+            totalRecords.set(student.id, totalRecord as StudentAcademic);
+
+            console.log(`💾 Total record for student ${student.id}:`, totalRecord);
+          } else {
+            console.log(`⚠️ No subject records found for student ${student.id}`);
+          }
+        } catch (error) {
+          console.log(`❌ Error loading total records for student ${student.id}:`, error);
+        }
+      }
+
+      console.log('✅ Final total academic records map:', totalRecords);
+      setTotalAcademicRecords(totalRecords);
+      
+      // Update max grades to be sum of all subjects' max grades
+      const totalMaxGrades: Record<GradeType, number> = {
+        board_grades: 0,
+        recitation_grades: 0,
+        first_exam_grades: 0,
+        midterm_grades: 0,
+        second_exam_grades: 0,
+        final_exam_grades: 0,
+        behavior_grade: 0,
+        activity_grade: 0,
+      };
+
+      // Sum max grades from all subjects
+      subjects.forEach(() => {
+        totalMaxGrades.board_grades += maxGrades.board_grades;
+        totalMaxGrades.recitation_grades += maxGrades.recitation_grades;
+        totalMaxGrades.first_exam_grades += maxGrades.first_exam_grades;
+        totalMaxGrades.midterm_grades += maxGrades.midterm_grades;
+        totalMaxGrades.second_exam_grades += maxGrades.second_exam_grades;
+        totalMaxGrades.final_exam_grades += maxGrades.final_exam_grades;
+        totalMaxGrades.behavior_grade += maxGrades.behavior_grade;
+        totalMaxGrades.activity_grade += maxGrades.activity_grade;
+      });
+
+      // Update max grades only in total view
+      if (isTotalView) {
+        setMaxGrades(totalMaxGrades);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load total academic records:', error);
     }
   };
 
@@ -734,7 +851,9 @@ const StudentAcademicInfoPage = () => {
   };
 
   const getGradeValue = (studentId: number, gradeType: GradeType): number | undefined => {
-    const record = academicRecords.get(studentId);
+    const record = isTotalView 
+      ? totalAcademicRecords.get(studentId) 
+      : academicRecords.get(studentId);
     const value = record ? record[gradeType] : undefined;
     // console.log(`Getting grade for student ${studentId}, type ${gradeType}:`, value);
     // إرجاع undefined بدلاً من null لعرض placeholder
@@ -742,7 +861,9 @@ const StudentAcademicInfoPage = () => {
   };
 
   const calculatePercentage = (studentId: number): number => {
-    const record = academicRecords.get(studentId);
+    const record = isTotalView 
+      ? totalAcademicRecords.get(studentId) 
+      : academicRecords.get(studentId);
     if (!record) return 0;
 
     let totalPercentages = 0;
@@ -793,7 +914,7 @@ const StudentAcademicInfoPage = () => {
   const saveMaxGrade = () => {
     if (editingGradeType) {
       // التحقق من صحة القيم
-      if (tempMaxGrade <= 0) {
+      if (!isTotalView && tempMaxGrade <= 0) {
         toast({
           title: 'خطأ',
           description: 'العلامة القصوى يجب أن تكون أكبر من صفر',
@@ -820,10 +941,14 @@ const StudentAcademicInfoPage = () => {
         return;
       }
       
-      setMaxGrades({
-        ...maxGrades,
-        [editingGradeType]: tempMaxGrade,
-      });
+      // في وضع المجموع، نحفظ فقط حد الرسوب وليس العلامة القصوى
+      if (!isTotalView) {
+        setMaxGrades({
+          ...maxGrades,
+          [editingGradeType]: tempMaxGrade,
+        });
+      }
+      
       setPassingThresholds({
         ...passingThresholds,
         [editingGradeType]: tempPassingThreshold,
@@ -835,7 +960,7 @@ const StudentAcademicInfoPage = () => {
       setEditingGradeType(null);
       toast({
         title: 'نجح',
-        description: 'تم تحديث العلامة القصوى وحد الرسوب',
+        description: isTotalView ? 'تم تحديث حد الرسوب' : 'تم تحديث العلامة القصوى وحد الرسوب',
       });
     }
   };
@@ -1089,23 +1214,25 @@ const StudentAcademicInfoPage = () => {
             <h1 className="text-3xl font-bold">معلومات دراسية - الطلاب</h1>
             <p className="text-muted-foreground mt-1">إدارة العلامات والحضور للطلاب</p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={saveAllPendingGrades}
-              disabled={isSaving || pendingGrades.size === 0}
-              className="rounded-xl gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-            </Button>
-          </div>
+          {!isTotalView && (
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={saveAllPendingGrades}
+                disabled={isSaving || pendingGrades.size === 0}
+                className="rounded-xl gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}
         <Card className="rounded-3xl overflow-hidden">
           <CardHeader>
-            <CardTitle>اختيار الصف والشعبة</CardTitle>
-            <CardDescription>اختر الصف والشعبة لعرض وإدارة العلامات</CardDescription>
+            <CardTitle>اختيار الصف والشعبة والمادة</CardTitle>
+            <CardDescription>اختر الصف والشعبة والمادة لعرض وإدارة العلامات، أو اضغط على "المجموع" لعرض مجموع جميع المواد</CardDescription>
           </CardHeader>
           <CardContent>
             {classesLoading ? (
@@ -1124,66 +1251,129 @@ const StudentAcademicInfoPage = () => {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>الصف</Label>
-                  <Select
-                    value={selectedClass?.toString()}
-                    onValueChange={(value) => {
-                      setSelectedClass(parseInt(value));
-                      setSelectedSection('');
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={classes.length === 0 ? "لا توجد صفوف متاحة" : "اختر الصف"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.length === 0 ? (
-                        <div className="px-4 py-2 text-sm text-muted-foreground">
-                          لا توجد صفوف مسجلة
-                        </div>
-                      ) : (
-                        classes.map((cls) => (
-                          <SelectItem key={cls.id} value={cls.id.toString()}>
-                            {`${cls.grade_level === 'primary' ? 'ابتدائي' : cls.grade_level === 'intermediate' ? 'إعدادي' : 'ثانوي'} - الصف ${cls.grade_number}`}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>الصف</Label>
+                    <Select
+                      value={selectedClass?.toString()}
+                      onValueChange={(value) => {
+                        setSelectedClass(parseInt(value));
+                        setSelectedSection('');
+                        setSelectedSubject(null);
+                        setIsTotalView(false);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={classes.length === 0 ? "لا توجد صفوف متاحة" : "اختر الصف"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.length === 0 ? (
+                          <div className="px-4 py-2 text-sm text-muted-foreground">
+                            لا توجد صفوف مسجلة
+                          </div>
+                        ) : (
+                          classes.map((cls) => (
+                            <SelectItem key={cls.id} value={cls.id.toString()}>
+                              {`${cls.grade_level === 'primary' ? 'ابتدائي' : cls.grade_level === 'intermediate' ? 'إعدادي' : 'ثانوي'} - الصف ${cls.grade_number}`}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>الشعبة</Label>
+                    <Select
+                      value={selectedSection}
+                      onValueChange={(value) => {
+                        setSelectedSection(value);
+                        setSelectedSubject(null);
+                        setIsTotalView(false);
+                      }}
+                      disabled={!selectedClass}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الشعبة" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getSectionOptions().map((section) => (
+                          <SelectItem key={section} value={section}>
+                            الشعبة {section}
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>الشعبة</Label>
-                  <Select
-                    value={selectedSection}
-                    onValueChange={setSelectedSection}
-                    disabled={!selectedClass}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر الشعبة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getSectionOptions().map((section) => (
-                        <SelectItem key={section} value={section}>
-                          الشعبة {section}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Subject selection or Total button */}
+                {selectedClass && selectedSection && (
+                  <div className="space-y-2">
+                    <Label>المادة</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={selectedSubject?.toString() || ''}
+                        onValueChange={(value) => {
+                          setSelectedSubject(parseInt(value));
+                          setIsTotalView(false);
+                        }}
+                        disabled={isTotalView || subjects.length === 0}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder={subjects.length === 0 ? "لا توجد مواد متاحة" : "اختر المادة"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subjects.length === 0 ? (
+                            <div className="px-4 py-2 text-sm text-muted-foreground">
+                              لا توجد مواد مسجلة لهذا الصف
+                            </div>
+                          ) : (
+                            subjects.map((subject) => (
+                              <SelectItem key={subject.id} value={subject.id.toString()}>
+                                {subject.subject_name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      
+                      <Button
+                        variant={isTotalView ? "default" : "outline"}
+                        onClick={() => {
+                          setIsTotalView(!isTotalView);
+                          if (!isTotalView) {
+                            setSelectedSubject(null);
+                          }
+                        }}
+                        className="rounded-xl px-6"
+                      >
+                        المجموع
+                      </Button>
+                    </div>
+                    {isTotalView && (
+                      <p className="text-sm text-muted-foreground">
+                        🔍 عرض مجموع العلامات من جميع المواد (للمشاهدة فقط)
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Students Grades Table */}
-        {selectedClass && selectedSection && students.length > 0 && (
+        {selectedClass && selectedSection && students.length > 0 && (isTotalView || selectedSubject) && (
           <Card className="rounded-3xl overflow-hidden">
             <CardHeader>
-              <CardTitle>العلامات والنشاط الدراسي</CardTitle>
+              <CardTitle>{isTotalView ? 'المجموع الكلي - للمشاهدة فقط' : 'العلامات والنشاط الدراسي'}</CardTitle>
               <CardDescription>
-                {students.length} طالب في هذه الشعبة - اضغط على أي عنوان لتعديل العلامة القصوى
+                {isTotalView 
+                  ? `${students.length} طالب في هذه الشعبة - عرض مجموع العلامات من جميع المواد` 
+                  : `${students.length} طالب في هذه الشعبة - اضغط على أي عنوان لتعديل العلامة القصوى`
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1205,7 +1395,7 @@ const StudentAcademicInfoPage = () => {
                         {gradeTypes.map((gradeType) => (
                           <th 
                             key={gradeType.value}
-                            className="px-2 py-3 text-center text-sm font-semibold cursor-pointer hover:bg-muted transition-colors group rounded-lg"
+                            className="px-2 py-3 text-center text-sm font-semibold rounded-lg cursor-pointer hover:bg-muted transition-colors group"
                             onClick={() => openMaxGradeDialog(gradeType.value as GradeType)}
                           >
                             <div className="flex flex-col items-center gap-1">
@@ -1220,8 +1410,10 @@ const StudentAcademicInfoPage = () => {
                         <th 
                           className="px-2 py-3 text-center text-sm font-semibold bg-primary/10 last:rounded-tl-2xl cursor-pointer hover:bg-primary/20 transition-colors group rounded-lg"
                           onClick={() => {
-                            setTempOverallPercentageThreshold(overallPercentageThreshold);
-                            setEditingOverallPercentage(true);
+                            if (!isTotalView) {
+                              setTempOverallPercentageThreshold(overallPercentageThreshold);
+                              setEditingOverallPercentage(true);
+                            }
                           }}
                         >
                           <div className="flex flex-col items-center gap-1">
@@ -1229,7 +1421,9 @@ const StudentAcademicInfoPage = () => {
                             <span className="text-xs text-muted-foreground">
                               (حد الرسوب: {overallPercentageThreshold}%)
                             </span>
-                            <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            {!isTotalView && (
+                              <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
                           </div>
                         </th>
                       </tr>
@@ -1263,30 +1457,36 @@ const StudentAcademicInfoPage = () => {
 
                               return (
                                 <td key={gradeType.value} className="px-2 py-3">
-                                  <ModernNumberInput
-                                    initialValue={currentGrade}
-                                    onSave={(grade) => {
-                                      // إضافة إلى العلامات المعلقة بدلاً من الحفظ مباشرة
-                                      const key = `${student.id}-${gt}`;
-                                      const newPending = new Map(pendingGrades);
-                                      newPending.set(key, {
-                                        studentId: student.id,
-                                        subjectId: defaultSubjectId,
-                                        gradeType: gt,
-                                        grade: grade,
-                                      });
-                                      setPendingGrades(newPending);
-                                      setHasUnsavedChanges(true);
-                                    }}
-                                    min={0}
-                                    max={maxGrade}
-                                    studentId={student.id}
-                                    gradeType={gt}
-                                    studentIndex={studentIndex}
-                                    gradeIndex={gradeIndex}
-                                    placeholder="--"
-                                    isFailing={failing}
-                                  />
+                                  {isTotalView ? (
+                                    <div className={`w-24 text-center py-2 px-3 rounded-lg bg-muted/30 ${failing ? 'text-red-800 dark:text-red-400 font-semibold' : ''}`}>
+                                      {currentGrade !== undefined ? (Number.isInteger(currentGrade) ? Math.round(currentGrade) : currentGrade.toFixed(1)) : '--'}
+                                    </div>
+                                  ) : (
+                                    <ModernNumberInput
+                                      initialValue={currentGrade}
+                                      onSave={(grade) => {
+                                        // إضافة إلى العلامات المعلقة بدلاً من الحفظ مباشرة
+                                        const key = `${student.id}-${gt}`;
+                                        const newPending = new Map(pendingGrades);
+                                        newPending.set(key, {
+                                          studentId: student.id,
+                                          subjectId: defaultSubjectId,
+                                          gradeType: gt,
+                                          grade: grade,
+                                        });
+                                        setPendingGrades(newPending);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                      min={0}
+                                      max={maxGrade}
+                                      studentId={student.id}
+                                      gradeType={gt}
+                                      studentIndex={studentIndex}
+                                      gradeIndex={gradeIndex}
+                                      placeholder="--"
+                                      isFailing={failing}
+                                    />
+                                  )}
                                 </td>
                               );
                             })}
@@ -1431,32 +1631,48 @@ const StudentAcademicInfoPage = () => {
         <Dialog open={editingGradeType !== null} onOpenChange={() => setEditingGradeType(null)}>
           <DialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
             <DialogHeader>
-              <DialogTitle>تعديل العلامة القصوى وحد الرسوب</DialogTitle>
+              <DialogTitle>{isTotalView ? 'تعديل حد الرسوب' : 'تعديل العلامة القصوى وحد الرسوب'}</DialogTitle>
               <DialogDescription>
-                قم بتعديل العلامة القصوى وحد الرسوب لـ{' '}
-                {editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label}
+                {isTotalView 
+                  ? `قم بتعديل حد الرسوب لـ ${editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label} (العلامة القصوى محسوبة تلقائياً من مجموع المواد)`
+                  : `قم بتعديل العلامة القصوى وحد الرسوب لـ ${editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label}`
+                }
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="maxGrade">العلامة القصوى</Label>
-                <Input
-                  id="maxGrade"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  value={tempMaxGrade}
-                  onChange={(e) => {
-                    const newMax = parseInt(e.target.value) || 100;
-                    setTempMaxGrade(newMax);
-                    // إذا كان الحد المطلق أكبر من العلامة القصوى الجديدة، نحدّثه
-                    if (tempThresholdType === 'absolute' && tempPassingThreshold > newMax) {
-                      setTempPassingThreshold(newMax);
-                    }
-                  }}
-                  className="text-center text-lg rounded-2xl"
-                />
-              </div>
+              {!isTotalView && (
+                <div className="space-y-2">
+                  <Label htmlFor="maxGrade">العلامة القصوى</Label>
+                  <Input
+                    id="maxGrade"
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={tempMaxGrade}
+                    onChange={(e) => {
+                      const newMax = parseInt(e.target.value) || 100;
+                      setTempMaxGrade(newMax);
+                      // إذا كان الحد المطلق أكبر من العلامة القصوى الجديدة، نحدّثه
+                      if (tempThresholdType === 'absolute' && tempPassingThreshold > newMax) {
+                        setTempPassingThreshold(newMax);
+                      }
+                    }}
+                    className="text-center text-lg rounded-2xl"
+                  />
+                </div>
+              )}
+              
+              {isTotalView && (
+                <div className="space-y-2">
+                  <Label>العلامة القصوى (محسوبة تلقائياً)</Label>
+                  <div className="text-center text-lg py-3 px-4 bg-muted/50 rounded-2xl font-bold text-primary">
+                    {tempMaxGrade}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    مجموع العلامات القصوى من جميع المواد
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label htmlFor="thresholdType">نوع حد الرسوب</Label>

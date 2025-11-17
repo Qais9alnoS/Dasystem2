@@ -212,7 +212,7 @@ class ValidationService:
             
             # Check each day and period to find if teacher is available
             # This is a simplified check - in reality we'd need to know the exact schedule requirements
-            # For now, just check if teacher has ANY free slots
+            # For now, just check if teacher has ANY free slots (using corrected AND logic)
             if teacher_free_slots["total_free"] == 0:
                 missing_timeslots.append("جميع الأوقات محجوزة")
             
@@ -244,6 +244,21 @@ class ValidationService:
             errors.append(f"المواد التالية ليس لها معلم معين: {', '.join(unassigned_subjects)}")
             missing_items.extend(unassigned_subjects)
             suggestions.append("قم بتعيين معلمين لجميع المواد في صفحة إدارة المعلمين")
+        
+        # Check for teachers without any free time slots configured
+        teachers_without_freetime = []
+        for teacher_id in teacher_info_map.keys():
+            teacher = teacher_info_map[teacher_id]
+            teacher_free_slots = self.availability_service.get_teacher_availability(teacher_id)
+            if teacher_free_slots["total_free"] == 0:
+                teachers_without_freetime.append(teacher.full_name)
+        
+        if teachers_without_freetime:
+            errors.append(
+                f"⚠️ المعلمون التالية لم يتم تحديد أوقات الفراغ لهم: {', '.join(teachers_without_freetime)}. "
+                f"يجب تحديد أوقات الفراغ لجميع المعلمين قبل إنشاء الجدول."
+            )
+            suggestions.append("قم بتحديد أوقات الفراغ للمعلمين في صفحة إدارة المعلمين → تبويب 'أوقات الفراغ'")
         
         if insufficient_availability:
             for item in insufficient_availability:
@@ -298,7 +313,13 @@ class ValidationService:
                     
                     if slot_index < len(teacher_avail["slots"]):
                         slot = teacher_avail["slots"][slot_index]
-                        if slot.get("status") == "free" or slot.get("is_free", False):
+                        # A slot is free only if: status='free' AND is_free=True AND no assignment
+                        is_slot_free = (
+                            slot.get("status") == "free" 
+                            and slot.get("is_free", slot.get("status") == "free")
+                            and not slot.get("assignment")
+                        )
+                        if is_slot_free:
                             has_free_teacher = True
                             break
                 
@@ -319,11 +340,108 @@ class ValidationService:
                 )
             suggestions.append("قم بتحديث أوقات الفراغ للمعلمين لتغطية جميع الفترات المطلوبة")
         
+        # NEW: Advanced validation checks for slot timing and coverage optimization
+        slot_timing_warnings = []
+        coverage_warnings = []
+        
+        # Check for timing conflicts: slots where multiple teachers are free vs. single-teacher slots
+        import json
+        slot_distribution = {}  # (day, period) -> list of teacher_ids
+        
+        for teacher_id in teacher_info_map.keys():
+            teacher = teacher_info_map[teacher_id]
+            if not teacher.free_time_slots:
+                continue
+            
+            try:
+                slots = json.loads(teacher.free_time_slots)
+                for slot in slots:
+                    if slot.get('status') == 'free' and slot.get('is_free') == True:
+                        day = slot.get('day')
+                        period = slot.get('period')
+                        key = (day, period)
+                        if key not in slot_distribution:
+                            slot_distribution[key] = []
+                        slot_distribution[key].append(teacher_id)
+            except:
+                pass
+        
+        # Analyze distribution
+        single_teacher_slots = sum(1 for teachers in slot_distribution.values() if len(teachers) == 1)
+        multiple_teacher_slots = sum(1 for teachers in slot_distribution.values() if len(teachers) > 1)
+        
+        # CRITICAL CHECK: Detect guaranteed empty slots
+        # When a teacher is the ONLY one available in certain periods but has more free slots than subjects need,
+        # those excess "exclusive" slots will definitely be empty
+        guaranteed_empty_slots = []
+        has_guaranteed_empties = False
+        day_names_ar = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+        
+        for teacher_id, teacher_cache in teacher_availability_cache.items():
+            teacher = teacher_info_map[teacher_id]
+            total_required = teacher_cache["total_required"]
+            available_slots = teacher_cache["available_slots"]
+            
+            # If teacher has excess free slots
+            if available_slots > total_required:
+                # Count how many of their free slots are "exclusive" (only this teacher is free)
+                exclusive_slots = []
+                for (day, period), teacher_list in slot_distribution.items():
+                    if len(teacher_list) == 1 and teacher_list[0] == teacher_id:
+                        exclusive_slots.append((day, period))
+                
+                # If exclusive slots > required periods, we'll have guaranteed empties
+                excess_exclusive = len(exclusive_slots) - total_required
+                if excess_exclusive > 0:
+                    has_guaranteed_empties = True
+                    # List the specific periods that will be empty
+                    for i, (day, period) in enumerate(exclusive_slots[total_required:]):
+                        if i < 3:  # Show first 3 examples
+                            guaranteed_empty_slots.append(f"{day_names_ar[day]} - الحصة {period + 1}")
+                    
+                    errors.append(
+                        f"⚠️ خطر: المعلم {teacher.full_name} لديه {excess_exclusive} فترة حصرية زائدة "
+                        f"(فترات لا يتوفر فيها معلم آخر). هذا سيؤدي حتماً إلى {excess_exclusive} فترة فارغة في الجدول!"
+                    )
+                    if guaranteed_empty_slots:
+                        errors.append(f"   الفترات الفارغة المتوقعة: {', '.join(guaranteed_empty_slots[:3])}")
+                    suggestions.append(
+                        f"الحل: إما تقليل أوقات فراغ {teacher.full_name} أو جعل معلمين آخرين متاحين في نفس الفترات"
+                    )
+        
+        if single_teacher_slots > 0 and multiple_teacher_slots > single_teacher_slots:
+            coverage_warnings.append(
+                f"تحذير: يوجد {multiple_teacher_slots} فترة مشتركة (عدة معلمين متاحين) مقابل {single_teacher_slots} فترة فردية. "
+                f"قد يؤدي هذا إلى فراغات في الجدول."
+            )
+            suggestions.append(
+                "نصيحة: حاول توزيع أوقات الفراغ للمعلمين بحيث تكون متباعدة لتغطية أكبر عدد من الفترات"
+            )
+        
+        # Check for teachers with excessive free slots vs. requirements
+        for teacher_id, teacher_cache in teacher_availability_cache.items():
+            teacher = teacher_info_map[teacher_id]
+            total_required = teacher_cache["total_required"]
+            available_slots = teacher_cache["available_slots"]
+            
+            # If teacher has significantly more free slots than needed
+            if available_slots > total_required + 5:
+                excess = available_slots - total_required
+                coverage_warnings.append(
+                    f"ملاحظة: المعلم {teacher.full_name} لديه {excess} فترة إضافية فوق المطلوب. "
+                    f"يمكن تخصيص مواد إضافية أو تقليل أوقات الفراغ."
+                )
+        
+        # Add coverage warnings to main warnings list
+        warnings.extend(coverage_warnings)
+        
         # Determine if we can proceed
         can_proceed = (
             len(unassigned_subjects) == 0 and 
             total_periods_needed >= required_periods and
-            len(periods_without_teachers) == 0  # NEW: Must have teachers for all periods
+            len(periods_without_teachers) == 0 and  # Must have teachers for all periods
+            len(teachers_without_freetime) == 0 and  # All teachers must have free time configured
+            not has_guaranteed_empties  # CRITICAL: Block if guaranteed empty slots detected
         )
         is_valid = can_proceed and len(insufficient_availability) == 0
         

@@ -46,7 +46,13 @@ class TeacherAvailabilityService:
             slots_data = self._initialize_empty_slots()
         
         # Count statuses
-        total_free = sum(1 for s in slots_data if s.get("status") == "free" or s.get("is_free", False))
+        # A slot is truly free only if: status='free' AND is_free=True AND no assignment exists
+        total_free = sum(
+            1 for s in slots_data 
+            if s.get("status") == "free" 
+            and s.get("is_free", s.get("status") == "free") 
+            and not s.get("assignment")
+        )
         total_assigned = sum(1 for s in slots_data if s.get("status") == "assigned")
         total_unavailable = sum(1 for s in slots_data if s.get("status") == "unavailable")
         
@@ -368,8 +374,8 @@ class TeacherAvailabilityService:
                 slots.append({
                     "day": day,
                     "period": period,
-                    "status": "free",
-                    "is_free": True,
+                    "status": "unavailable",  # Changed from "free" to "unavailable"
+                    "is_free": False,  # Changed from True to False
                     "assignment": None
                 })
         return slots

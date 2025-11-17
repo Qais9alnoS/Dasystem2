@@ -317,7 +317,16 @@ export interface Experience {
 export interface FreeTimeSlot {
     day: number; // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
     period: number; // 1-6 for periods
-    is_free: boolean; // true = free/available (blue), false = busy (gray)
+    is_free: boolean; // true = free/available (green), false = unavailable (gray)
+    status?: 'free' | 'assigned' | 'unavailable'; // Backend uses this field
+    assignment?: {
+        subject_id?: number;
+        subject_name?: string;
+        class_id?: number;
+        class_name?: string;
+        section?: string;
+        schedule_id?: number;
+    };
 }
 
 export interface TeacherAssignment {
