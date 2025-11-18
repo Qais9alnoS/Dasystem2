@@ -257,8 +257,8 @@ const TeacherManagementPage = () => {
                                         <div className="flex items-center gap-2">
                                             <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                                                 selectedTeacher.session_type === 'morning' 
-                                                    ? 'bg-amber-100 text-amber-800' 
-                                                    : 'bg-blue-100 text-blue-800'
+                                                    ? 'bg-accent/20 text-accent-foreground' 
+                                                    : 'bg-primary/20 text-primary'
                                             }`}>
                                                 {selectedTeacher.session_type === 'morning' ? 'صباحي' : 'مسائي'}
                                             </div>

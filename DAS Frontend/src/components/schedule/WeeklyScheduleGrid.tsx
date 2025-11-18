@@ -227,11 +227,11 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, day, period)}
           className={cn(
-            "h-full min-h-[80px] p-2 border border-dashed border-gray-200 rounded-lg bg-gray-50/50 hover:bg-gray-100/50 transition-colors flex items-center justify-center",
-            isDragOver && !isValidDrop && "bg-red-100 border-red-400 animate-pulse"
+            "h-full min-h-[90px] p-3 border border-dashed border-gray-200 dark:border-slate-600/50 rounded-lg bg-gray-50 dark:bg-slate-800/30 hover:bg-gray-100 dark:hover:bg-slate-700/40 transition-colors flex items-center justify-center",
+            isDragOver && !isValidDrop && "bg-red-100 dark:bg-red-900/40 border-red-400 dark:border-red-600 animate-pulse"
           )}
         >
-          <span className="text-xs text-gray-400">فارغ</span>
+          <span className="text-xs text-gray-400 dark:text-slate-400">فارغ</span>
         </div>
       );
     }
@@ -247,15 +247,14 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, day, period)}
         className={cn(
-          "h-full min-h-[80px] p-3 rounded-xl transition-all duration-200 cursor-move group relative",
-          "shadow-sm hover:shadow-md",
+          "h-full min-h-[90px] p-3 rounded-lg transition-all duration-200 cursor-move group relative",
           hasConflict
-            ? "bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/40 border-2 border-red-300 dark:border-red-700"
-            : "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/40 border border-blue-200 dark:border-blue-700",
-          !readOnly && "hover:scale-[1.02]",
+            ? "bg-red-50 dark:bg-red-950 border-2 border-red-300 dark:border-red-700"
+            : "bg-blue-50 dark:bg-slate-800/90 border border-blue-200 dark:border-slate-600/50",
+          !readOnly && "hover:opacity-80 active:scale-95",
           isDragging && "opacity-50 scale-95",
-          isDragOver && isValidDrop && "animate-wiggle border-green-500 dark:border-green-400 border-4 bg-green-100 dark:bg-green-900/40",
-          isDragOver && !isValidDrop && "border-red-500 dark:border-red-400 border-4 bg-red-100 dark:bg-red-900/40"
+          isDragOver && isValidDrop && "animate-wiggle border-green-500 dark:border-emerald-400 border-2 bg-green-50 dark:bg-slate-700/80",
+          isDragOver && !isValidDrop && "border-red-500 dark:border-red-400 border-2 bg-red-50 dark:bg-slate-800"
         )}
         style={{
           animation: isDragOver && isValidDrop ? 'wiggle 0.5s ease-in-out infinite' : undefined
@@ -273,13 +272,13 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
         {/* Content */}
         <div className="space-y-2">
           {/* Subject Name */}
-          <div className="font-semibold text-sm text-gray-900 line-clamp-1">
+          <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 line-clamp-1">
             {assignment.subject_name}
           </div>
 
           {/* Teacher Name */}
           {viewMode === 'detailed' && (
-            <div className="flex items-center gap-1 text-xs text-gray-600">
+            <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
               <User className="h-3 w-3 flex-shrink-0" />
               <span className="line-clamp-1">{assignment.teacher_name}</span>
             </div>
@@ -287,7 +286,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
 
           {/* Room (if exists) */}
           {viewMode === 'detailed' && assignment.room && (
-            <div className="flex items-center gap-1 text-xs text-gray-600">
+            <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
               <MapPin className="h-3 w-3 flex-shrink-0" />
               <span>{assignment.room}</span>
             </div>
@@ -328,8 +327,8 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-gradient-to-r from-blue-600 to-blue-700">
-                  <th className="p-3 text-white font-semibold text-sm border-l border-blue-500 min-w-[100px]">
+                <tr className="bg-blue-500 dark:bg-gradient-to-r dark:from-slate-800 dark:to-slate-700">
+                  <th className="p-3 text-white font-semibold text-sm border-b border-gray-200 dark:border-slate-600/50 min-w-[100px]">
                     <div className="flex items-center justify-center gap-2">
                       <Calendar className="h-4 w-4" />
                       اليوم
@@ -338,7 +337,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
                   {PERIODS.map((period) => (
                     <th
                       key={period.number}
-                      className="p-3 text-white font-semibold text-sm border-l border-blue-500 last:border-l-0"
+                      className="p-3 text-white font-semibold text-sm border-b border-gray-200 dark:border-slate-600/50 last:border-l-0"
                     >
                       <div className="text-center">
                         <div>الحصة {period.number}</div>
@@ -354,15 +353,12 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
                 {DAYS.map((day, dayIndex) => (
                   <tr
                     key={day.value}
-                    className={cn(
-                      "border-b border-gray-200",
-                      dayIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                    )}
+                    className="border-b border-gray-200 dark:border-slate-700/50 last:border-b-0"
                   >
                     {/* Day Column */}
-                    <td className="p-3 border-l border-gray-200 bg-gray-100">
+                    <td className="p-3 border-l border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
                       <div className="text-center">
-                        <div className="font-semibold text-gray-900">
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
                           {day.label}
                         </div>
                       </div>
@@ -372,7 +368,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
                     {PERIODS.map((period) => (
                       <td
                         key={period.number}
-                        className="p-2 border-l border-gray-200 last:border-l-0"
+                        className="p-2.5 border-l border-gray-200 dark:border-slate-700/50 last:border-l-0 dark:bg-slate-900/20"
                       >
                         {renderCell(day.value, period.number)}
                       </td>
@@ -386,32 +382,32 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
       </Card>
 
       {/* Statistics Footer */}
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-blue-200 dark:border-blue-800">
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-800 border-blue-200 dark:border-slate-700/50">
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+              <div className="text-2xl font-bold text-blue-900 dark:text-gray-100">
                 {assignments.length}
               </div>
-              <div className="text-xs text-blue-600 dark:text-blue-300">إجمالي الحصص</div>
+              <div className="text-xs text-blue-600 dark:text-gray-400">إجمالي الحصص</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-green-900 dark:text-green-100">
+              <div className="text-2xl font-bold text-green-900 dark:text-gray-100">
                 {assignments.filter(a => !a.has_conflict).length}
               </div>
-              <div className="text-xs text-green-600 dark:text-green-300">حصص صحيحة</div>
+              <div className="text-xs text-green-600 dark:text-gray-400">حصص صحيحة</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-red-900 dark:text-red-100">
+              <div className="text-2xl font-bold text-red-900 dark:text-gray-100">
                 {assignments.filter(a => a.has_conflict).length}
               </div>
-              <div className="text-xs text-red-600 dark:text-red-300">تعارضات</div>
+              <div className="text-xs text-red-600 dark:text-gray-400">تعارضات</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+              <div className="text-2xl font-bold text-purple-900 dark:text-gray-100">
                 {new Set(assignments.map(a => a.teacher_id)).size}
               </div>
-              <div className="text-xs text-purple-600 dark:text-purple-300">معلمين</div>
+              <div className="text-xs text-purple-600 dark:text-gray-400">معلمين</div>
             </div>
           </div>
         </CardContent>

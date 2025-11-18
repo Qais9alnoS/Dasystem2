@@ -218,11 +218,11 @@ const SchoolInfoManagementPage = () => {
         </div>
 
         {!selectedAcademicYear && (
-          <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+          <Card className="border-accent bg-accent/10 dark:bg-accent/5">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <AlertTriangle className="h-6 w-6 text-yellow-600" />
-                <p className="text-yellow-800 dark:text-yellow-200">
+                <AlertTriangle className="h-6 w-6 text-accent" />
+                <p className="text-accent-foreground">
                   يرجى اختيار سنة دراسية من القائمة الجانبية لعرض المعلومات
                 </p>
               </div>
@@ -238,7 +238,7 @@ const SchoolInfoManagementPage = () => {
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">عدد الطلاب الكلي</CardTitle>
-                  <Users className="h-4 w-4 text-blue-500" />
+                  <Users className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{students.length}</div>
@@ -280,7 +280,7 @@ const SchoolInfoManagementPage = () => {
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">عدد الشُعَب</CardTitle>
-                  <Layers className="h-4 w-4 text-orange-500" />
+                  <Layers className="h-4 w-4 text-secondary" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{totalSections}</div>

@@ -47,7 +47,7 @@ export default function DailyPage() {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-gray-600">جاري التحميل...</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default function DailyPage() {
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
       {/* Header */}
-      <Card className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+      <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
         <CardHeader>
           <CardTitle className="text-2xl flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -90,7 +90,7 @@ export default function DailyPage() {
               onClick={() => setSessionType('morning')}
               className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
                 sessionType === 'morning'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
@@ -100,7 +100,7 @@ export default function DailyPage() {
               onClick={() => setSessionType('evening')}
               className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
                 sessionType === 'evening'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >

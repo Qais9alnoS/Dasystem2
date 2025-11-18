@@ -4,18 +4,18 @@
 
 /* ===== CSS Custom Properties ===== */
 :root {
-  /* ===== DAS School Color Palette ===== */
-  --color-primary: 220 90% 50%; /* Blue */
-  --color-primary-light: 220 90% 60%;
-  --color-primary-dark: 220 90% 40%;
+  /* ===== DAS School Color Palette - Modern iOS-friendly shades ===== */
+  --color-primary: 211 86% 56%; /* Softer iOS-style blue */
+  --color-primary-light: 211 86% 64%;
+  --color-primary-dark: 211 86% 48%;
 
-  --color-secondary: 25 100% 65%; /* Orange */
-  --color-secondary-light: 25 100% 75%;
-  --color-secondary-dark: 25 100% 55%;
+  --color-secondary: 14 90% 62%; /* Balanced coral-orange */
+  --color-secondary-light: 14 90% 70%;
+  --color-secondary-dark: 14 90% 54%;
 
-  --color-accent: 45 100% 65%; /* Yellow */
-  --color-accent-light: 45 100% 75%;
-  --color-accent-dark: 45 100% 55%;
+  --color-accent: 38 92% 58%; /* Warm amber-yellow */
+  --color-accent-light: 38 92% 66%;
+  --color-accent-dark: 38 92% 50%;
 
   --color-success: 142 76% 36%;
   --color-warning: var(--color-secondary);
