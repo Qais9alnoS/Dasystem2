@@ -384,7 +384,7 @@ class TeacherAvailabilityService:
         """Get display name for a class"""
         grade_level_ar = {
             "primary": "ابتدائي",
-            "intermediate": "متوسط",
+            "intermediate": "إعدادي",
             "secondary": "ثانوي"
         }
         

@@ -53,7 +53,7 @@ def setup_base_data():
             ("primary", 5, 2),
             ("primary", 6, 2),
             
-            # Intermediate (متوسط) - 3 grades
+            # Intermediate (إعدادي) - 3 grades
             ("intermediate", 1, 2),  # Grade 1, 2 sections
             ("intermediate", 2, 2),
             ("intermediate", 3, 2),
@@ -90,7 +90,7 @@ def setup_base_data():
                 # Display in Arabic
                 level_ar = {
                     "primary": "ابتدائي",
-                    "intermediate": "متوسط",
+                    "intermediate": "إعدادي",
                     "secondary": "ثانوي"
                 }
                 print(f"   ✅ {level_ar[grade_level]} - الصف {grade_number} ({section_count} شعب)")

@@ -67,7 +67,7 @@ def verify_data():
                 Student.session_type == "morning",
                 Student.grade_level == grade_level
             ).count()
-            level_ar = {"primary": "ابتدائي", "intermediate": "متوسط", "secondary": "ثانوي"}
+            level_ar = {"primary": "ابتدائي", "intermediate": "إعدادي", "secondary": "ثانوي"}
             print(f"     - {level_ar[grade_level]}: {count} طالب")
         
         # Student Finances

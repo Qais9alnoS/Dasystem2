@@ -7,7 +7,6 @@ from decimal import Decimal
 
 class HolidayBase(BaseModel):
     holiday_date: date
-    session_type: str = "morning"  # morning, evening
     holiday_name: Optional[str] = None
     is_for_students: bool = True
     is_for_teachers: bool = False
@@ -15,6 +14,7 @@ class HolidayBase(BaseModel):
 
 class HolidayCreate(HolidayBase):
     academic_year_id: int
+    session_type: str = "morning"  # morning, evening
 
 class HolidayUpdate(BaseModel):
     holiday_name: Optional[str] = None

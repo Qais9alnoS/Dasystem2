@@ -45,6 +45,8 @@ const ACTION_TYPES = {
 };
 
 export function StudentActions({ academicYearId, sessionType, selectedDate }: StudentActionsProps) {
+  const [classes, setClasses] = useState<any[]>([]);
+  const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [students, setStudents] = useState<Student[]>([]);
@@ -65,18 +67,52 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
   const [whatsappLink, setWhatsappLink] = useState('');
 
   useEffect(() => {
+    fetchClasses();
+  }, [academicYearId, sessionType]);
+
+  useEffect(() => {
     if (selectedClassId && selectedSection) {
       fetchStudents();
       fetchSubjects();
     }
   }, [selectedClassId, selectedSection]);
 
-  const fetchStudents = async () => {
+  const fetchClasses = async () => {
     try {
+      const response = await api.get(`/academic/classes?academic_year_id=${academicYearId}&session_type=${sessionType}`);
+      setClasses(response.data as any[]);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    }
+  };
+
+  const getAvailableGradeLevels = (): string[] => {
+    const levels = new Set(classes.map((c: any) => c.grade_level));
+    return Array.from(levels).sort();
+  };
+
+  const getFilteredClasses = (): any[] => {
+    if (!selectedGradeLevel) return classes;
+    return classes.filter((c: any) => c.grade_level === selectedGradeLevel);
+  };
+
+  const fetchStudents = async () => {
+    if (!selectedClassId || !selectedSection) {
+      console.log('Missing classId or section');
+      return;
+    }
+    
+    try {
+      console.log('Fetching students for actions:', { 
+        classId: selectedClassId, 
+        section: selectedSection
+      });
       const response = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}`);
+      console.log('Students response:', response.data);
       setStudents(response.data as Student[]);
     } catch (error) {
       console.error('Error fetching students:', error);
+      alert('حدث خطأ أثناء جلب بيانات الطلاب');
     }
   };
 
@@ -132,8 +168,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
   };
 
   const handleGenerateWhatsAppMessage = async () => {
-    if (!selectedClassId || !selectedSection) {
-      alert('يرجى اختيار الصف والشعبة أولاً');
+    if (!selectedGradeLevel || !selectedClassId || !selectedSection) {
+      alert('يرجى اختيار المرحلة والصف والشعبة أولاً');
       return;
     }
 
@@ -196,28 +232,63 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* اختيار الصف والشعبة */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* اختيار المرحلة والصف والشعبة */}
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2">الصف</label>
-            <Select value={selectedClassId?.toString()} onValueChange={(val) => setSelectedClassId(parseInt(val))}>
+            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">المرحلة</label>
+            <Select value={selectedGradeLevel} onValueChange={(val) => {
+              setSelectedGradeLevel(val);
+              setSelectedClassId(null);
+              setSelectedSection('');
+            }}>
               <SelectTrigger>
-                <SelectValue placeholder="اختر الصف" />
+                <SelectValue placeholder="اختر المرحلة" />
               </SelectTrigger>
               <SelectContent>
-                {/* سيتم ملؤها من البيانات */}
+                {getAvailableGradeLevels().map(level => (
+                  <SelectItem key={level} value={level}>
+                    {level === 'primary' ? 'الابتدائية' : level === 'intermediate' ? 'الإعدادية' : 'الثانوية'}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">الشعبة</label>
-            <Select value={selectedSection} onValueChange={setSelectedSection}>
+            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">الصف</label>
+            <Select value={selectedClassId?.toString()} onValueChange={(val) => {
+              setSelectedClassId(parseInt(val));
+              setSelectedSection('');
+            }} disabled={!selectedGradeLevel}>
+              <SelectTrigger>
+                <SelectValue placeholder="اختر الصف" />
+              </SelectTrigger>
+              <SelectContent>
+                {getFilteredClasses().map((cls: any) => (
+                  <SelectItem key={cls.id} value={cls.id.toString()}>
+                    الصف {cls.grade_number}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">الشعبة</label>
+            <Select value={selectedSection} onValueChange={setSelectedSection} disabled={!selectedClassId}>
               <SelectTrigger>
                 <SelectValue placeholder="اختر الشعبة" />
               </SelectTrigger>
               <SelectContent>
-                {/* سيتم ملؤها من البيانات */}
+                {selectedClassId && classes.find((c: any) => c.id === selectedClassId)?.section_count &&
+                  Array.from({ length: classes.find((c: any) => c.id === selectedClassId)!.section_count }, (_, i) => 
+                    String(i + 1)
+                  ).map(section => (
+                    <SelectItem key={section} value={section}>
+                      الشعبة {section}
+                    </SelectItem>
+                  ))
+                }
               </SelectContent>
             </Select>
           </div>

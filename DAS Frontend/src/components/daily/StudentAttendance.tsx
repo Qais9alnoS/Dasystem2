@@ -30,6 +30,7 @@ interface StudentAttendanceProps {
 
 export function StudentAttendance({ academicYearId, sessionType, selectedDate }: StudentAttendanceProps) {
   const [classes, setClasses] = useState<Class[]>([]);
+  const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [students, setStudents] = useState<Student[]>([]);
@@ -48,6 +49,18 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
     }
   }, [selectedClassId, selectedSection, selectedDate]);
 
+  // الحصول على قائمة المراحل المتاحة
+  const getAvailableGradeLevels = (): string[] => {
+    const levels = new Set(classes.map(c => c.grade_level));
+    return Array.from(levels).sort();
+  };
+
+  // تصفية الصفوف حسب المرحلة المختارة
+  const getFilteredClasses = (): Class[] => {
+    if (!selectedGradeLevel) return classes;
+    return classes.filter(c => c.grade_level === selectedGradeLevel);
+  };
+
   const fetchClasses = async () => {
     try {
       const response = await api.get(`/academic/classes?academic_year_id=${academicYearId}&session_type=${sessionType}`);
@@ -58,9 +71,22 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
   };
 
   const fetchStudents = async () => {
+    if (!selectedClassId || !selectedSection) {
+      console.log('Missing classId or section');
+      return;
+    }
+    
+    setLoading(true);
     try {
+      console.log('Fetching students for:', { 
+        classId: selectedClassId, 
+        section: selectedSection,
+        date: selectedDate
+      });
+      
       // احصل على الطلاب
       const studentsResponse = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}`);
+      console.log('Students response:', studentsResponse.data);
       
       // احصل على حضور اليوم
       const attendanceResponse = await api.get(
@@ -79,6 +105,7 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
       }));
       
       setStudents(studentsWithAttendance);
+      console.log('Total students loaded:', studentsWithAttendance.length);
       
       // تحديث قائمة الغائبين
       const absent = new Set<number>(
@@ -89,6 +116,9 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
       setAbsentStudentIds(absent);
     } catch (error) {
       console.error('Error fetching students:', error);
+      alert('حدث خطأ أثناء جلب بيانات الطلاب');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -149,21 +179,41 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
         </div>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
-        {/* اختيار الصف والشعبة */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* اختيار المرحلة والصف والشعبة */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">المرحلة</label>
+            <Select value={selectedGradeLevel} onValueChange={(val) => {
+              setSelectedGradeLevel(val);
+              setSelectedClassId(null);
+              setSelectedSection('');
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="اختر المرحلة" />
+              </SelectTrigger>
+              <SelectContent>
+                {getAvailableGradeLevels().map(level => (
+                  <SelectItem key={level} value={level}>
+                    {level === 'primary' ? 'الابتدائية' : level === 'intermediate' ? 'الإعدادية' : 'الثانوية'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">الصف</label>
             <Select value={selectedClassId?.toString()} onValueChange={(val) => {
               setSelectedClassId(parseInt(val));
               setSelectedSection('');
-            }}>
+            }} disabled={!selectedGradeLevel}>
               <SelectTrigger>
                 <SelectValue placeholder="اختر الصف" />
               </SelectTrigger>
               <SelectContent>
-                {classes.map(cls => (
+                {getFilteredClasses().map(cls => (
                   <SelectItem key={cls.id} value={cls.id.toString()}>
-                    الصف {cls.grade_number} - {cls.grade_level}
+                    الصف {cls.grade_number}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -179,7 +229,7 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
               <SelectContent>
                 {selectedClassId && classes.find(c => c.id === selectedClassId)?.section_count &&
                   Array.from({ length: classes.find(c => c.id === selectedClassId)!.section_count }, (_, i) => 
-                    String.fromCharCode(65 + i)
+                    String(i + 1)
                   ).map(section => (
                     <SelectItem key={section} value={section}>
                       الشعبة {section}
@@ -232,10 +282,15 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
 
             {/* قائمة الطلاب */}
             <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
-              {filteredStudents.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p>جاري تحميل الطلاب...</p>
+                </div>
+              ) : filteredStudents.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>لا توجد نتائج</p>
+                  <p>لا يوجد طلاب في هذه الشعبة</p>
                 </div>
               ) : (
                 filteredStudents.map(student => (
