@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HolidayManagement } from '@/components/daily/HolidayManagement';
 import { StudentAttendance } from '@/components/daily/StudentAttendance';
 import { StudentActions } from '@/components/daily/StudentActions';
+import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 
 interface AcademicYear {
@@ -14,16 +15,18 @@ interface AcademicYear {
 }
 
 export default function DailyPage() {
+  const { state } = useAuth();
   const [academicYear, setAcademicYear] = useState<AcademicYear | null>(null);
   const [sessionType, setSessionType] = useState<'morning' | 'evening'>('morning');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  const [allowedSessions, setAllowedSessions] = useState<('morning' | 'evening')[]>([]);
 
   useEffect(() => {
     fetchActiveAcademicYear();
-    determineSessionType();
-  }, []);
+    determineAllowedSessions();
+  }, [state.user]);
 
   const fetchActiveAcademicYear = async () => {
     try {
@@ -37,10 +40,21 @@ export default function DailyPage() {
     }
   };
 
-  const determineSessionType = () => {
-    const hour = new Date().getHours();
-    // إذا كان الوقت بعد الظهر (بعد 12 ظهراً)، اعتبرها فترة مسائية
-    setSessionType(hour >= 12 ? 'evening' : 'morning');
+  const determineAllowedSessions = () => {
+    if (!state.user) return;
+    
+    // المدير يملك صلاحية لرؤية كلا الفترتين
+    if (state.user.role === 'admin' || state.user.role === 'director') {
+      setAllowedSessions(['morning', 'evening']);
+      // تحديد الفترة بناءً على الوقت
+      const hour = new Date().getHours();
+      setSessionType(hour >= 12 ? 'evening' : 'morning');
+    } else {
+      // للمشرفين، تحديد الفترة بناءً على session_type الخاص بهم
+      const userSession = state.user.session_type || 'morning';
+      setAllowedSessions([userSession]);
+      setSessionType(userSession);
+    }
   };
 
   if (!academicYear) {
@@ -82,33 +96,35 @@ export default function DailyPage() {
         </CardHeader>
       </Card>
 
-      {/* Session Type Selector */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={() => setSessionType('morning')}
-              className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                sessionType === 'morning'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              الفترة الصباحية
-            </button>
-            <button
-              onClick={() => setSessionType('evening')}
-              className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                sessionType === 'evening'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              الفترة المسائية
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Session Type Selector - يظهر فقط للمدير */}
+      {allowedSessions.length > 1 && (
+        <Card className="border-0 shadow-lg">
+          <CardContent className="pt-6">
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => setSessionType('morning')}
+                className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
+                  sessionType === 'morning'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                🌅 الفترة الصباحية
+              </button>
+              <button
+                onClick={() => setSessionType('evening')}
+                className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
+                  sessionType === 'evening'
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                🌆 الفترة المسائية
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content */}
       <Tabs defaultValue="holidays" className="space-y-4">
@@ -119,7 +135,10 @@ export default function DailyPage() {
         </TabsList>
 
         <TabsContent value="holidays">
-          <HolidayManagement academicYearId={academicYear.id} />
+          <HolidayManagement 
+            academicYearId={academicYear.id} 
+            sessionType={sessionType}
+          />
         </TabsContent>
 
         <TabsContent value="attendance" className="space-y-6">

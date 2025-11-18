@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
+import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import api from '@/services/api';
 
@@ -174,14 +175,21 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-purple-600 to-violet-700 dark:from-purple-800 dark:to-violet-900 text-white rounded-t-lg">
         <CardTitle className="flex items-center gap-2 justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <FileText className="h-5 w-5" />
-            الإجراءات السريعة على الطلاب
+            <span>الإجراءات السريعة على الطلاب</span>
+            <Badge className={`${
+              sessionType === 'morning' 
+                ? 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700' 
+                : 'bg-purple-900 hover:bg-purple-950 dark:bg-purple-950 dark:hover:bg-black'
+            } text-white`}>
+              {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
+            </Badge>
           </div>
-          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm">
+          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm" className="text-white border-white hover:bg-white/20">
             <Send className="h-4 w-4 ml-2" />
             إرسال للأهل
           </Button>
