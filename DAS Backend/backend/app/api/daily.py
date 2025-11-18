@@ -32,15 +32,19 @@ def create_holiday(
     current_user: User = Depends(get_current_user)
 ):
     """إنشاء يوم عطلة جديد"""
-    # تحقق من أن اليوم غير موجود مسبقاً
+    # تحقق من أن اليوم غير موجود مسبقاً لنفس الفترة
     existing = db.query(Holiday).filter(
-        Holiday.holiday_date == holiday.holiday_date
+        and_(
+            Holiday.holiday_date == holiday.holiday_date,
+            Holiday.session_type == holiday.session_type,
+            Holiday.academic_year_id == holiday.academic_year_id
+        )
     ).first()
     
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Holiday already exists for this date"
+            detail="Holiday already exists for this date and session"
         )
     
     db_holiday = Holiday(**holiday.dict())
@@ -52,6 +56,7 @@ def create_holiday(
 @router.get("/holidays", response_model=List[HolidayResponse])
 def get_holidays(
     academic_year_id: int,
+    session_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
@@ -61,6 +66,9 @@ def get_holidays(
     query = db.query(Holiday).filter(
         Holiday.academic_year_id == academic_year_id
     )
+    
+    if session_type:
+        query = query.filter(Holiday.session_type == session_type)
     
     if start_date:
         query = query.filter(Holiday.holiday_date >= start_date)

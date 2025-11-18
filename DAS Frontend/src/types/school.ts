@@ -7,12 +7,13 @@ export interface User {
     username: string;
     password_hash?: string; // Never exposed to frontend
     role: UserRole;
+    session_type?: 'morning' | 'evening'; // للمشرفين فقط - المدير يرى الاثنين
     is_active: boolean;
     last_login?: string;
     created_at?: string;
 }
 
-export type UserRole = 'director' | 'finance' | 'morning_school' | 'evening_school';
+export type UserRole = 'director' | 'finance' | 'morning_school' | 'evening_school' | 'admin';
 
 export interface LoginCredentials {
     username: string;

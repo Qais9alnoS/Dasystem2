@@ -193,6 +193,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       allowedRoles: ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'], // All supervisors and directors
     },
     {
+      name: 'الصفحة اليومية',
+      href: '/daily',
+      icon: ClipboardList,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Morning and Evening school staff
+    },
+    {
       name: 'النشاطات',
       href: '/activities',
       icon: Trophy,

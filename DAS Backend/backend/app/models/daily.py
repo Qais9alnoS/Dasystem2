@@ -7,7 +7,8 @@ class Holiday(BaseModel):
     __tablename__ = "holidays"
     
     academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
-    holiday_date = Column(Date, nullable=False, unique=True)
+    session_type = Column(String(10), nullable=False, default="morning")  # morning, evening - للفصل بين الفترتين
+    holiday_date = Column(Date, nullable=False)
     holiday_name = Column(String(200))  # اسم العطلة (اختياري)
     is_for_students = Column(Boolean, default=True)  # عطلة للطلاب
     is_for_teachers = Column(Boolean, default=False)  # عطلة للأساتذة

@@ -7,6 +7,7 @@ class User(BaseModel):
     
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False)  # director, finance, morning_school, evening_school
+    role = Column(String(20), nullable=False)  # director, finance, morning_school, evening_school, admin
+    session_type = Column(String(10))  # morning, evening - للمشرفين فقط، المدير يرى الاثنين
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True))
