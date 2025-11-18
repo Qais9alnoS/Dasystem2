@@ -87,10 +87,13 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   const { projects } = state;
   const { logout, state: authState, hasRole, hasAnyRole } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const [isResizing, setIsResizing] = useState(false);
+  const [customWidth, setCustomWidth] = useState<number | null>(null);
 
   // Function to toggle sidebar
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
+    setCustomWidth(null);
   };
 
   // Function to toggle sections
@@ -102,8 +105,45 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
     );
   };
 
+  // Handle resize
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 80 && newWidth <= 400) {
+        setCustomWidth(newWidth);
+        setIsCollapsed(newWidth < 150);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
   // Determine if we should show text based on sidebar width
-  const showText = sidebarWidth > 100;
+  const actualWidth = customWidth || (isCollapsed ? 80 : 288);
+  const showText = actualWidth > 150;
 
   // Navigation items with role-based access control
   const allNavItems = [
@@ -233,40 +273,54 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   });
 
   return (
-    <div className={`h-full flex flex-col ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300`} dir="rtl">
-      {/* Logo */}
-      <div className="flex items-center justify-between h-16 border-b border-gray-200 dark:border-gray-700 px-4">
-        {isCollapsed ? (
-          <div className="flex items-center justify-center w-full">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">D</span>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">DAS</span>
-            </div>
-            <div className="text-lg font-bold text-primary dark:text-primary">
-              نظام إدارة المدرسة
-            </div>
-          </div>
-        )}
+    <div 
+      className={`h-full flex flex-col relative bg-card rounded-2xl shadow-lg overflow-hidden border border-border ${!isResizing ? 'transition-all duration-300 ease-in-out' : ''}`}
+      style={{ width: `${actualWidth}px` }}
+      dir="rtl"
+    >
+      {/* Resize Handle */}
+      <div
+        className="absolute top-0 left-0 w-1 h-full cursor-ew-resize hover:bg-primary/20 transition-colors z-40"
+        onMouseDown={handleMouseDown}
+      />
+
+      {/* Toggle Button - Inside Sidebar */}
+      <div className="absolute top-3 left-3 z-50">
         <button 
           onClick={toggleSidebar}
-          className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="p-1.5 rounded-lg bg-muted hover:bg-muted-foreground/10 border border-border transition-all duration-200"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? (
-            <PanelRight className="h-5 w-5" />
+            <PanelRight className="h-4 w-4 text-muted-foreground" />
           ) : (
-            <PanelLeft className="h-5 w-5" />
+            <PanelLeft className="h-4 w-4 text-muted-foreground" />
           )}
         </button>
       </div>
 
+      {/* Logo */}
+      <div className={`flex items-center justify-center px-4 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-20 pt-12' : 'h-24 pt-6'}`}>
+        {!showText ? (
+          <div className="flex items-center justify-center w-full">
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+              <span className="text-primary-foreground text-lg font-bold">D</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center w-full space-y-2">
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+              <span className="text-primary-foreground text-base font-bold">DAS</span>
+            </div>
+            <div className="text-sm font-semibold text-foreground text-center">
+              نظام إدارة المدرسة
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
+      <nav className="flex-1 space-y-1.5 px-3 py-4 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
@@ -284,17 +338,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                     <NavLink
                       to={item.href}
                       className={({ isActive }) =>
-                        `w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        `w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                           isActive || isActiveSection
                             ? 'bg-primary/10 text-primary'
-                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                        } ${isCollapsed && !showText ? 'justify-center' : ''}`
+                            : 'text-foreground hover:bg-muted'
+                        }`
                       }
                     >
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5 flex-shrink-0" />
                         {showText && (
-                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                          <span className="font-medium">
                             {item.name}
                           </span>
                         )}
@@ -303,64 +357,57 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                   ) : (
                     <button
                       onClick={() => toggleSection(item.name)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      className={`w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                         isActiveSection
                           ? 'bg-primary/10 text-primary'
-                          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                      } ${isCollapsed && !showText ? 'justify-center' : ''}`}
+                          : 'text-foreground hover:bg-muted'
+                      }`}
                     >
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5 flex-shrink-0" />
                         {showText && (
-                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                          <span className="font-medium">
                             {item.name}
                           </span>
                         )}
                       </div>
-                    </button>
-                  )}
-                  {showText && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleSection(item.name);
-                      }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                    >
-                      <ChevronRight
-                        className={`h-4 w-4 transition-transform ${
-                          isExpanded ? 'rotate-90' : ''
-                        }`}
-                      />
+                      {showText && (
+                        <ChevronRight
+                          className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${
+                            isExpanded ? 'rotate-90' : ''
+                          }`}
+                        />
+                      )}
                     </button>
                   )}
                 </div>
-                {isExpanded && showText && item.subItems && (
-                  <div className="mt-1 space-y-1 pr-4 rtl:pr-0 rtl:pl-4">
-                    {item.subItems.map((subItem) => {
-                      const SubIcon = subItem.icon;
-                      return (
-                        <NavLink
-                          key={subItem.name}
-                          to={subItem.href}
-                          className={({ isActive }) =>
-                            `flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                              isActive
-                                ? 'bg-primary text-primary-foreground'
-                                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-                            }`
-                          }
-                        >
-                          <SubIcon className="h-4 w-4 flex-shrink-0" />
-                          <span className="mr-3 rtl:mr-0 rtl:ml-3">
-                            {subItem.name}
-                          </span>
-                        </NavLink>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isExpanded && showText ? '500px' : '0px' }}>
+                  {showText && item.subItems && (
+                    <div className="mt-1.5 space-y-1 pr-6 rtl:pr-0 rtl:pl-6">
+                      {item.subItems.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        return (
+                          <NavLink
+                            key={subItem.name}
+                            to={subItem.href}
+                            className={({ isActive }) =>
+                              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                isActive
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`
+                            }
+                          >
+                            <SubIcon className="h-4 w-4 flex-shrink-0" />
+                            <span>
+                              {subItem.name}
+                            </span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           }
@@ -375,16 +422,16 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                 const isActive = currentPath === item.href || 
                                 (item.href.includes('?') && currentPath.startsWith(item.href));
                 
-                return `flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                return `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                } ${isCollapsed && !showText ? 'justify-center' : ''}`;
+                    : 'text-foreground hover:bg-muted'
+                } ${!showText ? 'justify-center' : ''}`;
               }}
             >
               <Icon className="h-5 w-5 flex-shrink-0" />
               {showText && (
-                <span className="mr-3 rtl:mr-0 rtl:ml-3">
+                <span className="font-medium">
                   {item.name}
                 </span>
               )}
@@ -394,28 +441,28 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       </nav>
 
       {/* User Section & Logout */}
-      <div className="border-t border-gray-200 dark:border-gray-700">
+      <div className="border-t border-border mt-auto">
         <div className="p-4">
-          {isCollapsed || !showText ? (
+          {!showText ? (
             <div className="flex items-center justify-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground text-base font-semibold">
                   {authState.user?.username?.[0]?.toUpperCase() || 'م'}
                 </span>
               </div>
             </div>
           ) : (
-            <div className="flex items-center space-x-3 rtl:space-x-reverse">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground text-base font-semibold">
                   {authState.user?.username?.[0]?.toUpperCase() || 'م'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                <p className="text-sm font-semibold text-foreground truncate">
                   {authState.user?.username || 'مستخدم'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground font-medium">
                   {getRoleLabel(authState.user?.role || '')}
                 </p>
               </div>
@@ -430,13 +477,13 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
               await logout();
               navigate('/login');
             }}
-            className={`w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 ${
-              isCollapsed && !showText ? 'justify-center' : ''
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-destructive hover:bg-destructive/10 ${
+              !showText ? 'justify-center' : ''
             }`}
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {showText && (
-              <span className="mr-3 rtl:mr-0 rtl:ml-3">
+              <span className="font-medium">
                 تسجيل الخروج
               </span>
             )}

@@ -29,7 +29,7 @@ const DesktopLayout = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar - positioned on the right for RTL layout */}
         {showSidebar && (
-          <div className="h-full border-l border-border bg-card flex relative">
+          <div className="h-full flex relative p-2 pl-0">
             <Sidebar 
               isCollapsed={isSidebarCollapsed} 
               setIsCollapsed={setIsSidebarCollapsed}
