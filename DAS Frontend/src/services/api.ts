@@ -577,6 +577,22 @@ export const academicYearsApi = {
   },
 };
 
+// Academic Settings API
+export const academicSettingsApi = {
+  save: async (settings: any) => {
+    return apiClient.post<any>('/academic/settings', settings);
+  },
+
+  get: async (academic_year_id: number, class_id: number, subject_id?: number) => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString(),
+      class_id: class_id.toString(),
+      ...(subject_id && { subject_id: subject_id.toString() })
+    });
+    return apiClient.get<any>(`/academic/settings?${params.toString()}`);
+  },
+};
+
 // Activities API
 export const activitiesApi = {
   getAll: async (params?: {
@@ -1427,6 +1443,8 @@ export const api = {
     initializeFirstYear: academicYearsApi.initializeFirstYear,
     getClasses: classesApi.getAll,
     getSubjects: subjectsApi.getAll,
+    saveSettings: academicSettingsApi.save,
+    getSettings: academicSettingsApi.get,
   },
   students: {
     getAll: studentsApi.getAll,

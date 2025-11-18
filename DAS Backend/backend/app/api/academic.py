@@ -5,11 +5,12 @@ from sqlalchemy import and_
 from typing import List, Optional, cast
 
 from app.database import get_db
-from app.models.academic import AcademicYear, Class, Subject
+from app.models.academic import AcademicYear, Class, Subject, AcademicSettings
 from app.schemas.academic import (
     AcademicYearCreate, AcademicYearUpdate, AcademicYearResponse,
     ClassCreate, ClassResponse,
-    SubjectCreate, SubjectResponse
+    SubjectCreate, SubjectResponse,
+    AcademicSettingsCreate, AcademicSettingsUpdate, AcademicSettingsResponse
 )
 from app.core.dependencies import get_current_user, get_director_user, get_school_user
 from app.models.users import User
@@ -446,3 +447,63 @@ async def delete_subject(
     db.commit()
     
     return {"message": "Subject deleted successfully"}
+
+# Academic Settings Management
+@router.post("/settings", response_model=AcademicSettingsResponse)
+async def save_academic_settings(
+    settings_data: AcademicSettingsCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Save or update academic settings for a class/subject"""
+    # Check if settings already exist for this combination
+    existing_settings = db.query(AcademicSettings).filter(
+        and_(
+            AcademicSettings.academic_year_id == settings_data.academic_year_id,
+            AcademicSettings.class_id == settings_data.class_id,
+            AcademicSettings.subject_id == settings_data.subject_id
+        )
+    ).first()
+    
+    if existing_settings:
+        # Update existing settings
+        for field, value in settings_data.dict(exclude_unset=True).items():
+            if value is not None:
+                setattr(existing_settings, field, value.dict() if hasattr(value, 'dict') else value)
+        
+        db.commit()
+        db.refresh(existing_settings)
+        return existing_settings
+    else:
+        # Create new settings
+        settings_dict = settings_data.dict()
+        # Convert Pydantic models to dicts for JSON fields
+        for key in ['board_grades', 'recitation_grades', 'first_exam_grades', 'midterm_grades', 
+                    'second_exam_grades', 'final_exam_grades', 'behavior_grade', 'activity_grade']:
+            if settings_dict.get(key) is not None:
+                settings_dict[key] = settings_dict[key]
+        
+        new_settings = AcademicSettings(**settings_dict)
+        db.add(new_settings)
+        db.commit()
+        db.refresh(new_settings)
+        return new_settings
+
+@router.get("/settings", response_model=Optional[AcademicSettingsResponse])
+async def get_academic_settings(
+    academic_year_id: int,
+    class_id: int,
+    subject_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get academic settings for a specific class/subject"""
+    settings = db.query(AcademicSettings).filter(
+        and_(
+            AcademicSettings.academic_year_id == academic_year_id,
+            AcademicSettings.class_id == class_id,
+            AcademicSettings.subject_id == subject_id
+        )
+    ).first()
+    
+    return settings

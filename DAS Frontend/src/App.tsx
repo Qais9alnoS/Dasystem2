@@ -15,6 +15,7 @@ import LoginPage from '@/pages/LoginPage';
 import NotFound from '@/pages/NotFound';
 import DirectorNotesPage from '@/pages/DirectorNotesPage';
 import DirectorNotesSearchPage from '@/pages/DirectorNotesSearchPage';
+import DailyPage from '@/pages/DailyPage';
 import NoteFolderBrowser from '@/components/director-notes/NoteFolderBrowser';
 import MarkdownNoteEditor from '@/components/director-notes/MarkdownNoteEditor';
 import RewardsManager from '@/components/director-notes/RewardsManager';
@@ -186,8 +187,17 @@ const ProtectedApp = () => {
         <Route 
           path="schedules" 
           element={
-            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor']} fallback={<AccessDenied />}>
+            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <ScheduleManagementPage />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Daily Page - Morning and Evening School Staff */}
+        <Route 
+          path="daily" 
+          element={
+            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
+              <DailyPage />
             </ProtectedRoute>
           } 
         />

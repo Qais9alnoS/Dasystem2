@@ -67,6 +67,18 @@ const StudentAcademicInfoPage = () => {
     activity_grade: 100,
   });
   
+  // حفظ العلامات القصوى الأصلية (لكل مادة واحدة) - لاستخدامها في حساب المجموع
+  const [baseMaxGrades, setBaseMaxGrades] = useState<Record<GradeType, number>>({
+    board_grades: 100,
+    recitation_grades: 100,
+    first_exam_grades: 100,
+    midterm_grades: 100,
+    second_exam_grades: 100,
+    final_exam_grades: 100,
+    behavior_grade: 100,
+    activity_grade: 100,
+  });
+  
   // Passing thresholds for each type (default 50% - can be percentage or absolute value)
   const [passingThresholds, setPassingThresholds] = useState<Record<GradeType, number>>({
     board_grades: 50,
@@ -234,6 +246,109 @@ const StudentAcademicInfoPage = () => {
     }
   }, [selectedClass, selectedSection]);
 
+  // تحميل الإعدادات من الباك إند
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (selectedAcademicYear && selectedClass && !isTotalView) {
+        try {
+          const response = await retryWithTokenRefresh(() => 
+            api.academic.getSettings(
+              selectedAcademicYear,
+              selectedClass,
+              selectedSubject || undefined
+            )
+          );
+          
+          if (response && response.data) {
+            const settings = response.data;
+            console.log('📥 Loaded settings from backend:', settings);
+            
+            // تحديث الإعدادات من الاستجابة
+            const newMaxGrades: Record<GradeType, number> = {
+              board_grades: 100,
+              recitation_grades: 100,
+              first_exam_grades: 100,
+              midterm_grades: 100,
+              second_exam_grades: 100,
+              final_exam_grades: 100,
+              behavior_grade: 100,
+              activity_grade: 100,
+            };
+            const newBaseMaxGrades: Record<GradeType, number> = { ...newMaxGrades };
+            const newPassingThresholds: Record<GradeType, number> = { ...passingThresholds };
+            const newThresholdTypes: Record<GradeType, 'percentage' | 'absolute'> = { ...thresholdTypes };
+            
+            const gradeTypesList: GradeType[] = [
+              'board_grades', 'recitation_grades', 'first_exam_grades',
+              'midterm_grades', 'second_exam_grades', 'final_exam_grades',
+              'behavior_grade', 'activity_grade'
+            ];
+            
+            gradeTypesList.forEach((gradeType) => {
+              if (settings[gradeType]) {
+                newMaxGrades[gradeType] = settings[gradeType].max_grade || 100;
+                newBaseMaxGrades[gradeType] = settings[gradeType].max_grade || 100;
+                newPassingThresholds[gradeType] = settings[gradeType].passing_threshold || 50;
+                newThresholdTypes[gradeType] = settings[gradeType].threshold_type || 'percentage';
+              }
+            });
+            
+            setMaxGrades(newMaxGrades);
+            setBaseMaxGrades(newBaseMaxGrades);
+            setPassingThresholds(newPassingThresholds);
+            setThresholdTypes(newThresholdTypes);
+            
+            if (settings.overall_percentage_threshold) {
+              setOverallPercentageThreshold(settings.overall_percentage_threshold);
+            }
+            
+            console.log('✅ Settings loaded - maxGrades:', newMaxGrades);
+          } else {
+            // إذا لم توجد إعدادات، استخدم القيم الافتراضية
+            console.log('ℹ️ No saved settings found, using defaults (100 for all)');
+            const defaultMaxGrades: Record<GradeType, number> = {
+              board_grades: 100,
+              recitation_grades: 100,
+              first_exam_grades: 100,
+              midterm_grades: 100,
+              second_exam_grades: 100,
+              final_exam_grades: 100,
+              behavior_grade: 100,
+              activity_grade: 100,
+            };
+            setMaxGrades(defaultMaxGrades);
+            setBaseMaxGrades(defaultMaxGrades);
+          }
+        } catch (error) {
+          console.log('ℹ️ No saved settings found, using defaults (100 for all)');
+          const defaultMaxGrades: Record<GradeType, number> = {
+            board_grades: 100,
+            recitation_grades: 100,
+            first_exam_grades: 100,
+            midterm_grades: 100,
+            second_exam_grades: 100,
+            final_exam_grades: 100,
+            behavior_grade: 100,
+            activity_grade: 100,
+          };
+          setMaxGrades(defaultMaxGrades);
+          setBaseMaxGrades(defaultMaxGrades);
+        }
+      }
+    };
+    
+    loadSettings();
+  }, [selectedAcademicYear, selectedClass, selectedSubject]);
+
+  // استعادة العلامات القصوى الأصلية عند الخروج من وضع المجموع
+  useEffect(() => {
+    if (!isTotalView && baseMaxGrades.board_grades > 0) {
+      // استعادة العلامات القصوى الأصلية فقط إذا كانت موجودة
+      setMaxGrades({ ...baseMaxGrades });
+      console.log('🔄 Restored base max grades when exiting total view:', baseMaxGrades);
+    }
+  }, [isTotalView, baseMaxGrades]);
+
   useEffect(() => {
     if (students.length > 0 && subjects.length > 0) {
       if (isTotalView) {
@@ -360,10 +475,12 @@ const StudentAcademicInfoPage = () => {
     if (!selectedAcademicYear || students.length === 0 || !selectedSubject) return;
 
     try {
+      setLoading(true);
+      
+      console.log('🔄 Loading academic records for subject', selectedSubject, 'and', students.length, 'students');
+      
       const records = new Map<number, StudentAcademic>();
       const absences = new Map<number, AbsenceData>();
-
-      console.log('🔄 Loading academic records for', students.length, 'students');
 
       for (const student of students) {
         try {
@@ -395,22 +512,23 @@ const StudentAcademicInfoPage = () => {
           console.log(`✅ Processed ${studentRecords.length} records for student ${student.id}:`, studentRecords);
 
           if (studentRecords.length > 0) {
-            // Use the first record for each subject (or aggregate if needed)
-            const firstRecord = studentRecords[0];
-            records.set(student.id, firstRecord);
-
-            console.log(`💾 Stored record for student ${student.id}:`, {
-              id: firstRecord.id,
-              board_grades: firstRecord.board_grades,
-              recitation_grades: firstRecord.recitation_grades,
-              first_exam_grades: firstRecord.first_exam_grades,
+            // البحث عن السجل الخاص بالمادة المحددة - مع مقارنة رقمية صريحة
+            const subjectRecord = studentRecords.find(r => Number(r.subject_id) === Number(selectedSubject)) || studentRecords[0];
+            records.set(student.id, subjectRecord);
+            
+            console.log(`📚 Found record for subject ${selectedSubject}, record subject_id: ${subjectRecord.subject_id}:`, {
+              id: subjectRecord.id,
+              subject_id: subjectRecord.subject_id,
+              board_grades: subjectRecord.board_grades,
+              recitation_grades: subjectRecord.recitation_grades,
+              first_exam_grades: subjectRecord.first_exam_grades,
             });
 
             // Extract absence data
             absences.set(student.id, {
               student_id: student.id,
-              absence_days: firstRecord.absence_days || 0,
-              absence_dates: firstRecord.absence_dates ? JSON.parse(firstRecord.absence_dates) : [],
+              absence_days: subjectRecord.absence_days || 0,
+              absence_dates: subjectRecord.absence_dates ? JSON.parse(subjectRecord.absence_dates) : [],
             });
           } else {
             console.log(`⚠️ No records found for student ${student.id}`);
@@ -421,16 +539,41 @@ const StudentAcademicInfoPage = () => {
         }
       }
 
-      console.log('✅ Final academic records map:', records);
+      console.log('✅ Final academic records map for subject', selectedSubject, ':', records);
+      console.log('📋 Records size:', records.size, 'Students:', students.length);
+      
+      // عرض محتوى السجلات للتأكد
+      records.forEach((record, studentId) => {
+        console.log(`Student ${studentId} record:`, {
+          id: record.id,
+          subject_id: record.subject_id,
+          board_grades: record.board_grades,
+          recitation_grades: record.recitation_grades,
+        });
+      });
+      
+      // تحديث الـ state مرة واحدة بعد تحميل جميع البيانات
       setAcademicRecords(records);
       setAbsenceRecords(absences);
+      // مسح البيانات المعلقة القديمة بعد تحميل البيانات الجديدة
+      setPendingGrades(new Map());
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error('❌ Failed to load academic records:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const loadTotalAcademicRecords = async () => {
-    if (!selectedAcademicYear || students.length === 0 || subjects.length === 0) return;
+    if (!selectedAcademicYear || students.length === 0 || subjects.length === 0) {
+      console.log('⚠️ Cannot load total records: missing requirements', {
+        hasAcademicYear: !!selectedAcademicYear,
+        studentsCount: students.length,
+        subjectsCount: subjects.length
+      });
+      return;
+    }
 
     try {
       const totalRecords = new Map<number, StudentAcademic>();
@@ -482,31 +625,85 @@ const StudentAcademicInfoPage = () => {
 
             // Sum up all grades from all subjects
             studentRecords.forEach((record: any) => {
-              totalRecord.board_grades += record.board_grades || 0;
-              totalRecord.recitation_grades += record.recitation_grades || 0;
-              totalRecord.first_exam_grades += record.first_exam_grades || 0;
-              totalRecord.midterm_grades += record.midterm_grades || 0;
-              totalRecord.second_exam_grades += record.second_exam_grades || 0;
-              totalRecord.final_exam_grades += record.final_exam_grades || 0;
-              totalRecord.behavior_grade += record.behavior_grade || 0;
-              totalRecord.activity_grade += record.activity_grade || 0;
+              // تحويل القيم إلى أرقام بشكل آمن وتجنب NaN
+              const toNumber = (val: any): number => {
+                if (val === null || val === undefined || val === '') return 0;
+                const num = Number(val);
+                return isNaN(num) ? 0 : num;
+              };
+              
+              totalRecord.board_grades += toNumber(record.board_grades);
+              totalRecord.recitation_grades += toNumber(record.recitation_grades);
+              totalRecord.first_exam_grades += toNumber(record.first_exam_grades);
+              totalRecord.midterm_grades += toNumber(record.midterm_grades);
+              totalRecord.second_exam_grades += toNumber(record.second_exam_grades);
+              totalRecord.final_exam_grades += toNumber(record.final_exam_grades);
+              totalRecord.behavior_grade += toNumber(record.behavior_grade);
+              totalRecord.activity_grade += toNumber(record.activity_grade);
             });
 
+            // التحقق النهائي من أن جميع القيم أرقام صحيحة
+            Object.keys(totalRecord).forEach(key => {
+              if (typeof totalRecord[key] === 'number' && isNaN(totalRecord[key])) {
+                console.warn(`⚠️ NaN detected in ${key} for student ${student.id}, setting to 0`);
+                totalRecord[key] = 0;
+              }
+            });
+            
             totalRecords.set(student.id, totalRecord as StudentAcademic);
 
             console.log(`💾 Total record for student ${student.id}:`, totalRecord);
           } else {
-            console.log(`⚠️ No subject records found for student ${student.id}`);
+            // إنشاء سجل فارغ بقيم صفرية إذا لم توجد سجلات
+            const emptyRecord: any = {
+              id: 0,
+              student_id: student.id,
+              academic_year_id: yearId,
+              subject_id: 0,
+              board_grades: 0,
+              recitation_grades: 0,
+              first_exam_grades: 0,
+              midterm_grades: 0,
+              second_exam_grades: 0,
+              final_exam_grades: 0,
+              behavior_grade: 0,
+              activity_grade: 0,
+              absence_days: 0,
+              absence_dates: '[]'
+            };
+            totalRecords.set(student.id, emptyRecord as StudentAcademic);
+            console.log(`⚠️ No subject records found for student ${student.id}, created empty record`);
           }
         } catch (error) {
           console.log(`❌ Error loading total records for student ${student.id}:`, error);
+          // إنشاء سجل فارغ حتى في حالة الخطأ
+          const yearId = typeof selectedAcademicYear === 'number' 
+            ? selectedAcademicYear 
+            : parseInt(String(selectedAcademicYear), 10);
+          const emptyRecord: any = {
+            id: 0,
+            student_id: student.id,
+            academic_year_id: yearId,
+            subject_id: 0,
+            board_grades: 0,
+            recitation_grades: 0,
+            first_exam_grades: 0,
+            midterm_grades: 0,
+            second_exam_grades: 0,
+            final_exam_grades: 0,
+            behavior_grade: 0,
+            activity_grade: 0,
+            absence_days: 0,
+            absence_dates: '[]'
+          };
+          totalRecords.set(student.id, emptyRecord as StudentAcademic);
         }
       }
 
       console.log('✅ Final total academic records map:', totalRecords);
       setTotalAcademicRecords(totalRecords);
       
-      // Update max grades to be sum of all subjects' max grades
+      // تحميل العلامات القصوى الفعلية لكل مادة من قاعدة البيانات
       const totalMaxGrades: Record<GradeType, number> = {
         board_grades: 0,
         recitation_grades: 0,
@@ -518,17 +715,64 @@ const StudentAcademicInfoPage = () => {
         activity_grade: 0,
       };
 
-      // Sum max grades from all subjects
-      subjects.forEach(() => {
-        totalMaxGrades.board_grades += maxGrades.board_grades;
-        totalMaxGrades.recitation_grades += maxGrades.recitation_grades;
-        totalMaxGrades.first_exam_grades += maxGrades.first_exam_grades;
-        totalMaxGrades.midterm_grades += maxGrades.midterm_grades;
-        totalMaxGrades.second_exam_grades += maxGrades.second_exam_grades;
-        totalMaxGrades.final_exam_grades += maxGrades.final_exam_grades;
-        totalMaxGrades.behavior_grade += maxGrades.behavior_grade;
-        totalMaxGrades.activity_grade += maxGrades.activity_grade;
-      });
+      console.log('📊 Loading actual max grades for each subject...');
+      
+      // تحميل إعدادات كل مادة وجمع العلامات القصوى
+      for (const subject of subjects) {
+        try {
+          const settingsResponse = await retryWithTokenRefresh(() => 
+            api.academic.getSettings(
+              selectedAcademicYear,
+              selectedClass,
+              subject.id
+            )
+          );
+          
+          if (settingsResponse && settingsResponse.data) {
+            const subjectSettings = settingsResponse.data;
+            console.log(`📚 Settings for subject ${subject.subject_name}:`, subjectSettings);
+            
+            const gradeTypesList: GradeType[] = [
+              'board_grades', 'recitation_grades', 'first_exam_grades',
+              'midterm_grades', 'second_exam_grades', 'final_exam_grades',
+              'behavior_grade', 'activity_grade'
+            ];
+            
+            gradeTypesList.forEach((gradeType) => {
+              if (subjectSettings[gradeType] && subjectSettings[gradeType].max_grade) {
+                totalMaxGrades[gradeType] += subjectSettings[gradeType].max_grade;
+              } else {
+                // إذا لم توجد إعدادات، استخدم القيمة الافتراضية 100
+                totalMaxGrades[gradeType] += 100;
+              }
+            });
+          } else {
+            // لا توجد إعدادات، استخدم القيم الافتراضية
+            console.log(`⚠️ No settings found for subject ${subject.subject_name}, using defaults`);
+            totalMaxGrades.board_grades += 100;
+            totalMaxGrades.recitation_grades += 100;
+            totalMaxGrades.first_exam_grades += 100;
+            totalMaxGrades.midterm_grades += 100;
+            totalMaxGrades.second_exam_grades += 100;
+            totalMaxGrades.final_exam_grades += 100;
+            totalMaxGrades.behavior_grade += 100;
+            totalMaxGrades.activity_grade += 100;
+          }
+        } catch (error) {
+          console.log(`⚠️ Failed to load settings for subject ${subject.subject_name}, using defaults`);
+          // في حالة الخطأ، استخدم القيم الافتراضية
+          totalMaxGrades.board_grades += 100;
+          totalMaxGrades.recitation_grades += 100;
+          totalMaxGrades.first_exam_grades += 100;
+          totalMaxGrades.midterm_grades += 100;
+          totalMaxGrades.second_exam_grades += 100;
+          totalMaxGrades.final_exam_grades += 100;
+          totalMaxGrades.behavior_grade += 100;
+          totalMaxGrades.activity_grade += 100;
+        }
+      }
+
+      console.log(`✅ Total max grades calculated from ${subjects.length} subjects:`, totalMaxGrades);
 
       // Update max grades only in total view
       if (isTotalView) {
@@ -854,10 +1098,20 @@ const StudentAcademicInfoPage = () => {
     const record = isTotalView 
       ? totalAcademicRecords.get(studentId) 
       : academicRecords.get(studentId);
-    const value = record ? record[gradeType] : undefined;
-    // console.log(`Getting grade for student ${studentId}, type ${gradeType}:`, value);
-    // إرجاع undefined بدلاً من null لعرض placeholder
-    return value === null ? undefined : value;
+    
+    if (!record) {
+      // console.log(`⚠️ No record found for student ${studentId} in ${isTotalView ? 'total' : 'subject'} view, subject: ${selectedSubject}`);
+      return undefined;
+    }
+    
+    const value = record[gradeType];
+    // console.log(`Getting grade for student ${studentId}, type ${gradeType}, subject ${record.subject_id}, value:`, value);
+    
+    // إرجاع undefined بدلاً من null أو NaN لعرض placeholder
+    if (value === null || value === undefined) return undefined;
+    // التحقق من NaN
+    const numValue = Number(value);
+    return isNaN(numValue) ? undefined : numValue;
   };
 
   const calculatePercentage = (studentId: number): number => {
@@ -871,14 +1125,27 @@ const StudentAcademicInfoPage = () => {
 
     gradeTypes.forEach(({ value }) => {
       const gradeType = value as GradeType;
-      const grade = record[gradeType];
+      const gt = gradeType as GradeType;
+      
+      // استخدام العلامة المعلقة إذا كانت موجودة، وإلا استخدام المحفوظة
+      const savedGrade = record[gradeType];
+      const pendingKey = `${studentId}-${gt}`;
+      const pendingGrade = pendingGrades.get(pendingKey);
+      const grade = pendingGrade?.grade ?? savedGrade;
+      
       const maxGrade = maxGrades[gradeType];
       
-      if (grade !== null && grade !== undefined && maxGrade > 0) {
+      // التحقق من القيمة وتحويلها إلى رقم بشكل آمن
+      const numGrade = Number(grade);
+      const numMaxGrade = Number(maxGrade);
+      
+      if (!isNaN(numGrade) && numGrade !== null && !isNaN(numMaxGrade) && numMaxGrade > 0) {
         // حساب النسبة المئوية لكل علامة
-        const percentage = (grade / maxGrade) * 100;
-        totalPercentages += percentage;
-        countGrades++;
+        const percentage = (numGrade / numMaxGrade) * 100;
+        if (!isNaN(percentage)) {
+          totalPercentages += percentage;
+          countGrades++;
+        }
       }
     });
 
@@ -906,12 +1173,19 @@ const StudentAcademicInfoPage = () => {
 
   const openMaxGradeDialog = (gradeType: GradeType) => {
     setEditingGradeType(gradeType);
-    setTempMaxGrade(maxGrades[gradeType]);
+    // استخدام baseMaxGrades في الوضع العادي، maxGrades في وضع المجموع
+    setTempMaxGrade(isTotalView ? maxGrades[gradeType] : baseMaxGrades[gradeType]);
     setTempPassingThreshold(passingThresholds[gradeType]);
     setTempThresholdType(thresholdTypes[gradeType]);
+    console.log(`📝 Opening dialog for ${gradeType}:`, {
+      isTotalView,
+      maxGrade: isTotalView ? maxGrades[gradeType] : baseMaxGrades[gradeType],
+      passingThreshold: passingThresholds[gradeType],
+      thresholdType: thresholdTypes[gradeType]
+    });
   };
 
-  const saveMaxGrade = () => {
+  const saveMaxGrade = async () => {
     if (editingGradeType) {
       // التحقق من صحة القيم
       if (!isTotalView && tempMaxGrade <= 0) {
@@ -947,6 +1221,11 @@ const StudentAcademicInfoPage = () => {
           ...maxGrades,
           [editingGradeType]: tempMaxGrade,
         });
+        // تحديث baseMaxGrades أيضاً (العلامات الأصلية)
+        setBaseMaxGrades({
+          ...baseMaxGrades,
+          [editingGradeType]: tempMaxGrade,
+        });
       }
       
       setPassingThresholds({
@@ -957,6 +1236,33 @@ const StudentAcademicInfoPage = () => {
         ...thresholdTypes,
         [editingGradeType]: tempThresholdType,
       });
+      
+      // حفظ الإعدادات في الباك إند
+      if (selectedAcademicYear && selectedClass) {
+        try {
+          const settings = {
+            academic_year_id: selectedAcademicYear,
+            class_id: selectedClass,
+            subject_id: selectedSubject || null,
+            [editingGradeType]: {
+              max_grade: tempMaxGrade,
+              passing_threshold: tempPassingThreshold,
+              threshold_type: tempThresholdType
+            }
+          };
+          
+          await retryWithTokenRefresh(() => api.academic.saveSettings(settings));
+          console.log('✅ Settings saved to backend');
+        } catch (error) {
+          console.error('❌ Failed to save settings:', error);
+          toast({
+            title: 'تحذير',
+            description: 'تم الحفظ محلياً لكن فشل الحفظ في الخادم',
+            variant: 'default',
+          });
+        }
+      }
+      
       setEditingGradeType(null);
       toast({
         title: 'نجح',
@@ -1214,7 +1520,7 @@ const StudentAcademicInfoPage = () => {
             <h1 className="text-3xl font-bold">معلومات دراسية - الطلاب</h1>
             <p className="text-muted-foreground mt-1">إدارة العلامات والحضور للطلاب</p>
           </div>
-          {!isTotalView && (
+          {!isTotalView && selectedSubject && (
             <div className="flex items-center gap-3">
               <Button
                 onClick={saveAllPendingGrades}
@@ -1232,7 +1538,12 @@ const StudentAcademicInfoPage = () => {
         <Card className="rounded-3xl overflow-hidden">
           <CardHeader>
             <CardTitle>اختيار الصف والشعبة والمادة</CardTitle>
-            <CardDescription>اختر الصف والشعبة والمادة لعرض وإدارة العلامات، أو اضغط على "المجموع" لعرض مجموع جميع المواد</CardDescription>
+            <CardDescription>
+              {isTotalView 
+                ? "عرض المجموع الكلي لجميع المواد (للمشاهدة فقط - لا يمكن تعديل العلامات)"
+                : "اختر الصف والشعبة والمادة لعرض وإدارة العلامات، أو اضغط على 'المجموع' لعرض مجموع جميع المواد"
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {classesLoading ? (
@@ -1311,18 +1622,29 @@ const StudentAcademicInfoPage = () => {
                 {/* Subject selection or Total button */}
                 {selectedClass && selectedSection && (
                   <div className="space-y-2">
-                    <Label>المادة</Label>
+                    <Label>المادة {!isTotalView && <span className="text-red-500">*</span>}</Label>
                     <div className="flex gap-2">
                       <Select
                         value={selectedSubject?.toString() || ''}
                         onValueChange={(value) => {
                           setSelectedSubject(parseInt(value));
                           setIsTotalView(false);
+                          // مسح التغييرات المعلقة عند تغيير المادة
+                          if (pendingGrades.size > 0) {
+                            const confirmSwitch = window.confirm(
+                              `لديك ${pendingGrades.size} تغيير غير محفوظ. هل تريد تغيير المادة وفقدان هذه التغييرات؟`
+                            );
+                            if (!confirmSwitch) {
+                              return;
+                            }
+                            setPendingGrades(new Map());
+                            setHasUnsavedChanges(false);
+                          }
                         }}
                         disabled={isTotalView || subjects.length === 0}
                       >
                         <SelectTrigger className="flex-1">
-                          <SelectValue placeholder={subjects.length === 0 ? "لا توجد مواد متاحة" : "اختر المادة"} />
+                          <SelectValue placeholder={subjects.length === 0 ? "لا توجد مواد متاحة" : isTotalView ? "وضع المجموع مفعّل" : "اختر المادة"} />
                         </SelectTrigger>
                         <SelectContent>
                           {subjects.length === 0 ? (
@@ -1342,20 +1664,48 @@ const StudentAcademicInfoPage = () => {
                       <Button
                         variant={isTotalView ? "default" : "outline"}
                         onClick={() => {
-                          setIsTotalView(!isTotalView);
-                          if (!isTotalView) {
+                          const newTotalView = !isTotalView;
+                          setIsTotalView(newTotalView);
+                          if (newTotalView) {
                             setSelectedSubject(null);
+                            // مسح التغييرات المعلقة عند الدخول لوضع المجموع
+                            if (pendingGrades.size > 0) {
+                              const confirmSwitch = window.confirm(
+                                `لديك ${pendingGrades.size} تغيير غير محفوظ. هل تريد التبديل إلى وضع المجموع وفقدان هذه التغييرات؟`
+                              );
+                              if (!confirmSwitch) {
+                                setIsTotalView(false);
+                                return;
+                              }
+                              setPendingGrades(new Map());
+                              setHasUnsavedChanges(false);
+                            }
                           }
                         }}
                         className="rounded-xl px-6"
+                        disabled={subjects.length === 0}
                       >
                         المجموع
                       </Button>
                     </div>
                     {isTotalView && (
-                      <p className="text-sm text-muted-foreground">
-                        🔍 عرض مجموع العلامات من جميع المواد (للمشاهدة فقط)
-                      </p>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mt-2">
+                        <p className="text-sm text-blue-900 dark:text-blue-100 font-medium flex items-center gap-2">
+                          <span className="text-lg">🔍</span>
+                          وضع المجموع الكلي: عرض للقراءة فقط - لا يمكن تعديل العلامات في هذا الوضع
+                        </p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 mr-7">
+                          العلامات المعروضة هي مجموع علامات جميع المواد ({subjects.length} مادة). يمكنك تعديل حد الرسوب فقط بالضغط على عنوان أي عمود.
+                        </p>
+                      </div>
+                    )}
+                    {!isTotalView && !selectedSubject && subjects.length > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 mt-2">
+                        <p className="text-sm text-amber-900 dark:text-amber-100 font-medium flex items-center gap-2">
+                          <span className="text-lg">⚠️</span>
+                          يرجى اختيار مادة لعرض وتعديل العلامات
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1368,11 +1718,13 @@ const StudentAcademicInfoPage = () => {
         {selectedClass && selectedSection && students.length > 0 && (isTotalView || selectedSubject) && (
           <Card className="rounded-3xl overflow-hidden">
             <CardHeader>
-              <CardTitle>{isTotalView ? 'المجموع الكلي - للمشاهدة فقط' : 'العلامات والنشاط الدراسي'}</CardTitle>
+              <CardTitle>
+                {isTotalView ? '📊 المجموع الكلي - للمشاهدة فقط' : '📝 العلامات والنشاط الدراسي'}
+              </CardTitle>
               <CardDescription>
                 {isTotalView 
-                  ? `${students.length} طالب في هذه الشعبة - عرض مجموع العلامات من جميع المواد` 
-                  : `${students.length} طالب في هذه الشعبة - اضغط على أي عنوان لتعديل العلامة القصوى`
+                  ? `${students.length} طالب في هذه الشعبة - مجموع علامات ${subjects.length} مادة (اضغط على عنوان أي عمود لتعديل حد الرسوب فقط)` 
+                  : `${students.length} طالب في هذه الشعبة - اضغط على أي عنوان لتعديل العلامة القصوى وحد الرسوب`
                 }
               </CardDescription>
             </CardHeader>
@@ -1430,7 +1782,8 @@ const StudentAcademicInfoPage = () => {
                     </thead>
                     <tbody>
                       {students.map((student, studentIndex) => {
-                        const defaultSubjectId = subjects[0]?.id || 1;
+                        // استخدام المادة المحددة حالياً بدلاً من المادة الأولى
+                        const defaultSubjectId = selectedSubject || subjects[0]?.id || 1;
                         
                         // حساب النسبة المئوية من السجلات الأكاديمية المحفوظة
                         const percentage = calculatePercentage(student.id);
@@ -1459,10 +1812,11 @@ const StudentAcademicInfoPage = () => {
                                 <td key={gradeType.value} className="px-2 py-3">
                                   {isTotalView ? (
                                     <div className={`w-24 text-center py-2 px-3 rounded-lg bg-muted/30 ${failing ? 'text-red-800 dark:text-red-400 font-semibold' : ''}`}>
-                                      {currentGrade !== undefined ? (Number.isInteger(currentGrade) ? Math.round(currentGrade) : currentGrade.toFixed(1)) : '--'}
+                                      {currentGrade !== undefined && currentGrade !== null ? (Number.isInteger(Number(currentGrade)) ? Math.round(Number(currentGrade)) : Number(currentGrade).toFixed(1)) : '--'}
                                     </div>
                                   ) : (
                                     <ModernNumberInput
+                                      key={`${student.id}-${gt}-${selectedSubject || 'total'}`}
                                       initialValue={currentGrade}
                                       onSave={(grade) => {
                                         // إضافة إلى العلامات المعلقة بدلاً من الحفظ مباشرة
@@ -1492,7 +1846,9 @@ const StudentAcademicInfoPage = () => {
                             })}
                             <td className="px-2 py-3 text-center bg-primary/5">
                               <span className={`text-lg font-bold ${percentage < overallPercentageThreshold ? 'text-red-800 dark:text-red-400' : 'text-primary'}`}>
-                                {Number.isInteger(percentage) ? Math.round(percentage) : percentage.toFixed(1)}%
+                                {!isNaN(percentage) && percentage !== null && percentage !== undefined ? 
+                                  (Number.isInteger(Number(percentage)) ? Math.round(Number(percentage)) : Number(percentage).toFixed(1)) 
+                                  : '0'}%
                               </span>
                             </td>
                           </tr>
@@ -1631,10 +1987,12 @@ const StudentAcademicInfoPage = () => {
         <Dialog open={editingGradeType !== null} onOpenChange={() => setEditingGradeType(null)}>
           <DialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
             <DialogHeader>
-              <DialogTitle>{isTotalView ? 'تعديل حد الرسوب' : 'تعديل العلامة القصوى وحد الرسوب'}</DialogTitle>
+              <DialogTitle>
+                {isTotalView ? 'تعديل حد الرسوب (وضع المجموع)' : 'تعديل العلامة القصوى وحد الرسوب'}
+              </DialogTitle>
               <DialogDescription>
                 {isTotalView 
-                  ? `قم بتعديل حد الرسوب لـ ${editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label} (العلامة القصوى محسوبة تلقائياً من مجموع المواد)`
+                  ? `قم بتعديل حد الرسوب لـ ${editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label}. العلامة القصوى محسوبة تلقائياً من مجموع ${subjects.length} مادة ولا يمكن تعديلها.`
                   : `قم بتعديل العلامة القصوى وحد الرسوب لـ ${editingGradeType && gradeTypes.find(g => g.value === editingGradeType)?.label}`
                 }
               </DialogDescription>

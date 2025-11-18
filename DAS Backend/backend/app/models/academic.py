@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import BaseModel
@@ -44,3 +44,24 @@ class Subject(BaseModel):
     
     # Relationships
     class_rel = relationship("Class", back_populates="subjects")
+
+class AcademicSettings(BaseModel):
+    __tablename__ = "academic_settings"
+    
+    # Settings attributes
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=True)
+    
+    # Grade settings stored as JSON
+    board_grades = Column(JSON)
+    recitation_grades = Column(JSON)
+    first_exam_grades = Column(JSON)
+    midterm_grades = Column(JSON)
+    second_exam_grades = Column(JSON)
+    final_exam_grades = Column(JSON)
+    behavior_grade = Column(JSON)
+    activity_grade = Column(JSON)
+    
+    # Overall threshold
+    overall_percentage_threshold = Column(Integer, default=50)

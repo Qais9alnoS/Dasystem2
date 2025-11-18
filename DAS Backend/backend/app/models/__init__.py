@@ -14,6 +14,10 @@ from .system import (
     AuditLog, SystemNotification, FileUpload, SystemConfiguration,
     UserSession, LoginAttempt
 )
+from .daily import (
+    Holiday, StudentDailyAttendance, TeacherPeriodAttendance,
+    StudentAction, WhatsAppGroupConfig
+)
 
 __all__ = [
     "BaseModel",
@@ -27,5 +31,7 @@ __all__ = [
     "DirectorNote", "Reward", "AssistanceRecord",
     "SystemSetting", "BackupHistory", "SystemLog", "PerformanceMetric",
     "AuditLog", "SystemNotification", "FileUpload", "SystemConfiguration",
-    "UserSession", "LoginAttempt"
+    "UserSession", "LoginAttempt",
+    "Holiday", "StudentDailyAttendance", "TeacherPeriodAttendance",
+    "StudentAction", "WhatsAppGroupConfig"
 ]
