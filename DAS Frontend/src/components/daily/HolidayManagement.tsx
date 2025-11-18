@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, X, AlertCircle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, X, AlertCircle, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
@@ -181,17 +181,25 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
     setCurrentMonth(new Date());
   };
 
-  const isHoliday = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const isHoliday = (dateStr: string, dateObj?: Date) => {
+    // استخدام الكائن Date إذا تم تمريره، وإلا إنشاء واحد جديد
+    const date = dateObj || new Date(dateStr + 'T00:00:00');
     const dayOfWeek = date.getDay();
     
-    // الجمعة (5) والسبت (6)
-    if (dayOfWeek === 5 || dayOfWeek === 6) {
-      return { isHoliday: true, isWeekend: true };
+    // التحقق من العطل المسجلة في قاعدة البيانات أولاً
+    const holiday = holidays.find(h => h.holiday_date === dateStr);
+    
+    // إذا كانت هناك عطلة مسجلة، نعيدها
+    if (holiday) {
+      return { isHoliday: true, isDefault: false, holiday };
     }
     
-    const holiday = holidays.find(h => h.holiday_date === dateStr);
-    return { isHoliday: !!holiday, isWeekend: false, holiday };
+    // الجمعة (5) والسبت (6) كعطلة افتراضية - في JS: 0=الأحد، 5=الجمعة، 6=السبت
+    if (dayOfWeek === 5 || dayOfWeek === 6) {
+      return { isHoliday: true, isDefault: true, holiday: null };
+    }
+    
+    return { isHoliday: false, isDefault: false, holiday: null };
   };
   
   const isToday = (date: Date | null): boolean => {
@@ -237,11 +245,12 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
           <div className="flex items-center gap-2">
             <Button 
               size="sm"
-              variant="ghost" 
+              variant="outline" 
               onClick={goToToday}
-              className="text-white hover:bg-white/20"
+              className="text-white border-white hover:bg-white/20 flex items-center gap-1.5"
             >
-              اليوم
+              <CalendarDays className="h-4 w-4" />
+              العودة لليوم
             </Button>
           </div>
         </div>
@@ -282,14 +291,10 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
 
         {/* أسماء الأيام */}
         <div className="grid grid-cols-7 gap-2 mb-2">
-          {['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => (
+          {['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day) => (
             <div 
               key={day} 
-              className={`text-center font-semibold text-xs py-2 rounded ${
-                index === 5 || index === 6 
-                  ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20' 
-                  : 'text-gray-700 dark:text-gray-300'
-              }`}
+              className="text-center font-semibold text-xs py-2 rounded text-gray-700 dark:text-gray-300"
             >
               {day}
             </div>
@@ -303,55 +308,51 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
               return <div key={`empty-${index}`} className="aspect-square" />;
             }
             
-            const dateStr = date.toISOString().split('T')[0];
-            const { isHoliday: isHol, isWeekend, holiday } = isHoliday(dateStr);
+            // استخدام التوقيت المحلي بدلاً من UTC
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            const { isHoliday: isHol, isDefault, holiday } = isHoliday(dateStr, date);
             const isTodayDate = isToday(date);
-            const dayOfWeek = date.getDay();
-            const isFridayOrSaturday = dayOfWeek === 5 || dayOfWeek === 6;
             
             return (
               <button
                 key={dateStr}
-                onClick={() => !isFridayOrSaturday && handleDateClick(dateStr)}
-                disabled={isFridayOrSaturday}
+                onClick={() => handleDateClick(dateStr)}
                 className={`
                   aspect-square p-1 text-center rounded-lg border-2 transition-all duration-200
                   ${isTodayDate 
                     ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900' 
                     : ''
                   }
-                  ${isFridayOrSaturday
-                    ? 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 cursor-not-allowed'
-                    : isHol && !isWeekend
-                      ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 hover:bg-amber-200 dark:hover:bg-amber-900/50'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600'
+                  ${isHol
+                    ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 hover:bg-amber-200 dark:hover:bg-amber-900/50'
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600'
                   }
                 `}
-                title={holiday?.holiday_name || (isFridayOrSaturday ? 'عطلة نهاية الأسبوع' : '')}
+                title={holiday?.holiday_name || (isDefault ? 'عطلة نهاية الأسبوع' : '')}
               >
                 <div className={`text-sm font-semibold ${
                   isTodayDate 
                     ? 'text-blue-700 dark:text-blue-400' 
-                    : isFridayOrSaturday
-                      ? 'text-red-600 dark:text-red-400'
-                      : isHol
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-gray-900 dark:text-gray-100'
+                    : isHol
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-gray-900 dark:text-gray-100'
                 }`}>
                   {date.getDate()}
                 </div>
-                {isHol && !isWeekend && (
+                {isHol && (
                   <div className="text-[9px] leading-tight mt-0.5 text-amber-700 dark:text-amber-300 font-medium">
-                    {holiday?.is_for_students && holiday?.is_for_teachers
-                      ? 'عامة'
-                      : holiday?.is_for_students
-                      ? 'طلاب'
-                      : 'معلمين'}
-                  </div>
-                )}
-                {isFridayOrSaturday && (
-                  <div className="text-[9px] leading-tight mt-0.5 text-red-600 dark:text-red-400 font-medium">
-                    عطلة
+                    {holiday ? (
+                      holiday.is_for_students && holiday.is_for_teachers
+                        ? 'عامة'
+                        : holiday.is_for_students
+                        ? 'طلاب'
+                        : 'معلمين'
+                    ) : (
+                      'عطلة'
+                    )}
                   </div>
                 )}
               </button>
@@ -366,12 +367,8 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
             <span>يوم عادي</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-red-100 dark:bg-red-900/30 border-2 border-red-300 dark:border-red-700"></div>
-            <span>عطلة أسبوعية</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600"></div>
-            <span>عطلة رسمية</span>
+            <span>عطلة (رسمية أو أسبوعية)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded ring-2 ring-blue-500"></div>

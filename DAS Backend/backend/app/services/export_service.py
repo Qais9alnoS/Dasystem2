@@ -462,7 +462,7 @@ class ExportService:
         
         grade_level_ar = {
             "primary": "ابتدائي",
-            "intermediate": "متوسط",
+            "intermediate": "إعدادي",
             "secondary": "ثانوي"
         }
         

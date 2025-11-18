@@ -22,6 +22,8 @@ async def get_students(
     session_type: Optional[str] = Query(None),
     grade_level: Optional[str] = Query(None),
     grade_number: Optional[int] = Query(None),
+    class_id: Optional[int] = Query(None),
+    section: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(True),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, le=1000),
@@ -39,6 +41,10 @@ async def get_students(
         query = query.filter(Student.grade_level == grade_level)
     if grade_number:
         query = query.filter(Student.grade_number == grade_number)
+    if class_id:
+        query = query.filter(Student.class_id == class_id)
+    if section:
+        query = query.filter(Student.section == section)
     if is_active is not None:
         query = query.filter(Student.is_active == is_active)
     
