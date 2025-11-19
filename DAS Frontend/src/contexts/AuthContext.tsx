@@ -166,8 +166,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Call backend logout endpoint
             await authApi.logout();
         } catch (error) {
-            // Even if backend logout fails, we still clear local state
-            console.error('Logout error:', error);
+            // Silently fail - logout should always succeed locally
+            // This handles cases where token is invalid (e.g., after username change)
         } finally {
             localStorage.removeItem('das_token');
             localStorage.removeItem('das_user');

@@ -81,20 +81,9 @@ def validate_password_strength(password: str) -> dict:
     """Validate password strength requirements"""
     errors = []
     
+    # Only require minimum length - make it simple for Arabic users
     if len(password) < 8:
-        errors.append("Password must be at least 8 characters long")
-    
-    if not any(c.isupper() for c in password):
-        errors.append("Password must contain at least one uppercase letter")
-    
-    if not any(c.islower() for c in password):
-        errors.append("Password must contain at least one lowercase letter")
-    
-    if not any(c.isdigit() for c in password):
-        errors.append("Password must contain at least one number")
-    
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-        errors.append("Password must contain at least one special character")
+        errors.append("كلمة المرور يجب أن تكون 8 أحرف على الأقل")
     
     return {
         "is_valid": len(errors) == 0,

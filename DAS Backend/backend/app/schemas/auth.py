@@ -10,6 +10,14 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str
+    session_type: Optional[str] = None
+
+class UserUpdate(BaseModel):
+    username: str
+    password: Optional[str] = None  # Optional for updates
+    role: str
+    session_type: Optional[str] = None
+    is_active: Optional[bool] = None  # Add is_active field
 
 class UserResponse(BaseModel):
     id: int
@@ -39,3 +47,6 @@ class PasswordChange(BaseModel):
 class PasswordReset(BaseModel):
     username: str
     role: str
+
+class UsernameUpdate(BaseModel):
+    new_username: str

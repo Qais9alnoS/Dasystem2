@@ -340,6 +340,34 @@ export const authApi = {
   resetPassword: async (data: { username: string; role: string }) => {
     return apiClient.post<void>('/auth/reset-password', data);
   },
+
+  createUser: async (data: { username: string; password: string; role: string; session_type?: string }) => {
+    return apiClient.post<{ id: number; username: string; role: string; is_active: boolean }>('/auth/create-user', data);
+  },
+
+  getAllUsers: async () => {
+    return apiClient.get<Array<{
+      id: number;
+      username: string;
+      role: string;
+      session_type?: string;
+      is_active: boolean;
+      last_login?: string;
+      created_at?: string;
+    }>>('/auth/users');
+  },
+
+  updateUsername: async (new_username: string) => {
+    return apiClient.put<void>('/auth/update-username', { new_username });
+  },
+
+  deleteUser: async (userId: number) => {
+    return apiClient.delete<void>(`/auth/users/${userId}`);
+  },
+
+  updateUser: async (userId: number, data: { username: string; password?: string; role: string; session_type?: string; is_active?: boolean }) => {
+    return apiClient.put<{ id: number; username: string; role: string; session_type?: string; is_active: boolean }>(`/auth/users/${userId}`, data);
+  },
 };
 
 // Students API

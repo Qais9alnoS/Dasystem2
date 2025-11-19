@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect } from 'react';
 import { NavLink, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { UserProfileModal } from '@/components/UserProfileModal';
 import {
   LayoutDashboard,
   BookOpen,
@@ -89,6 +90,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [isResizing, setIsResizing] = useState(false);
   const [customWidth, setCustomWidth] = useState<number | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Function to toggle sidebar
   const toggleSidebar = () => {
@@ -242,6 +244,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       name: 'النشاطات',
       href: '/activities',
       icon: Trophy,
+      allowedRoles: ['director'], // Director only
+    },
+    {
+      name: 'إدارة تسجيل الدخول',
+      href: '/user-management',
+      icon: Key,
       allowedRoles: ['director'], // Director only
     },
     // Finance Manager specific sections
@@ -443,31 +451,36 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       {/* User Section & Logout */}
       <div className="border-t border-border mt-auto">
         <div className="p-4">
-          {!showText ? (
-            <div className="flex items-center justify-center">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground text-base font-semibold">
-                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
-                </span>
+          <button
+            onClick={() => setIsProfileModalOpen(true)}
+            className="w-full transition-all duration-200 hover:opacity-80"
+          >
+            {!showText ? (
+              <div className="flex items-center justify-center">
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                  <span className="text-primary-foreground text-base font-semibold">
+                    {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground text-base font-semibold">
-                  {authState.user?.username?.[0]?.toUpperCase() || 'م'}
-                </span>
+            ) : (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-muted/80 cursor-pointer">
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                  <span className="text-primary-foreground text-base font-semibold">
+                    {authState.user?.username?.[0]?.toUpperCase() || 'م'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {authState.user?.username || 'مستخدم'}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    {getRoleLabel(authState.user?.role || '')}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {authState.user?.username || 'مستخدم'}
-                </p>
-                <p className="text-xs text-muted-foreground font-medium">
-                  {getRoleLabel(authState.user?.role || '')}
-                </p>
-              </div>
-            </div>
-          )}
+            )}
+          </button>
         </div>
         
         {/* Logout Button */}
@@ -490,6 +503,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           </button>
         </div>
       </div>
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        open={isProfileModalOpen}
+        onOpenChange={setIsProfileModalOpen}
+      />
     </div>
   );
 };

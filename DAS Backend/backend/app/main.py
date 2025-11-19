@@ -20,6 +20,7 @@ from app.core.exceptions import (
 from app.services.security_service import security_service
 from app.services.config_service import config_service
 from app.core.telegram_logging_handler import setup_telegram_logging
+from app.core.logging_config import setup_logging
 
 # Create database tables
 # Suppressing type error for Base.metadata as it's a known SQLAlchemy pattern
@@ -99,6 +100,9 @@ app.include_router(daily.router, prefix="/api/daily", tags=["Daily Page"])
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    # Setup custom logging to filter 401 errors
+    setup_logging()
+    
     # Update database schema to match current models
     update_database_schema()
     
@@ -194,11 +198,11 @@ async def create_default_admin():
     
     db = SessionLocal()
     try:
-        # Check if any director user exists
+        # Check if admin user exists
         # Using type: ignore to suppress basedpyright error for working query pattern
-        director_user = db.query(User).filter(User.role == "director").first()  # type: ignore
-        if not director_user:
-            # Create admin user using dictionary approach to avoid type errors
+        admin_user = db.query(User).filter(User.username == "admin").first()  # type: ignore
+        if not admin_user:
+            # Create admin user (director role) using dictionary approach to avoid type errors
             admin_user_data = {
                 "username": "admin",
                 "password_hash": get_password_hash("admin123"),
@@ -208,76 +212,11 @@ async def create_default_admin():
             admin_user = User(**admin_user_data)
             db.add(admin_user)
             
-            # Also create director user to match documentation
-            director_user_data = {
-                "username": "director",
-                "password_hash": get_password_hash("director123"),
-                "role": "director",
-                "is_active": True
-            }
-            director_user = User(**director_user_data)
-            db.add(director_user)
-            
             db.commit()
-            print("Default admin users created:")
-            print("  - Username: admin, Password: admin123")
-            print("  - Username: director, Password: director123")
+            print("Default admin user created:")
+            print("  - Username: admin, Password: admin123, Role: director")
         else:
-            print("Director user already exists")
-            
-        # Create finance user if it doesn't exist
-        # Using type: ignore to suppress basedpyright error for working query pattern
-        finance_user = db.query(User).filter(User.role == "finance").first()  # type: ignore
-        if not finance_user:
-            finance_user_data = {
-                "username": "finance",
-                "password_hash": get_password_hash("finance123"),
-                "role": "finance",
-                "is_active": True
-            }
-            finance_user = User(**finance_user_data)
-            db.add(finance_user)
-            db.commit()
-            print("Finance user created:")
-            print("  - Username: finance, Password: finance123")
-        else:
-            print("Finance user already exists")
-            
-        # Create morning_school user if it doesn't exist
-        # Using type: ignore to suppress basedpyright error for working query pattern
-        morning_user = db.query(User).filter(User.role == "morning_school").first()  # type: ignore
-        if not morning_user:
-            morning_user_data = {
-                "username": "morning",
-                "password_hash": get_password_hash("morning123"),
-                "role": "morning_school",
-                "is_active": True
-            }
-            morning_user = User(**morning_user_data)
-            db.add(morning_user)
-            db.commit()
-            print("Morning school user created:")
-            print("  - Username: morning, Password: morning123")
-        else:
-            print("Morning school user already exists")
-            
-        # Create evening_school user if it doesn't exist
-        # Using type: ignore to suppress basedpyright error for working query pattern
-        evening_user = db.query(User).filter(User.role == "evening_school").first()  # type: ignore
-        if not evening_user:
-            evening_user_data = {
-                "username": "evening",
-                "password_hash": get_password_hash("evening123"),
-                "role": "evening_school",
-                "is_active": True
-            }
-            evening_user = User(**evening_user_data)
-            db.add(evening_user)
-            db.commit()
-            print("Evening school user created:")
-            print("  - Username: evening, Password: evening123")
-        else:
-            print("Evening school user already exists")
+            print("Admin user already exists")
     finally:
         db.close()
 
