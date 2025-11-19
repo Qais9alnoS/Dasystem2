@@ -86,7 +86,10 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
       
       // احصل على الطلاب
       const studentsResponse = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}`);
-      console.log('Students response:', studentsResponse.data);
+      console.log('Students response FULL:', studentsResponse);
+      console.log('Students response.data:', studentsResponse.data);
+      console.log('Students response.data type:', typeof studentsResponse.data);
+      console.log('Students response.data is Array:', Array.isArray(studentsResponse.data));
       
       // احصل على حضور اليوم
       const attendanceResponse = await api.get(
@@ -116,7 +119,13 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
       setAbsentStudentIds(absent);
     } catch (error) {
       console.error('Error fetching students:', error);
-      alert('حدث خطأ أثناء جلب بيانات الطلاب');
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      let errorMessage = 'حدث خطأ أثناء جلب بيانات الطلاب';
+      if (error instanceof Error) {
+        errorMessage += `\n\nالتفاصيل: ${error.message}`;
+      }
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
