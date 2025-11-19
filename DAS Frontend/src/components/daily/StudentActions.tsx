@@ -19,6 +19,21 @@ interface Subject {
   subject_name: string;
 }
 
+interface StudentAction {
+  id: number;
+  student_id: number;
+  student_name: string;
+  action_type: string;
+  action_type_label: string;
+  subject_id: number | null;
+  subject_name: string | null;
+  description: string;
+  grade: number | null;
+  max_grade: number | null;
+  notes: string | null;
+  action_date: string;
+}
+
 interface StudentActionsProps {
   academicYearId: number;
   sessionType: string;
@@ -65,6 +80,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [whatsappMessage, setWhatsappMessage] = useState('');
   const [whatsappLink, setWhatsappLink] = useState('');
+  
+  const [todayActions, setTodayActions] = useState<StudentAction[]>([]);
+  const [editingAction, setEditingAction] = useState<StudentAction | null>(null);
 
   useEffect(() => {
     fetchClasses();
@@ -74,8 +92,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
     if (selectedClassId && selectedSection) {
       fetchStudents();
       fetchSubjects();
+      fetchTodayActions();
     }
-  }, [selectedClassId, selectedSection]);
+  }, [selectedClassId, selectedSection, selectedDate]);
 
   const fetchClasses = async () => {
     try {
@@ -145,6 +164,22 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
       return;
     }
 
+    // التحقق من المادة إذا كانت مطلوبة
+    if (requiresSubject() && !selectedSubjectId) {
+      alert('يرجى اختيار المادة لهذا النوع من الإجراءات');
+      return;
+    }
+
+    // التحقق من العلامة
+    if (isAcademicAction() && grade && maxGrade) {
+      const gradeNum = parseFloat(grade);
+      const maxGradeNum = parseFloat(maxGrade);
+      if (gradeNum > maxGradeNum) {
+        alert('العلامة لا يمكن أن تكون أعلى من العلامة الكاملة');
+        return;
+      }
+    }
+
     try {
       await api.post('/daily/actions/students', {
         student_id: selectedStudent.id,
@@ -161,9 +196,90 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
       alert('تم حفظ الإجراء بنجاح');
       setShowActionDialog(false);
       resetActionForm();
+      fetchTodayActions(); // تحديث قائمة الإجراءات
     } catch (error) {
       console.error('Error saving action:', error);
       alert('حدث خطأ أثناء حفظ الإجراء');
+    }
+  };
+
+  const fetchTodayActions = async () => {
+    if (!selectedClassId || !selectedSection) return;
+    
+    try {
+      const response = await api.get(
+        `/daily/actions/students?class_id=${selectedClassId}&section=${selectedSection}&action_date=${selectedDate}`
+      );
+      setTodayActions(response.data as StudentAction[]);
+    } catch (error) {
+      console.error('Error fetching today actions:', error);
+    }
+  };
+
+  const handleDeleteAction = async (actionId: number) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الإجراء؟')) return;
+    
+    try {
+      await api.delete(`/daily/actions/students/${actionId}`);
+      alert('تم حذف الإجراء بنجاح');
+      fetchTodayActions();
+    } catch (error) {
+      console.error('Error deleting action:', error);
+      alert('حدث خطأ أثناء حذف الإجراء');
+    }
+  };
+
+  const handleEditAction = (action: StudentAction) => {
+    setEditingAction(action);
+    setSelectedStudent({ id: action.student_id, full_name: action.student_name });
+    setActionType(action.action_type);
+    setSelectedSubjectId(action.subject_id);
+    setDescription(action.description);
+    setGrade(action.grade?.toString() || '');
+    setMaxGrade(action.max_grade?.toString() || '');
+    setNotes(action.notes || '');
+    setShowActionDialog(true);
+  };
+
+  const handleUpdateAction = async () => {
+    if (!editingAction || !actionType || !description) {
+      alert('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+
+    if (requiresSubject() && !selectedSubjectId) {
+      alert('يرجى اختيار المادة لهذا النوع من الإجراءات');
+      return;
+    }
+
+    // التحقق من العلامة
+    if (isAcademicAction() && grade && maxGrade) {
+      const gradeNum = parseFloat(grade);
+      const maxGradeNum = parseFloat(maxGrade);
+      if (gradeNum > maxGradeNum) {
+        alert('العلامة لا يمكن أن تكون أعلى من العلامة الكاملة');
+        return;
+      }
+    }
+
+    try {
+      await api.put(`/daily/actions/students/${editingAction.id}`, {
+        action_type: actionType,
+        subject_id: selectedSubjectId,
+        description,
+        grade: grade ? parseFloat(grade) : null,
+        max_grade: maxGrade ? parseFloat(maxGrade) : null,
+        notes
+      });
+
+      alert('تم تحديث الإجراء بنجاح');
+      setShowActionDialog(false);
+      setEditingAction(null);
+      resetActionForm();
+      fetchTodayActions();
+    } catch (error) {
+      console.error('Error updating action:', error);
+      alert('حدث خطأ أثناء تحديث الإجراء');
     }
   };
 
@@ -180,7 +296,14 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
       
       const data = response.data as { message_content: string; group_link: string | null };
       setWhatsappMessage(data.message_content);
-      setWhatsappLink(data.group_link || '');
+      
+      // إذا كان هناك رابط محفوظ، استخدمه، وإلا استخدم الرابط من الاستجابة
+      if (whatsappLink) {
+        // احتفظ بالرابط الحالي
+      } else if (data.group_link) {
+        setWhatsappLink(data.group_link);
+      }
+      
       setShowWhatsAppDialog(true);
     } catch (error) {
       console.error('Error generating WhatsApp message:', error);
@@ -188,12 +311,53 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
     }
   };
 
-  const handleSendToWhatsApp = () => {
-    if (whatsappLink) {
-      const encodedMessage = encodeURIComponent(whatsappMessage);
-      window.open(`${whatsappLink}?text=${encodedMessage}`, '_blank');
-    } else {
-      alert('يرجى تحديد رابط المجموعة أولاً');
+  const handleSendToWhatsApp = async () => {
+    if (!whatsappLink) {
+      alert('يرجى إدخال رابط المجموعة أولاً');
+      return;
+    }
+
+    // حفظ رابط المجموعة
+    try {
+      await api.post('/daily/whatsapp/config', {
+        class_id: selectedClassId,
+        section: selectedSection,
+        academic_year_id: academicYearId,
+        group_link: whatsappLink
+      });
+    } catch (error) {
+      console.error('Error saving WhatsApp link:', error);
+    }
+
+    // إرسال الرسالة
+    const encodedMessage = encodeURIComponent(whatsappMessage);
+    
+    // تنسيق الرابط: https://chat.whatsapp.com/XXXXXXXX
+    if (whatsappLink.includes('chat.whatsapp.com/')) {
+      // رابط مجموعة - نسخ الرسالة وفتح المجموعة
+      navigator.clipboard.writeText(whatsappMessage).then(() => {
+        alert('تم نسخ الرسالة! الآن افتح مجموعة الواتساب والصقها.');
+        setTimeout(() => {
+          window.open(whatsappLink, '_blank');
+        }, 500);
+      }).catch(() => {
+        window.open(whatsappLink, '_blank');
+        alert('افتح المجموعة وانسخ الرسالة من النافذة السابقة');
+      });
+    }
+    // تنسيق wa.me مع رقم هاتف
+    else if (whatsappLink.includes('wa.me/')) {
+      const phoneNumber = whatsappLink.split('wa.me/')[1].replace(/[^0-9]/g, '');
+      window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
+    }
+    // رقم هاتف مباشر
+    else if (whatsappLink.match(/^\+?[0-9]+$/)) {
+      const phoneNumber = whatsappLink.replace(/[^0-9]/g, '');
+      window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
+    }
+    // رابط مباشر
+    else {
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
     }
   };
 
@@ -231,17 +395,17 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           </Button>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         {/* اختيار المرحلة والصف والشعبة */}
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">المرحلة</label>
+            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">المرحلة</label>
             <Select value={selectedGradeLevel} onValueChange={(val) => {
               setSelectedGradeLevel(val);
               setSelectedClassId(null);
               setSelectedSection('');
             }}>
-              <SelectTrigger>
+              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                 <SelectValue placeholder="اختر المرحلة" />
               </SelectTrigger>
               <SelectContent>
@@ -255,12 +419,12 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">الصف</label>
+            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">الصف</label>
             <Select value={selectedClassId?.toString()} onValueChange={(val) => {
               setSelectedClassId(parseInt(val));
               setSelectedSection('');
             }} disabled={!selectedGradeLevel}>
-              <SelectTrigger>
+              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                 <SelectValue placeholder="اختر الصف" />
               </SelectTrigger>
               <SelectContent>
@@ -274,9 +438,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">الشعبة</label>
+            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">الشعبة</label>
             <Select value={selectedSection} onValueChange={setSelectedSection} disabled={!selectedClassId}>
-              <SelectTrigger>
+              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                 <SelectValue placeholder="اختر الشعبة" />
               </SelectTrigger>
               <SelectContent>
@@ -298,62 +462,130 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           <>
             {/* شريط البحث */}
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
               <Input
                 type="text"
                 placeholder="ابحث عن طالب..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-10"
+                className="pr-10 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
               />
             </div>
 
             {/* قائمة الطلاب */}
-            <div className="max-h-96 overflow-y-auto space-y-2">
+            <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
               {filteredStudents.map(student => (
                 <div
                   key={student.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50"
+                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  <span className="font-medium">{student.full_name}</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{student.full_name}</span>
                   <Button
                     size="sm"
                     onClick={() => openActionDialog(student)}
+                    className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
                   >
                     إضافة إجراء
                   </Button>
                 </div>
               ))}
             </div>
+
+            {/* إجراءات اليوم */}
+            {todayActions.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">
+                  📋 إجراءات اليوم ({todayActions.length})
+                </h3>
+                <div className="space-y-3">
+                  {todayActions.map(action => (
+                    <Card key={action.id} className="border-purple-200 dark:border-purple-800">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="font-bold text-gray-900 dark:text-gray-100">
+                                {action.student_name}
+                              </span>
+                              <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                {action.action_type_label}
+                              </Badge>
+                              {action.subject_name && (
+                                <Badge variant="outline" className="dark:border-gray-600 dark:text-gray-300">
+                                  📚 {action.subject_name}
+                                </Badge>
+                              )}
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {new Date(action.action_date).toLocaleDateString('ar-SA')}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                              {action.description}
+                            </p>
+                            {action.grade !== null && action.max_grade !== null && (
+                              <div className="text-sm text-gray-600 dark:text-gray-400">
+                                <span className="font-medium">العلامة:</span> {action.grade}/{action.max_grade}
+                              </div>
+                            )}
+                            {action.notes && (
+                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                <span className="font-medium">ملاحظات:</span> {action.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditAction(action)}
+                              className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                            >
+                              تعديل
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteAction(action.id)}
+                            >
+                              حذف
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {/* نافذة إضافة إجراء */}
         <Dialog open={showActionDialog} onOpenChange={setShowActionDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl dark:bg-gray-900 dark:border-gray-700">
             <DialogHeader>
-              <DialogTitle>
-                إضافة إجراء - {selectedStudent?.full_name}
+              <DialogTitle className="dark:text-white">
+                {editingAction ? 'تعديل إجراء' : 'إضافة إجراء'} - {selectedStudent?.full_name}
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">نوع الإجراء</label>
+                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">نوع الإجراء</label>
                 <Select value={actionType} onValueChange={setActionType}>
-                  <SelectTrigger>
+                  <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                     <SelectValue placeholder="اختر نوع الإجراء" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="" disabled>إجراءات بدون مادة</SelectItem>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">إجراءات بدون مادة</div>
                     {Object.entries(ACTION_TYPES.WITHOUT_SUBJECT).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
-                    <SelectItem value="" disabled>إجراءات مع مادة</SelectItem>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400 mt-2">إجراءات مع مادة</div>
                     {Object.entries(ACTION_TYPES.WITH_SUBJECT).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
-                    <SelectItem value="" disabled>إجراءات أكاديمية</SelectItem>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400 mt-2">إجراءات أكاديمية</div>
                     {Object.entries(ACTION_TYPES.ACADEMIC).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
@@ -363,9 +595,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
               {requiresSubject() && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">المادة</label>
+                  <label className="block text-sm font-semibold mb-2 dark:text-gray-200">المادة</label>
                   <Select value={selectedSubjectId?.toString()} onValueChange={(val) => setSelectedSubjectId(parseInt(val))}>
-                    <SelectTrigger>
+                    <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                       <SelectValue placeholder="اختر المادة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -380,56 +612,61 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-2">التفاصيل / السبب</label>
+                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">التفاصيل / السبب</label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="اكتب تفاصيل الإجراء أو السبب..."
                   rows={3}
+                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
 
               {isAcademicAction() && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">العلامة</label>
+                    <label className="block text-sm font-semibold mb-2 dark:text-gray-200">العلامة</label>
                     <Input
                       type="number"
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
                       placeholder="0"
+                      className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">العلامة الكاملة</label>
+                    <label className="block text-sm font-semibold mb-2 dark:text-gray-200">العلامة الكاملة</label>
                     <Input
                       type="number"
                       value={maxGrade}
                       onChange={(e) => setMaxGrade(e.target.value)}
                       placeholder="10"
+                      className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                     />
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-2">ملاحظات إضافية</label>
+                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">ملاحظات إضافية</label>
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="ملاحظات..."
+                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
 
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => {
                   setShowActionDialog(false);
+                  setEditingAction(null);
                   resetActionForm();
                 }}>
                   إلغاء
                 </Button>
-                <Button onClick={handleSaveAction}>
-                  حفظ الإجراء
+                <Button onClick={editingAction ? handleUpdateAction : handleSaveAction}>
+                  {editingAction ? 'تحديث الإجراء' : 'حفظ الإجراء'}
                 </Button>
               </div>
             </div>
@@ -438,28 +675,55 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
         {/* نافذة رسالة الواتساب */}
         <Dialog open={showWhatsAppDialog} onOpenChange={setShowWhatsAppDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl dark:bg-gray-900 dark:border-gray-700">
             <DialogHeader>
-              <DialogTitle>إرسال التقرير اليومي للأهل</DialogTitle>
+              <DialogTitle className="dark:text-white">إرسال التقرير اليومي للأهل</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">رابط مجموعة الواتساب</label>
-                <Input
-                  value={whatsappLink}
-                  onChange={(e) => setWhatsappLink(e.target.value)}
-                  placeholder="https://chat.whatsapp.com/..."
-                />
+                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">رابط مجموعة الواتساب</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={whatsappLink}
+                    onChange={(e) => setWhatsappLink(e.target.value)}
+                    placeholder="https://chat.whatsapp.com/..."
+                    className="flex-1 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!whatsappLink) {
+                        alert('يرجى إدخال رابط المجموعة أولاً');
+                        return;
+                      }
+                      try {
+                        await api.post('/daily/whatsapp/config', {
+                          class_id: selectedClassId,
+                          section: selectedSection,
+                          academic_year_id: academicYearId,
+                          group_link: whatsappLink
+                        });
+                        alert('تم حفظ رابط المجموعة بنجاح');
+                      } catch (error) {
+                        console.error('Error saving WhatsApp link:', error);
+                        alert('حدث خطأ أثناء حفظ الرابط');
+                      }
+                    }}
+                    variant="outline"
+                    className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    حفظ
+                  </Button>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">محتوى الرسالة</label>
+                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">محتوى الرسالة</label>
                 <Textarea
                   value={whatsappMessage}
                   onChange={(e) => setWhatsappMessage(e.target.value)}
                   rows={10}
-                  className="font-mono text-sm"
+                  className="font-mono text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
 

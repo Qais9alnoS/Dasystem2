@@ -5,9 +5,9 @@ from typing import List, Optional
 from datetime import date, datetime, timedelta
 from app.database import get_db
 from app.models import (
-    Holiday, StudentDailyAttendance, TeacherPeriodAttendance,
+    Holiday, StudentDailyAttendance, TeacherPeriodAttendance, 
     StudentAction, WhatsAppGroupConfig, Student, Teacher, 
-    Class, Schedule, AcademicYear, Subject, User
+    Class, Schedule, AcademicYear, Subject, User, StudentAcademic
 )
 from app.schemas.daily import (
     HolidayCreate, HolidayUpdate, HolidayResponse,
@@ -22,6 +22,79 @@ from app.schemas.daily import (
 from app.core.dependencies import get_current_user
 
 router = APIRouter()
+
+# ==================== Helper Functions ====================
+
+def update_academic_averages(db: Session, student_id: int, academic_year_id: int, subject_id: int, action_type: str):
+    """تحديث المتوسطات الأكاديمية للطالب في مادة معينة"""
+    # احصل أو أنشئ سجل StudentAcademic
+    student_academic = db.query(StudentAcademic).filter(
+        and_(
+            StudentAcademic.student_id == student_id,
+            StudentAcademic.academic_year_id == academic_year_id,
+            StudentAcademic.subject_id == subject_id
+        )
+    ).first()
+    
+    if not student_academic:
+        student_academic = StudentAcademic(
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            subject_id=subject_id
+        )
+        db.add(student_academic)
+    
+    # احسب المتوسط حسب نوع الإجراء
+    if action_type == 'recitation':
+        # احسب متوسط التسميع
+        recitations = db.query(StudentAction).filter(
+            and_(
+                StudentAction.student_id == student_id,
+                StudentAction.academic_year_id == academic_year_id,
+                StudentAction.subject_id == subject_id,
+                StudentAction.action_type == 'recitation',
+                StudentAction.grade.isnot(None)
+            )
+        ).all()
+        
+        if recitations:
+            # حساب النسبة المئوية لكل تسميع ثم المتوسط
+            percentages = [(r.grade / r.max_grade * 100) if r.max_grade else 0 for r in recitations]
+            student_academic.recitation_grades = sum(percentages) / len(percentages)
+    
+    elif action_type == 'activity':
+        # احسب متوسط النشاط
+        activities = db.query(StudentAction).filter(
+            and_(
+                StudentAction.student_id == student_id,
+                StudentAction.academic_year_id == academic_year_id,
+                StudentAction.subject_id == subject_id,
+                StudentAction.action_type == 'activity',
+                StudentAction.grade.isnot(None)
+            )
+        ).all()
+        
+        if activities:
+            percentages = [(a.grade / a.max_grade * 100) if a.max_grade else 0 for a in activities]
+            student_academic.activity_grade = sum(percentages) / len(percentages)
+    
+    elif action_type == 'quiz':
+        # احسب متوسط السبر (يُحفظ في first_exam_grades)
+        quizzes = db.query(StudentAction).filter(
+            and_(
+                StudentAction.student_id == student_id,
+                StudentAction.academic_year_id == academic_year_id,
+                StudentAction.subject_id == subject_id,
+                StudentAction.action_type == 'quiz',
+                StudentAction.grade.isnot(None)
+            )
+        ).all()
+        
+        if quizzes:
+            percentages = [(q.grade / q.max_grade * 100) if q.max_grade else 0 for q in quizzes]
+            student_academic.board_grades = sum(percentages) / len(percentages)
+    
+    db.commit()
 
 # ==================== Holiday Management ====================
 
@@ -374,9 +447,19 @@ def create_student_action(
     db.commit()
     db.refresh(db_action)
     
+    # تحديث المتوسطات للإجراءات الأكاديمية
+    if action.action_type in ['recitation', 'activity', 'quiz'] and action.subject_id and action.grade is not None:
+        update_academic_averages(
+            db=db,
+            student_id=action.student_id,
+            academic_year_id=action.academic_year_id,
+            subject_id=action.subject_id,
+            action_type=action.action_type
+        )
+    
     return db_action
 
-@router.get("/actions/students", response_model=List[StudentActionResponse])
+@router.get("/actions/students")
 def get_student_actions(
     student_id: Optional[int] = None,
     class_id: Optional[int] = None,
@@ -386,7 +469,7 @@ def get_student_actions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """الحصول على قائمة إجراءات الطلاب"""
+    """الحصول على قائمة إجراءات الطلاب مع التفاصيل"""
     query = db.query(StudentAction)
     
     if student_id:
@@ -408,7 +491,120 @@ def get_student_actions(
     if action_type:
         query = query.filter(StudentAction.action_type == action_type)
     
-    return query.order_by(StudentAction.action_date.desc()).all()
+    actions = query.order_by(StudentAction.action_date.desc()).all()
+    
+    # إضافة البيانات الإضافية
+    action_names = {
+        'warning': 'إنذار',
+        'parent_call': 'استدعاء ولي أمر',
+        'suspension': 'فصل',
+        'misbehavior': 'مشاغبة',
+        'distinguished_participation': 'مشاركة مميزة',
+        'thank_you_card': 'بطاقة شكر',
+        'recitation': 'تسميع',
+        'activity': 'نشاط',
+        'quiz': 'سبر',
+        'note': 'ملاحظة'
+    }
+    
+    result = []
+    for action in actions:
+        student = db.query(Student).filter(Student.id == action.student_id).first()
+        subject = None
+        if action.subject_id:
+            subject = db.query(Subject).filter(Subject.id == action.subject_id).first()
+        
+        result.append({
+            'id': action.id,
+            'student_id': action.student_id,
+            'student_name': student.full_name if student else '',
+            'action_type': action.action_type,
+            'action_type_label': action_names.get(action.action_type, action.action_type),
+            'subject_id': action.subject_id,
+            'subject_name': subject.subject_name if subject else None,
+            'description': action.description,
+            'grade': action.grade,
+            'max_grade': action.max_grade,
+            'notes': action.notes,
+            'action_date': action.action_date.isoformat()
+        })
+    
+    return result
+
+@router.put("/actions/students/{action_id}", response_model=StudentActionResponse)
+def update_student_action(
+    action_id: int,
+    action_update: StudentActionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """تحديث إجراء لطالب"""
+    db_action = db.query(StudentAction).filter(StudentAction.id == action_id).first()
+    if not db_action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    
+    # حفظ البيانات القديمة لتحديث المتوسطات
+    old_action_type = db_action.action_type
+    old_subject_id = db_action.subject_id
+    
+    for key, value in action_update.dict(exclude_unset=True).items():
+        setattr(db_action, key, value)
+    
+    db.commit()
+    db.refresh(db_action)
+    
+    # تحديث المتوسطات إذا كان إجراء أكاديمي
+    if db_action.action_type in ['recitation', 'activity', 'quiz'] and db_action.subject_id:
+        update_academic_averages(
+            db=db,
+            student_id=db_action.student_id,
+            academic_year_id=db_action.academic_year_id,
+            subject_id=db_action.subject_id,
+            action_type=db_action.action_type
+        )
+    # إذا تغيرت المادة أو النوع، حدّث المتوسطات القديمة أيضاً
+    if old_subject_id and old_subject_id != db_action.subject_id and old_action_type in ['recitation', 'activity', 'quiz']:
+        update_academic_averages(
+            db=db,
+            student_id=db_action.student_id,
+            academic_year_id=db_action.academic_year_id,
+            subject_id=old_subject_id,
+            action_type=old_action_type
+        )
+    
+    return db_action
+
+@router.delete("/actions/students/{action_id}")
+def delete_student_action(
+    action_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """حذف إجراء لطالب"""
+    db_action = db.query(StudentAction).filter(StudentAction.id == action_id).first()
+    if not db_action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    
+    # حفظ البيانات قبل الحذف لتحديث المتوسطات
+    student_id = db_action.student_id
+    academic_year_id = db_action.academic_year_id
+    subject_id = db_action.subject_id
+    action_type = db_action.action_type
+    
+    db.delete(db_action)
+    db.commit()
+    
+    # تحديث المتوسطات بعد الحذف
+    if action_type in ['recitation', 'activity', 'quiz'] and subject_id:
+        update_academic_averages(
+            db=db,
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            subject_id=subject_id,
+            action_type=action_type
+        )
+    
+    return {"message": "Action deleted successfully"}
 
 # ==================== WhatsApp Group Configuration ====================
 
@@ -604,32 +800,42 @@ def generate_whatsapp_message(
     message += f"الصف: {class_id} - الشعبة: {section}\n\n"
     
     if absences:
-        message += "⚠️ *الغيابات:*\n"
+        message += "*الغيابات:*\n"
         for absence in absences:
             student = db.query(Student).filter(Student.id == absence.student_id).first()
             message += f"- {student.full_name}\n"
         message += "\n"
     
     if actions:
-        message += "📋 *الإجراءات والملاحظات:*\n"
+        message += "*الاجراءات والملاحظات:*\n"
         for action in actions:
             student = db.query(Student).filter(Student.id == action.student_id).first()
             action_names = {
-                'warning': '⚠️ إنذار',
-                'parent_call': '📞 استدعاء ولي أمر',
-                'suspension': '🚫 فصل',
-                'misbehavior': '😠 مشاغبة',
-                'distinguished_participation': '⭐ مشاركة مميزة',
-                'thank_you_card': '🎉 بطاقة شكر',
-                'recitation': '📖 تسميع',
-                'activity': '✏️ نشاط',
-                'quiz': '📝 سبر',
-                'note': '📝 ملاحظة'
+                'warning': 'انذار',
+                'parent_call': 'استدعاء ولي امر',
+                'suspension': 'فصل',
+                'misbehavior': 'مشاغبة',
+                'distinguished_participation': 'مشاركة مميزة',
+                'thank_you_card': 'بطاقة شكر',
+                'recitation': 'تسميع',
+                'activity': 'نشاط',
+                'quiz': 'سبر',
+                'note': 'ملاحظة'
             }
             action_name = action_names.get(action.action_type, action.action_type)
             message += f"- {student.full_name}: {action_name}"
-            if action.grade:
-                message += f" ({action.grade}/{action.max_grade})"
+            
+            # إضافة اسم المادة إذا كانت موجودة
+            if action.subject_id:
+                subject = db.query(Subject).filter(Subject.id == action.subject_id).first()
+                if subject:
+                    message += f" - مادة {subject.subject_name}"
+            
+            if action.grade is not None and action.max_grade is not None:
+                # تحويل العلامات إلى أعداد صحيحة إذا كانت كاملة
+                grade_str = str(int(action.grade)) if action.grade == int(action.grade) else str(action.grade)
+                max_grade_str = str(int(action.max_grade)) if action.max_grade == int(action.max_grade) else str(action.max_grade)
+                message += f" - العلامة {grade_str} من {max_grade_str}"
             message += f"\n  {action.description}\n"
         message += "\n"
     
