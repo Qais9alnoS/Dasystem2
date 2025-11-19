@@ -1251,21 +1251,25 @@ class ScheduleGenerationService:
                 self.db.add(schedule_entry)
                 all_schedules.append(schedule_entry)
             
-            # Update teacher availability
+            # Commit all schedule entries first to get IDs
+            self.db.commit()
+            
+            # Update teacher free_time_slots to mark slots as assigned
             for schedule in all_schedules:
                 if schedule.teacher_id:
-                    teacher = self.db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
-                    if teacher:
-                        availability = teacher.availability or {}
-                        day_key = str(schedule.day_of_week)
-                        if day_key not in availability:
-                            availability[day_key] = []
-                        if schedule.period_number not in availability[day_key]:
-                            availability[day_key].append(schedule.period_number)
-                        teacher.availability = availability
-            
-            # Commit all schedule entries
-            self.db.commit()
+                    try:
+                        self.availability_service.mark_slot_as_assigned(
+                            teacher_id=schedule.teacher_id,
+                            day=schedule.day_of_week - 1,  # Convert to 0-based
+                            period=schedule.period_number - 1,  # Convert to 0-based
+                            subject_id=schedule.subject_id,
+                            class_id=schedule.class_id,
+                            section=schedule.section,
+                            schedule_id=schedule.id
+                        )
+                        print(f"Marked teacher {schedule.teacher_id} as assigned for day {schedule.day_of_week} period {schedule.period_number}")
+                    except Exception as e:
+                        print(f"Warning: Failed to mark slot as assigned: {e}")
             
             # Create generation history record
             generation_time = time.time() - start_time

@@ -54,13 +54,13 @@ const DirectorNotesPage: React.FC = () => {
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'goals':
-        return <Target className="h-6 w-6 text-blue-500" />;
+        return <Target className="h-6 w-6 text-primary" />;
       case 'projects':
         return <Briefcase className="h-6 w-6 text-green-500" />;
       case 'blogs':
         return <BookOpen className="h-6 w-6 text-purple-500" />;
       case 'educational_admin':
-        return <GraduationCap className="h-6 w-6 text-orange-500" />;
+        return <GraduationCap className="h-6 w-6 text-secondary" />;
       default:
         return <FileText className="h-6 w-6 text-gray-500" />;
     }
@@ -169,7 +169,7 @@ const DirectorNotesPage: React.FC = () => {
                         htmlFor="filter-notes"
                         className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        <FileText className="h-4 w-4 text-blue-500" />
+                        <FileText className="h-4 w-4 text-primary" />
                         الملاحظات
                       </label>
                     </div>
@@ -186,7 +186,7 @@ const DirectorNotesPage: React.FC = () => {
                         htmlFor="filter-rewards"
                         className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        <Award className="h-4 w-4 text-yellow-500" />
+                        <Award className="h-4 w-4 text-accent" />
                         المكافآت
                       </label>
                     </div>
@@ -286,7 +286,7 @@ const DirectorNotesPage: React.FC = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Award className="h-6 w-6 text-yellow-500" />
+                <Award className="h-6 w-6 text-accent" />
                 <div>
                   <CardTitle className="text-xl">المكافئات</CardTitle>
                   <CardDescription className="mt-1">

@@ -369,7 +369,7 @@ export const ScheduleManagementPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-3">
-            <Calendar className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <Calendar className="h-8 w-8 text-primary" />
             إدارة الجداول الدراسية
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -421,7 +421,7 @@ export const ScheduleManagementPage: React.FC = () => {
                         <div
                           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
                             isActive
-                              ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-lg'
+                              ? 'bg-primary text-primary-foreground shadow-lg'
                               : isCompleted
                               ? 'bg-green-500 dark:bg-green-600 text-white'
                               : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
@@ -434,7 +434,7 @@ export const ScheduleManagementPage: React.FC = () => {
                           )}
                         </div>
                         <div className="mt-2 text-center">
-                          <p className={`text-sm font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                          <p className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`}>
                             {step.title}
                           </p>
                           <p className="text-xs text-muted-foreground hidden md:block">
@@ -463,7 +463,7 @@ export const ScheduleManagementPage: React.FC = () => {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     {React.createElement(steps.find(s => s.id === currentStep)?.icon || Calendar, {
-                      className: 'h-5 w-5 text-blue-600'
+                      className: 'h-5 w-5 text-primary'
                     })}
                     {steps.find(s => s.id === currentStep)?.title}
                   </CardTitle>
@@ -523,7 +523,7 @@ export const ScheduleManagementPage: React.FC = () => {
                     readOnly={isPreviewMode}
                   />
                   {isPreviewMode && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-900 dark:text-blue-100">
+                    <div className="p-4 bg-primary/10 border border-primary/30 rounded text-sm text-primary">
                       هذه نسخة معاينة فقط. انتقل إلى خطوة "التصدير" لحفظ الجدول بشكل نهائي.
                     </div>
                   )}
@@ -541,8 +541,8 @@ export const ScheduleManagementPage: React.FC = () => {
                 <div className="text-center py-12 space-y-4">
                   {isPreviewMode ? (
                     <>
-                      <AlertTriangle className="h-16 w-16 text-yellow-500 mx-auto" />
-                      <h3 className="text-2xl font-bold text-yellow-900">لم يتم النشر بعد</h3>
+                      <AlertTriangle className="h-16 w-16 text-accent mx-auto" />
+                      <h3 className="text-2xl font-bold text-accent-foreground">لم يتم النشر بعد</h3>
                       <p className="text-muted-foreground">
                         قم بحفظ الجدول في قاعدة البيانات ليظهر ضمن "عرض الجداول" ويصبح متاحًا للتصدير.
                       </p>

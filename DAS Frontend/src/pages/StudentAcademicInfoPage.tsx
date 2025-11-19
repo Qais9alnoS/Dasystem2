@@ -1485,18 +1485,18 @@ const StudentAcademicInfoPage = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Warning Banner for Unsaved Changes */}
         {hasUnsavedChanges && pendingGrades.size > 0 && (
-          <Card className="border-orange-500 bg-orange-50 dark:bg-orange-900/20 rounded-3xl shadow-lg">
+          <Card className="border-secondary bg-secondary/10 dark:bg-secondary/5 rounded-3xl shadow-lg">
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5 text-white" />
+                  <div className="w-10 h-10 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-secondary-foreground" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-orange-900 dark:text-orange-100 text-base">
+                    <p className="font-semibold text-secondary-foreground text-base">
                       ⚠️ لديك {pendingGrades.size} تغيير غير محفوظ
                     </p>
-                    <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                    <p className="text-sm text-secondary-foreground/80 mt-1">
                       إذا قمت بإعادة تحميل الصفحة أو مغادرتها، سيتم فقدان جميع التغييرات غير المحفوظة
                     </p>
                   </div>
@@ -1504,7 +1504,7 @@ const StudentAcademicInfoPage = () => {
                 <Button
                   onClick={saveAllPendingGrades}
                   disabled={isSaving}
-                  className="rounded-xl gap-2 bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
+                  className="rounded-xl gap-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground flex-shrink-0"
                 >
                   <Save className="h-4 w-4" />
                   {isSaving ? 'جاري الحفظ...' : 'حفظ الآن'}
@@ -1689,19 +1689,19 @@ const StudentAcademicInfoPage = () => {
                       </Button>
                     </div>
                     {isTotalView && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mt-2">
-                        <p className="text-sm text-blue-900 dark:text-blue-100 font-medium flex items-center gap-2">
+                      <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 mt-2">
+                        <p className="text-sm text-primary font-medium flex items-center gap-2">
                           <span className="text-lg">🔍</span>
                           وضع المجموع الكلي: عرض للقراءة فقط - لا يمكن تعديل العلامات في هذا الوضع
                         </p>
-                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 mr-7">
+                        <p className="text-xs text-primary/80 mt-1 mr-7">
                           العلامات المعروضة هي مجموع علامات جميع المواد ({subjects.length} مادة). يمكنك تعديل حد الرسوب فقط بالضغط على عنوان أي عمود.
                         </p>
                       </div>
                     )}
                     {!isTotalView && !selectedSubject && subjects.length > 0 && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 mt-2">
-                        <p className="text-sm text-amber-900 dark:text-amber-100 font-medium flex items-center gap-2">
+                      <div className="bg-accent/10 border border-accent/30 rounded-xl p-3 mt-2">
+                        <p className="text-sm text-accent-foreground font-medium flex items-center gap-2">
                           <span className="text-lg">⚠️</span>
                           يرجى اختيار مادة لعرض وتعديل العلامات
                         </p>
@@ -1867,8 +1867,8 @@ const StudentAcademicInfoPage = () => {
           <AlertDialogContent className="sm:max-w-md rounded-3xl" dir="rtl">
             <AlertDialogHeader>
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                <div className="w-12 h-12 bg-secondary/20 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-secondary" />
                 </div>
                 <AlertDialogTitle className="text-xl font-bold">
                   تغييرات غير محفوظة
@@ -1876,7 +1876,7 @@ const StudentAcademicInfoPage = () => {
               </div>
               <AlertDialogDescription className="text-base space-y-3 pt-2">
                 <p className="font-medium text-foreground">
-                  لديك <span className="text-orange-600 dark:text-orange-400 font-bold">{pendingGrades.size}</span> تغيير غير محفوظ
+                  لديك <span className="text-secondary font-bold">{pendingGrades.size}</span> تغيير غير محفوظ
                 </p>
                 <p className="text-muted-foreground">
                   إذا غادرت الصفحة الآن، سيتم فقدان جميع التغييرات غير المحفوظة.

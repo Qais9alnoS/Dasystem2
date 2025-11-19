@@ -135,7 +135,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 const occupied = scheduleData.map((entry: any) => ({
                     day: entry.day_of_week - 1, // Convert from 1-5 to 0-4
                     period: entry.period_number - 1, // Convert from 1-6 to 0-5
-                    className: `${entry.grade_level}/${entry.grade_number}-${entry.section}`,
+                    className: `${entry.grade_number}/${entry.section}`, // Format as: grade/section (e.g. 1/1)
                     subject: entry.subject_name || 'مادة'
                 }));
                 setOccupiedSlots(occupied);
@@ -313,18 +313,43 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
         return total;
     };
 
+    // Calculate remaining required hours (total - already scheduled)
+    const calculateRemainingRequiredHours = () => {
+        const totalRequired = calculateTotalWeeklyHours();
+        const alreadyScheduled = occupiedSlots.length; // Number of periods already in schedule
+        const remaining = Math.max(0, totalRequired - alreadyScheduled);
+        return remaining;
+    };
+
+    // Count truly free slots (not occupied by schedule)
+    const countTrulyFreeSlots = () => {
+        return freeTimeSlots.filter(slot => {
+            // Check if this slot is occupied
+            const isOccupied = occupiedSlots.some(
+                occ => occ.day === slot.day && occ.period === slot.period
+            );
+            // Only count if marked as free AND not occupied
+            return slot.is_free && !isOccupied;
+        }).length;
+    };
+
     const handleSaveFreeTimeSlots = async (slots: FreeTimeSlot[]) => {
-        // Calculate total weekly hours from assignments
-        const totalWeeklyHours = calculateTotalWeeklyHours();
+        // Calculate remaining required hours (excluding already scheduled)
+        const remainingRequired = calculateRemainingRequiredHours();
 
-        // Count free time slots
-        const freeSlotCount = slots.filter(slot => slot.is_free).length;
+        // Count free time slots (only slots that are free and not in occupied list)
+        const freeSlotCount = slots.filter(slot => {
+            const isOccupied = occupiedSlots.some(
+                occ => occ.day === slot.day && occ.period === slot.period
+            );
+            return slot.is_free && !isOccupied;
+        }).length;
 
-        // Validate bottleneck: free slots must be >= total weekly hours
-        if (freeSlotCount < totalWeeklyHours) {
+        // Validate bottleneck: free slots must be >= remaining required hours
+        if (freeSlotCount < remainingRequired) {
             toast({
                 title: "خطأ في التحقق",
-                description: `عدد أوقات الفراغ المحددة (${freeSlotCount}) أقل من عدد الحصص الأسبوعية المطلوبة (${totalWeeklyHours}). يجب تحديد ${totalWeeklyHours} حصة على الأقل.`,
+                description: `عدد أوقات الفراغ المحددة (${freeSlotCount}) أقل من عدد الحصص المتبقية المطلوبة (${remainingRequired}). يجب تحديد ${remainingRequired} حصة على الأقل.`,
                 variant: "destructive"
             });
             return;
@@ -339,7 +364,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             if (response.success) {
                 toast({
                     title: "نجاح",
-                    description: `تم حفظ أوقات الفراغ بنجاح (${freeSlotCount} من ${totalWeeklyHours} حصة مطلوبة)`,
+                    description: `تم حفظ أوقات الفراغ بنجاح (${freeSlotCount} من ${remainingRequired} حصة متبقية)`,
                 });
                 setFreeTimeSlots(slots);
                 setShowFreeTimeDialog(false);
@@ -438,11 +463,13 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     </CardHeader>
                     <CardContent>
                         {freeTimeSlots.filter(s => s.is_free).length > 0 ? (
-                            <FreeTimeSlotsCalendar
-                                slots={freeTimeSlots}
-                                readonly={true}
-                                occupiedSlots={occupiedSlots}
-                            />
+                            <div dir="rtl">
+                                <FreeTimeSlotsCalendar
+                                    slots={freeTimeSlots}
+                                    readonly={true}
+                                    occupiedSlots={occupiedSlots}
+                                />
+                            </div>
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">
                                 <p className="mb-2">لم يتم تحديد أوقات الفراغ بعد</p>
@@ -580,22 +607,22 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     
                     {/* Requirement Indicator */}
                     {calculateTotalWeeklyHours() > 0 && (
-                        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                        <div className="bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-700 rounded-xl p-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
                                         ℹ️
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-blue-900 dark:text-blue-100">
-                                            عدد الحصص المطلوبة: <span className="text-lg">{calculateTotalWeeklyHours()}</span> حصة أسبوعياً
+                                        <p className="font-semibold text-blue-900 dark:text-gray-100">
+                                            عدد الحصص المطلوبة: <span className="text-lg">{calculateRemainingRequiredHours()}</span> حصة أسبوعياً
                                         </p>
-                                        <p className="text-sm text-blue-700 dark:text-blue-300">
-                                            عدد أوقات الفراغ المحددة حالياً: {freeTimeSlots.filter(s => s.is_free).length}
+                                        <p className="text-sm text-blue-700 dark:text-gray-300">
+                                            عدد أوقات الفراغ المحددة حالياً: {countTrulyFreeSlots()}
                                         </p>
                                     </div>
                                 </div>
-                                {freeTimeSlots.filter(s => s.is_free).length >= calculateTotalWeeklyHours() ? (
+                                {countTrulyFreeSlots() >= calculateRemainingRequiredHours() ? (
                                     <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
                                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

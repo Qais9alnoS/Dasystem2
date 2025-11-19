@@ -140,13 +140,14 @@ async def login(user_credentials: UserLogin, request: Request, db: Session = Dep
             "id": user.id,
             "username": user.username,
             "role": user.role,
-            "is_active": user.is_active
+            "is_active": user.is_active,
+            "session_type": user.session_type
         }
     }
     
     return {"success": True, "data": auth_response}
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh")
 async def refresh_token(current_user: User = Depends(get_current_user)):
     """Refresh access token"""
     # Create new access token
@@ -156,7 +157,20 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         expires_delta=access_token_expires
     )
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    # Return auth response with user data in the same format as login
+    auth_response = {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "role": current_user.role,
+            "is_active": current_user.is_active,
+            "session_type": current_user.session_type
+        }
+    }
+    
+    return {"success": True, "data": auth_response}
 
 @router.post("/change-password")
 async def change_password(

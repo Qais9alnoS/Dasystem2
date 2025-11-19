@@ -1,8 +1,8 @@
 /* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap");
 
 /* Import iOS utilities */
-@import './styles/ios-utilities.css';
+@import "./styles/ios-utilities.css";
 
 @tailwind base;
 @tailwind components;
@@ -10,7 +10,8 @@
 
 /* Drag and Drop Animations */
 @keyframes wiggle {
-  0%, 100% {
+  0%,
+  100% {
     transform: rotate(-3deg);
   }
   50% {
@@ -27,106 +28,154 @@
     /* iOS-inspired light mode variables */
     --background: 0 0% 100%; /* Pure white background */
     --foreground: 0 0% 0%; /* Pure black text */
-    
+
     --muted: 0 0% 95%; /* Light gray for muted elements */
     --muted-foreground: 0 0% 45%; /* Medium gray for muted text */
-    
+
     --popover: 0 0% 100%; /* White popover */
     --popover-foreground: 0 0% 0%; /* Black text */
-    
+
     --border: 0 0% 90%; /* Light border */
     --input: 0 0% 88%; /* Slightly darker input border */
-    
+
     --card: 0 0% 100%; /* White cards */
     --card-foreground: 0 0% 0%; /* Black text */
     --card-hover: 0 0% 98%; /* Slightly off-white on hover */
-    
-    /* Updated brand palette - Blue primary, Yellow accent, Orange secondary */
-    --primary: 220 90% 50%; /* Blue */
+
+    /* Updated brand palette - Modern iOS-friendly Blue, Yellow, Orange */
+    --primary: 211 86% 56%; /* Softer iOS-style blue */
     --primary-foreground: 0 0% 100%; /* White text */
-    --primary-glow: 45 100% 65%; /* Yellow for glow effects */
-    
-    --secondary: 25 100% 65%; /* Orange */
+    --primary-glow: 38 92% 58%; /* Warm amber glow */
+
+    --secondary: 14 90% 62%; /* Balanced coral-orange */
     --secondary-foreground: 0 0% 100%; /* White text */
-    
-    --accent: 45 100% 65%; /* Yellow */
-    --accent-foreground: 0 0% 0%; /* Black text */
-    --accent-glow: 45 100% 75%; /* Brighter yellow for glow effects */
-    
+
+    --accent: 38 92% 58%; /* Warm amber-yellow */
+    --accent-foreground: 0 0% 20%; /* Dark text for contrast */
+    --accent-glow: 38 92% 68%; /* Brighter amber for glow effects */
+
     --destructive: 0 84% 60%; /* iOS red */
     --destructive-foreground: 0 0% 100%; /* White text */
-    
-    --ring: 217 90% 60%; /* iOS blue ring */
-    
+
+    --ring: 211 86% 58%; /* iOS blue ring */
+
     --radius: 1.1rem; /* iOS-style rounded corners */
-    
+
     /* iOS-inspired gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217, 90%, 65%), hsl(217, 90%, 55%));
-    --gradient-secondary: linear-gradient(135deg, hsl(28, 92%, 65%), hsl(28, 92%, 55%));
-    --gradient-accent: linear-gradient(135deg, hsl(280, 80%, 70%), hsl(280, 80%, 60%));
-    --gradient-hero: linear-gradient(135deg, hsl(217, 90%, 65%), hsl(280, 80%, 65%));
-    --gradient-glass: linear-gradient(135deg, hsla(0, 0%, 100%, 0.8), hsla(0, 0%, 100%, 0.6));
-    
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(211, 86%, 62%),
+      hsl(211, 86%, 52%)
+    );
+    --gradient-secondary: linear-gradient(
+      135deg,
+      hsl(14, 90%, 68%),
+      hsl(14, 90%, 58%)
+    );
+    --gradient-accent: linear-gradient(
+      135deg,
+      hsl(38, 92%, 64%),
+      hsl(38, 92%, 54%)
+    );
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(211, 86%, 62%),
+      hsl(38, 92%, 60%)
+    );
+    --gradient-glass: linear-gradient(
+      135deg,
+      hsla(0, 0%, 100%, 0.8),
+      hsla(0, 0%, 100%, 0.6)
+    );
+
     /* iOS-inspired shadows */
-    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
-    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
-    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.09), 0 4px 10px rgba(0, 0, 0, 0.06);
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.08);
+    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.07),
+      0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.09),
+      0 4px 10px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
-    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08);
-    --shadow-glow: 0 0 15px hsl(217, 90%, 60%, 0.3);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08),
+      0 2px 4px rgba(0, 0, 0, 0.08);
+    --shadow-glow: 0 0 15px hsl(211, 86%, 60%, 0.3);
   }
 
   .dark {
     /* iOS-inspired dark mode variables */
     --background: 0 0% 8%; /* Dark background */
     --foreground: 0 0% 100%; /* White text */
-    
+
     --muted: 0 0% 15%; /* Darker gray for muted elements */
     --muted-foreground: 0 0% 65%; /* Light gray for muted text */
-    
+
     --popover: 0 0% 12%; /* Dark popover */
     --popover-foreground: 0 0% 100%; /* White text */
-    
+
     --border: 0 0% 20%; /* Dark border */
     --input: 0 0% 22%; /* Slightly lighter input border */
-    
+
     --card: 0 0% 12%; /* Dark cards */
     --card-foreground: 0 0% 100%; /* White text */
     --card-hover: 0 0% 18%; /* Slightly lighter on hover */
-    
-    /* Updated colors for dark mode - Blue primary, Yellow accent, Orange secondary */
-    --primary: 220 90% 60%; /* Brighter blue */
+
+    /* Updated colors for dark mode - Modern iOS-friendly shades */
+    --primary: 211 86% 64%; /* Brighter iOS-style blue for dark mode */
     --primary-foreground: 0 0% 100%; /* White text */
-    --primary-glow: 45 100% 75%; /* Yellow for glow effects */
-    
-    --secondary: 25 100% 70%; /* Brighter orange */
+    --primary-glow: 38 92% 66%; /* Warm amber glow */
+
+    --secondary: 14 90% 68%; /* Brighter coral-orange for dark mode */
     --secondary-foreground: 0 0% 100%; /* White text */
-    
-    --accent: 45 100% 75%; /* Brighter yellow */
-    --accent-foreground: 0 0% 0%; /* Black text */
-    --accent-glow: 45 100% 85%; /* Even brighter yellow for glow effects */
-    
+
+    --accent: 38 92% 66%; /* Brighter amber-yellow for dark mode */
+    --accent-foreground: 0 0% 10%; /* Near-black text */
+    --accent-glow: 38 92% 76%; /* Even brighter amber for glow effects */
+
     --destructive: 0 70% 55%; /* Adjusted iOS red */
     --destructive-foreground: 0 0% 100%; /* White text */
-    
-    --ring: 217 92% 65%; /* Brighter iOS blue ring */
-    
+
+    --ring: 211 86% 66%; /* Brighter iOS blue ring */
+
     --radius: 1.1rem; /* iOS-style rounded corners */
-    
+
     /* iOS-inspired gradients for dark mode */
-    --gradient-primary: linear-gradient(135deg, hsl(217, 92%, 70%), hsl(217, 92%, 60%));
-    --gradient-secondary: linear-gradient(135deg, hsl(28, 95%, 70%), hsl(28, 95%, 60%));
-    --gradient-accent: linear-gradient(135deg, hsl(280, 90%, 75%), hsl(280, 90%, 65%));
-    --gradient-hero: linear-gradient(135deg, hsl(217, 92%, 70%), hsl(280, 90%, 70%));
-    --gradient-glass: linear-gradient(135deg, hsla(0, 0%, 20%, 0.8), hsla(0, 0%, 20%, 0.6));
-    
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(211, 86%, 70%),
+      hsl(211, 86%, 60%)
+    );
+    --gradient-secondary: linear-gradient(
+      135deg,
+      hsl(14, 90%, 74%),
+      hsl(14, 90%, 64%)
+    );
+    --gradient-accent: linear-gradient(
+      135deg,
+      hsl(38, 92%, 72%),
+      hsl(38, 92%, 62%)
+    );
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(211, 86%, 70%),
+      hsl(38, 92%, 68%)
+    );
+    --gradient-glass: linear-gradient(
+      135deg,
+      hsla(0, 0%, 20%, 0.8),
+      hsla(0, 0%, 20%, 0.6)
+    );
+
     /* iOS-inspired shadows for dark mode */
-    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
-    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.2);
-    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.25);
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.2),
+      0 1px 2px rgba(0, 0, 0, 0.15);
+    --shadow-elevation-2: 0 4px 6px rgba(0, 0, 0, 0.25),
+      0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-elevation-3: 0 10px 25px rgba(0, 0, 0, 0.3),
+      0 4px 10px rgba(0, 0, 0, 0.25);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
-    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
-    --shadow-glow: 0 0 15px hsl(217, 92%, 65%, 0.4);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.25),
+      0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-glow: 0 0 15px hsl(211, 86%, 65%, 0.4);
   }
 
   * {
@@ -143,7 +192,8 @@
     /* iOS-inspired styling */
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -200,7 +250,11 @@
   }
 
   /* Smooth transitions for all interactive elements */
-  a, button, input, select, textarea {
+  a,
+  button,
+  input,
+  select,
+  textarea {
     transition: all 0.2s ease;
   }
 
@@ -216,7 +270,7 @@
   .card-hover-effect {
     transition: all 0.3s ease;
   }
-  
+
   .card-hover-effect:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-elevation-2);
@@ -226,7 +280,7 @@
   .btn-hover-effect {
     transition: all 0.2s ease;
   }
-  
+
   .btn-hover-effect:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-elevation-1);
@@ -285,7 +339,11 @@
 
   /* Gradient text */
   .gradient-text {
-    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary)),
+      hsl(var(--secondary))
+    );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -319,11 +377,13 @@
 
   /* Premium Glow Effects */
   .glow-primary {
-    box-shadow: 0 0 15px hsl(var(--primary) / 0.3), 0 0 30px hsl(var(--primary) / 0.2);
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.3),
+      0 0 30px hsl(var(--primary) / 0.2);
   }
 
   .glow-secondary {
-    box-shadow: 0 0 15px hsl(var(--secondary) / 0.3), 0 0 30px hsl(var(--secondary) / 0.2);
+    box-shadow: 0 0 15px hsl(var(--secondary) / 0.3),
+      0 0 30px hsl(var(--secondary) / 0.2);
   }
 
   /* Custom Title Bar Styles */
@@ -331,17 +391,17 @@
     -webkit-app-region: drag;
     app-region: drag;
   }
-  
+
   .titlebar-center {
     -webkit-app-region: no-drag;
     app-region: no-drag;
   }
-  
+
   .titlebar-right {
     -webkit-app-region: no-drag;
     app-region: no-drag;
   }
-  
+
   .titlebar-button,
   .window-control {
     -webkit-app-region: no-drag;
@@ -356,7 +416,7 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
   }
-  
+
   .fluent-surface:focus-within {
     border-color: hsl(var(--primary));
     box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
@@ -466,11 +526,11 @@
     -webkit-appearance: none;
     margin: 0;
   }
-  
+
   input[type="number"] {
     -moz-appearance: textfield;
   }
-  
+
   /* Custom modern spinner styles */
   input[type="number"].modern-spinner {
     position: relative;
@@ -485,12 +545,12 @@
     align-items: center;
     width: 100%;
   }
-  
+
   .number-input-wrapper input[type="number"] {
     padding-left: 2.5rem;
     padding-right: 2.5rem;
   }
-  
+
   .number-input-spinner {
     position: absolute;
     display: flex;
@@ -500,7 +560,7 @@
     transform: translateY(-50%);
     gap: 0.125rem;
   }
-  
+
   .number-input-spinner button {
     width: 1.5rem;
     height: 1.5rem;
@@ -514,18 +574,18 @@
     cursor: pointer;
     color: hsl(var(--foreground));
   }
-  
+
   .number-input-spinner button:hover {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     border-color: hsl(var(--primary));
     transform: scale(1.05);
   }
-  
+
   .number-input-spinner button:active {
     transform: scale(0.95);
   }
-  
+
   .number-input-spinner svg {
     width: 0.75rem;
     height: 0.75rem;

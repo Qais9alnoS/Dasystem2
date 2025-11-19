@@ -26,7 +26,7 @@ export const PageLoadingOverlay: React.FC<{ message?: string }> = ({
     return (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center gap-4">
-                <LoadingSpinner size="lg" className="text-blue-600" />
+                <LoadingSpinner size="lg" className="text-primary" />
                 <p className="text-lg font-medium text-gray-700">{message}</p>
             </div>
         </div>
@@ -194,8 +194,8 @@ export const SearchResultsSkeleton: React.FC = () => {
                 <div key={i} className="flex items-center gap-3 p-3 border rounded-lg">
                     <div className="flex-shrink-0">
                         {i % 2 === 0 ? (
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                <Users className="w-4 h-4 text-blue-600" />
+                            <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
+                                <Users className="w-4 h-4 text-primary" />
                             </div>
                         ) : (
                             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">

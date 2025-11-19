@@ -699,12 +699,12 @@ const AddEditGradePage = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-blue-500" />
+                  <Users className="h-5 w-5 text-primary" />
                   <CardTitle>الطلاب في الصف</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-blue-500 mb-4">
+                <div className="text-3xl font-bold text-primary mb-4">
                   {studentsInGrade.length}
                 </div>
                 

@@ -200,9 +200,9 @@ const DirectorNotesSearchPage: React.FC = () => {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'note':
-        return <FileText className="h-5 w-5 text-blue-500" />;
+        return <FileText className="h-5 w-5 text-primary" />;
       case 'reward':
-        return <Award className="h-5 w-5 text-yellow-500" />;
+        return <Award className="h-5 w-5 text-accent" />;
       case 'assistance':
         return <Heart className="h-5 w-5 text-red-500" />;
       default:

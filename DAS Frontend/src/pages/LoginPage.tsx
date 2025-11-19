@@ -68,8 +68,8 @@ const LoginPage = () => {
             label: 'إدارة الفترة المسائية',
             description: 'إدارة الطلاب والمعلمين في الفترة المسائية',
             icon: Moon,
-            color: 'text-purple-600',
-            bgColor: 'bg-purple-100'
+            color: 'text-primary',
+            bgColor: 'bg-primary/10'
         }
     ];
 

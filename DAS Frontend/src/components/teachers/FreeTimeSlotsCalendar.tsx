@@ -117,11 +117,19 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
     );
   };
 
+  const isSlotOccupied = (day: number, period: number): boolean => {
+    return !!getOccupiedSlot(day, period);
+  };
+
   const toggleSlot = (day: number, period: number) => {
     if (readonly) return;
 
     const newSlots = currentSlots.map((slot) => {
       if (slot.day === day && slot.period === period) {
+        // Don't toggle assigned slots or occupied slots
+        if (slot.status === "assigned" || isSlotOccupied(day, period)) {
+          return slot;
+        }
         const newIsFree = !slot.is_free;
         return {
           ...slot,
@@ -145,13 +153,15 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
   const toggleDay = (day: number) => {
     if (readonly) return;
 
-    // Check if all periods in this day are free
-    const daySlots = currentSlots.filter((slot) => slot.day === day);
+    // Check if all NON-ASSIGNED and NON-OCCUPIED periods in this day are free
+    const daySlots = currentSlots.filter(
+      (slot) => slot.day === day && slot.status !== "assigned" && !isSlotOccupied(slot.day, slot.period)
+    );
     const allFree = daySlots.every((slot) => slot.is_free);
 
-    // Toggle all periods in this day
+    // Toggle all NON-ASSIGNED and NON-OCCUPIED periods in this day
     const newSlots = currentSlots.map((slot) => {
-      if (slot.day === day) {
+      if (slot.day === day && slot.status !== "assigned" && !isSlotOccupied(slot.day, slot.period)) {
         const newIsFree = !allFree;
         return {
           ...slot,
@@ -175,13 +185,15 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
   const togglePeriod = (period: number) => {
     if (readonly) return;
 
-    // Check if all days in this period are free
-    const periodSlots = currentSlots.filter((slot) => slot.period === period);
+    // Check if all NON-ASSIGNED and NON-OCCUPIED days in this period are free
+    const periodSlots = currentSlots.filter(
+      (slot) => slot.period === period && slot.status !== "assigned" && !isSlotOccupied(slot.day, slot.period)
+    );
     const allFree = periodSlots.every((slot) => slot.is_free);
 
-    // Toggle all days in this period
+    // Toggle all NON-ASSIGNED and NON-OCCUPIED days in this period
     const newSlots = currentSlots.map((slot) => {
-      if (slot.period === period) {
+      if (slot.period === period && slot.status !== "assigned" && !isSlotOccupied(slot.day, slot.period)) {
         const newIsFree = !allFree;
         return {
           ...slot,
@@ -204,47 +216,47 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-6 text-sm bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 rounded-2xl border border-blue-100 dark:border-blue-900">
+      {/* Legend - Flat iOS Design */}
+      <div className="flex items-center justify-center gap-6 text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 shadow-sm border border-gray-300/50"></div>
-          <span className="font-semibold text-gray-700 dark:text-gray-300">
+          <div className="w-7 h-7 rounded-lg bg-gray-300 dark:bg-gray-600"></div>
+          <span className="font-medium text-gray-700 dark:text-gray-300">
             مشغول
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm border border-emerald-500/30"></div>
-          <span className="font-semibold text-gray-700 dark:text-gray-300">
+          <div className="w-7 h-7 rounded-lg bg-green-500"></div>
+          <span className="font-medium text-gray-700 dark:text-gray-300">
             متاح
           </span>
         </div>
         {occupiedSlots.length > 0 && (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-sm border border-blue-500/30"></div>
-            <span className="font-semibold text-gray-700 dark:text-gray-300">
+            <div className="w-7 h-7 rounded-lg bg-blue-500"></div>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
               محجوز (مجدول)
             </span>
           </div>
         )}
       </div>
 
-      {/* Calendar Grid - Modern Design */}
-      <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950">
+      {/* Calendar Grid - Flat iOS Design */}
+      <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             {/* Header Row */}
             <thead>
-              <tr className="bg-gradient-to-r from-indigo-500 to-purple-500">
-                <th className="px-3 py-3 text-center text-white font-bold text-sm border-l border-white/20 min-w-[100px]">
+              <tr className="bg-gray-100 dark:bg-gray-700">
+                <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200 font-semibold text-sm border-b border-gray-200 dark:border-gray-600 min-w-[100px]">
                   اليوم
                 </th>
                 {periods.map((period) => (
                   <th
                     key={period}
                     className={cn(
-                      "px-3 py-3 text-center text-white font-bold text-sm border-l border-white/20 min-w-[80px] transition-all",
+                      "px-3 py-3 text-center text-gray-700 dark:text-gray-200 font-semibold text-sm border-b border-gray-200 dark:border-gray-600 min-w-[90px] transition-colors",
                       !readonly &&
-                        "cursor-pointer hover:bg-white/20 active:bg-white/30"
+                        "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500"
                     )}
                     onClick={() => !readonly && togglePeriod(period)}
                   >
@@ -259,18 +271,13 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
               {days.map((day, dayIndex) => (
                 <tr
                   key={day.id}
-                  className={cn(
-                    "transition-colors",
-                    dayIndex % 2 === 0
-                      ? "bg-gray-50/50 dark:bg-gray-900/30"
-                      : "bg-white dark:bg-gray-950"
-                  )}
+                  className="border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
                   <td
                     className={cn(
-                      "px-3 py-3 text-center font-bold text-gray-700 dark:text-gray-300 border-l border-gray-200 dark:border-gray-700 bg-gradient-to-l from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 transition-all",
+                      "px-4 py-3 text-center font-semibold text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-800 transition-colors",
                       !readonly &&
-                        "cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 active:bg-indigo-200 dark:active:bg-indigo-800/40"
+                        "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600"
                     )}
                     onClick={() => !readonly && toggleDay(day.id)}
                   >
@@ -285,27 +292,19 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
                     return (
                       <td
                         key={`${day.id}-${period}`}
-                        className="p-2 border-l border-gray-200 dark:border-gray-700"
+                        className="p-2.5"
                       >
                         <div
                           className={cn(
-                            "w-full h-12 rounded-xl transition-all duration-300 ease-in-out flex items-center justify-center text-xs font-bold",
+                            "w-full h-14 rounded-lg transition-all duration-200 ease-out flex flex-col items-center justify-center text-[10px] font-medium leading-tight",
                             isOccupied
-                              ? "bg-gradient-to-br from-blue-400 to-blue-600 shadow-md border-2 border-blue-500/30 text-white"
+                              ? "bg-blue-500 text-white"
                               : isFree
-                              ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md border-2 border-emerald-500/30"
-                              : "bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 border-2 border-gray-300/30 dark:border-gray-600/30",
+                              ? "bg-green-500 text-white"
+                              : "bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300",
                             !readonly &&
                               !isOccupied &&
-                              "cursor-pointer hover:scale-105 hover:shadow-lg active:scale-95",
-                            !readonly &&
-                              isFree &&
-                              !isOccupied &&
-                              "hover:from-emerald-500 hover:to-teal-600",
-                            !readonly &&
-                              !isFree &&
-                              !isOccupied &&
-                              "hover:from-gray-300 hover:to-gray-400 dark:hover:from-gray-600 dark:hover:to-gray-500",
+                              "cursor-pointer hover:opacity-80 active:scale-95",
                             isOccupied && "cursor-not-allowed"
                           )}
                           onClick={() =>
@@ -320,9 +319,14 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
                           }
                         >
                           {isOccupied ? (
-                            <span className="text-[10px] leading-tight text-center px-1">
-                              {occupiedSlot.className}
-                            </span>
+                            <div className="text-center px-1 space-y-0.5">
+                              <div className="text-[11px] font-semibold">
+                                {occupiedSlot.subject}
+                              </div>
+                              <div className="text-[9px] opacity-90">
+                                صف {occupiedSlot.className}
+                              </div>
+                            </div>
                           ) : isFree ? (
                             <svg
                               className="w-6 h-6 text-white"
@@ -348,11 +352,11 @@ export const FreeTimeSlotsCalendar: React.FC<FreeTimeSlotsCalendarProps> = ({
       </div>
 
       {!readonly && (
-        <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-2xl border border-blue-200 dark:border-blue-900">
-          <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+        <div className="bg-blue-50 dark:bg-gray-800 p-4 rounded-2xl border border-blue-200 dark:border-gray-700">
+          <p className="font-semibold text-blue-900 dark:text-gray-100 mb-2">
             💡 نصائح الاستخدام:
           </p>
-          <ul className="space-y-1.5 text-sm text-blue-800 dark:text-blue-200">
+          <ul className="space-y-1.5 text-sm text-blue-800 dark:text-gray-300">
             <li className="flex items-start gap-2">
               <span className="text-blue-500 mt-0.5">•</span>
               <span>
