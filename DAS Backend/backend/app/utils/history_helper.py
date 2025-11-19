@@ -192,7 +192,7 @@ def log_activity_action(
     metadata = {}
     if old_values and new_values:
         metadata["changes"] = _get_changes(old_values, new_values)
-    
+    #hi 
     history_service.log_action(
         db=db,
         action_type=action_type,
