@@ -15,6 +15,7 @@ import {
   DirectorNote, Reward, AssistanceRecord,
   FileItem, StorageStats
 } from '../types/school';
+import { HistoryLog, HistoryStatistics, HistoryFilters, HistoryListResponse } from '../types/history';
 import { getSecurityHeaders } from '@/lib/security';
 
 // Base API configuration
@@ -1435,6 +1436,35 @@ export const directorApi = {
   },
 };
 
+// History API
+export const historyApi = {
+  getHistory: async (filters?: HistoryFilters) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const queryString = params.toString();
+    return apiClient.get<HistoryListResponse>(`/history${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getStatistics: async (academic_year_id?: number) => {
+    const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
+    return apiClient.get<HistoryStatistics>(`/history/statistics${params}`);
+  },
+
+  getById: async (id: number) => {
+    return apiClient.get<HistoryLog>(`/history/${id}`);
+  },
+
+  delete: async (id: number) => {
+    return apiClient.delete<{success: boolean, message: string}>(`/history/${id}`);
+  },
+};
+
 // File Management API
 export const filesApi = {
   getAll: async () => {
@@ -1511,6 +1541,7 @@ export const api = {
   monitoring: monitoringApi,
   director: directorApi,
   files: filesApi,
+  history: historyApi,
 };
 
 // Export API client and error class

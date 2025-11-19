@@ -12,6 +12,7 @@ from app.schemas.students import (
 )
 from app.core.dependencies import get_current_user, get_school_user
 from app.models.users import User
+from app.utils.history_helper import log_student_action, log_finance_action
 
 router = APIRouter()
 
@@ -63,6 +64,15 @@ async def create_student(
     db.commit()
     db.refresh(new_student)
     
+    # Log history
+    log_student_action(
+        db=db,
+        action_type="create",
+        student=new_student,
+        current_user=current_user,
+        new_values=student_data.dict()
+    )
+    
     return new_student
 
 @router.get("/{student_id}", response_model=StudentResponse)
@@ -96,11 +106,24 @@ async def update_student(
             detail="Student not found"
         )
     
+    # Store old values for history
+    old_values = {field: getattr(student, field) for field in student_data.dict(exclude_unset=True).keys()}
+    
     for field, value in student_data.dict(exclude_unset=True).items():
         setattr(student, field, value)
     
     db.commit()
     db.refresh(student)
+    
+    # Log history
+    log_student_action(
+        db=db,
+        action_type="update",
+        student=student,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=student_data.dict(exclude_unset=True)
+    )
     
     return student
 
@@ -120,6 +143,14 @@ async def deactivate_student(
     
     student.is_active = False
     db.commit()
+    
+    # Log history
+    log_student_action(
+        db=db,
+        action_type="deactivate",
+        student=student,
+        current_user=current_user
+    )
     
     return {"message": "Student deactivated successfully"}
 

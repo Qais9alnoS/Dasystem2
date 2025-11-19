@@ -4,6 +4,21 @@
 
 Implement a comprehensive history tracking system that logs all major actions in the app, organized by user roles (Morning, Evening, Finance, Director) and displayed in a card on the dashboard.
 
+## ✅ **Confirmed Requirements**
+
+- **Real-time Updates**: WebSockets for instant updates (highest quality)
+- **Card Position**: Left top in 2-column grid layout
+- **Display Format**: Detailed with main properties in title, full details in modal popup
+- **Statistics**: Today, This Week, This Month counts
+- **Filters UI**: Slide-out side panel
+- **Critical Actions**: Highlighted in red/yellow (deletions, large transactions)
+- **Date Format**: dd/mm/yyyy
+- **User Tracking**: Show username + role for each action
+- **Before/After Values**: Full change tracking
+- **Infinite Scroll**: 20 items initially, load more on scroll
+- **Role Isolation**: Morning sees morning only, evening sees evening only, finance sees finance, director sees all
+- **Storage**: Keep forever, no deletion/archiving
+
 ---
 
 ## 📊 **System Requirements**

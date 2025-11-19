@@ -12,7 +12,7 @@ from .director import DirectorNote, Reward, AssistanceRecord
 from .system import (
     SystemSetting, BackupHistory, SystemLog, PerformanceMetric,
     AuditLog, SystemNotification, FileUpload, SystemConfiguration,
-    UserSession, LoginAttempt
+    UserSession, LoginAttempt, HistoryLog
 )
 from .daily import (
     Holiday, StudentDailyAttendance, TeacherPeriodAttendance,
@@ -31,7 +31,7 @@ __all__ = [
     "DirectorNote", "Reward", "AssistanceRecord",
     "SystemSetting", "BackupHistory", "SystemLog", "PerformanceMetric",
     "AuditLog", "SystemNotification", "FileUpload", "SystemConfiguration",
-    "UserSession", "LoginAttempt",
+    "UserSession", "LoginAttempt", "HistoryLog",
     "Holiday", "StudentDailyAttendance", "TeacherPeriodAttendance",
     "StudentAction", "WhatsAppGroupConfig"
 ]

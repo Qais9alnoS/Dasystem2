@@ -130,3 +130,40 @@ class LoginAttempt(BaseModel):
     success = Column(Boolean, nullable=False)
     failure_reason = Column(String(100))  # invalid_password, user_not_found, account_disabled
     attempted_at = Column(DateTime, default=datetime.utcnow)
+
+class HistoryLog(BaseModel):
+    """History tracking for all major actions in the system"""
+    __tablename__ = "history_logs"
+    
+    # Core fields
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="SET NULL"), nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Action details
+    action_type = Column(String(50), nullable=False)  # create, update, delete, activate, deactivate, etc.
+    action_category = Column(String(50), nullable=False, index=True)  # morning, evening, finance, director, system, activity
+    entity_type = Column(String(50), nullable=False, index=True)  # student, class, transaction, etc.
+    entity_id = Column(Integer)  # ID of the affected entity
+    entity_name = Column(String(500))  # Display name of the entity
+    
+    # User tracking
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_name = Column(String(100))  # Cached username
+    user_role = Column(String(50))  # Cached user role
+    
+    # Description and details
+    description = Column(Text, nullable=False)  # Human-readable description in Arabic
+    meta_data = Column(JSON)  # Before/after values, related IDs, additional data
+    
+    # Session and severity
+    session_type = Column(String(10))  # morning, evening, both, null
+    severity = Column(String(20), default="info")  # info, warning, critical
+    is_visible = Column(Boolean, default=True)
+    tags = Column(JSON)  # Array of tags for filtering
+    
+    # Additional context
+    ip_address = Column(String(45))
+    
+    # Relationships
+    academic_year = relationship("AcademicYear", foreign_keys=[academic_year_id])
+    user = relationship("User", foreign_keys=[user_id])
