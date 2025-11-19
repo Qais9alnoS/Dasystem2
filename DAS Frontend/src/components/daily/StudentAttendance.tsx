@@ -78,18 +78,22 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
     
     setLoading(true);
     try {
-      console.log('Fetching students for:', { 
+      console.log('Fetching students with params:', { 
         classId: selectedClassId, 
         section: selectedSection,
+        academicYearId: academicYearId,
+        sessionType: sessionType,
         date: selectedDate
       });
       
       // احصل على الطلاب
-      const studentsResponse = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}`);
-      console.log('Students response FULL:', studentsResponse);
-      console.log('Students response.data:', studentsResponse.data);
-      console.log('Students response.data type:', typeof studentsResponse.data);
-      console.log('Students response.data is Array:', Array.isArray(studentsResponse.data));
+      const studentsResponse = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}&academic_year_id=${academicYearId}&session_type=${sessionType}`);
+      const studentsData = studentsResponse.data as Student[];
+      console.log('Students response:', {
+        total: studentsData?.length || 0,
+        data: studentsData
+      });
+      console.log('Request URL:', `/students/?class_id=${selectedClassId}&section=${selectedSection}&academic_year_id=${academicYearId}&session_type=${sessionType}`);
       
       // احصل على حضور اليوم
       const attendanceResponse = await api.get(
@@ -101,7 +105,6 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
         attendanceData.map((a) => [a.student_id, a.is_present])
       );
       
-      const studentsData = studentsResponse.data as Student[];
       const studentsWithAttendance = studentsData.map((student) => ({
         ...student,
         is_present: attendanceMap.get(student.id) ?? true

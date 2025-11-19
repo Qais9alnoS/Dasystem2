@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from app.database import get_db
 from app.models.students import Student, StudentFinance, StudentPayment, StudentAcademic
+from app.models.academic import Class
 from app.schemas.students import (
     StudentCreate, StudentUpdate, StudentResponse,
     StudentFinanceCreate, StudentFinanceResponse,
@@ -31,6 +32,56 @@ async def get_students(
     current_user: User = Depends(get_school_user)
 ):
     """Get students with filters"""
+    # تسجيل المعلمات المستلمة للتشخيص
+    print(f"\n=== GET STUDENTS REQUEST ===")
+    print(f"Filters received:")
+    print(f"  academic_year_id: {academic_year_id}")
+    print(f"  session_type: {session_type}")
+    print(f"  grade_level: {grade_level}")
+    print(f"  grade_number: {grade_number}")
+    print(f"  class_id: {class_id}")
+    print(f"  section: {section} (type: {type(section).__name__})")
+    print(f"  is_active: {is_active}")
+    
+    # إصلاح الطلاب الذين ليس لديهم class_id
+    students_without_class = db.query(Student).filter(Student.class_id == None).all()
+    if students_without_class:
+        print(f"\n🔧 Found {len(students_without_class)} students without class_id. Fixing...")
+        for student in students_without_class:
+            # ابحث عن الصف المناسب للطالب
+            matching_class = db.query(Class).filter(
+                Class.academic_year_id == student.academic_year_id,
+                Class.session_type == student.session_type,
+                Class.grade_level == student.grade_level,
+                Class.grade_number == student.grade_number
+            ).first()
+            
+            if matching_class:
+                student.class_id = matching_class.id
+                print(f"  ✅ Fixed student {student.full_name} - assigned to class_id {matching_class.id}")
+            else:
+                print(f"  ⚠️ No matching class found for student {student.full_name} (Grade: {student.grade_level} {student.grade_number}, Session: {student.session_type})")
+        
+        db.commit()
+        print(f"✅ Fixed students committed to database\n")
+    
+    # تحقق من جميع الطلاب في قاعدة البيانات للتشخيص
+    all_students = db.query(Student).all()
+    all_students_count = len(all_students)
+    print(f"Total students in database: {all_students_count}")
+    
+    if all_students_count > 0:
+        print(f"ALL students in database:")
+        for s in all_students:
+            print(f"  - ID: {s.id}, Name: {s.full_name}, ClassID: {s.class_id}, Section: '{s.section}', GradeLevel: {s.grade_level}, GradeNumber: {s.grade_number}, Year: {s.academic_year_id}, Session: {s.session_type}, Active: {s.is_active}")
+    
+    # إذا كان class_id موجود، اعرض جميع الطلاب في هذا الصف
+    if class_id:
+        class_students = db.query(Student).filter(Student.class_id == class_id).all()
+        print(f"\nAll students in class {class_id}: {len(class_students)} students")
+        for s in class_students:
+            print(f"  - ID: {s.id}, Name: {s.full_name}, Section: '{s.section}', Year: {s.academic_year_id}, Session: {s.session_type}, Active: {s.is_active}")
+    
     query = db.query(Student)
     
     if academic_year_id:
@@ -49,6 +100,14 @@ async def get_students(
         query = query.filter(Student.is_active == is_active)
     
     students = query.offset(skip).limit(limit).all()
+    
+    print(f"Students found: {len(students)}")
+    if students:
+        print(f"Sample student data:")
+        for s in students[:3]:  # عرض أول 3 طلاب
+            print(f"  - ID: {s.id}, Name: {s.full_name}, Class: {s.class_id}, Section: {s.section}, Active: {s.is_active}")
+    print(f"=========================\n")
+    
     return students
 
 @router.post("/", response_model=StudentResponse)
@@ -59,6 +118,20 @@ async def create_student(
 ):
     """Create new student"""
     new_student = Student(**student_data.dict())
+    
+    # إذا لم يتم تحديد class_id، ابحث عن الصف المناسب تلقائياً
+    if not new_student.class_id:
+        matching_class = db.query(Class).filter(
+            Class.academic_year_id == new_student.academic_year_id,
+            Class.session_type == new_student.session_type,
+            Class.grade_level == new_student.grade_level,
+            Class.grade_number == new_student.grade_number
+        ).first()
+        
+        if matching_class:
+            new_student.class_id = matching_class.id
+            print(f"✅ Auto-assigned class_id {matching_class.id} to new student {new_student.full_name}")
+    
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
