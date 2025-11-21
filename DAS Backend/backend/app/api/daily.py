@@ -141,7 +141,7 @@ def create_holiday(
     
     return db_holiday
 
-@router.get("/holidays", response_model=List[HolidayResponse])
+@router.get("/holidays")
 def get_holidays(
     academic_year_id: int,
     session_type: Optional[str] = None,
@@ -151,19 +151,40 @@ def get_holidays(
     current_user: User = Depends(get_current_user)
 ):
     """الحصول على قائمة أيام العطل"""
-    query = db.query(Holiday).filter(
-        Holiday.academic_year_id == academic_year_id
-    )
-    
-    if session_type:
-        query = query.filter(Holiday.session_type == session_type)
-    
-    if start_date:
-        query = query.filter(Holiday.holiday_date >= start_date)
-    if end_date:
-        query = query.filter(Holiday.holiday_date <= end_date)
-    
-    return query.order_by(Holiday.holiday_date).all()
+    try:
+        query = db.query(Holiday).filter(
+            Holiday.academic_year_id == academic_year_id
+        )
+        
+        if session_type:
+            query = query.filter(Holiday.session_type == session_type)
+        
+        if start_date:
+            query = query.filter(Holiday.holiday_date >= start_date)
+        if end_date:
+            query = query.filter(Holiday.holiday_date <= end_date)
+        
+        holidays = query.order_by(Holiday.holiday_date).all()
+        
+        # تحويل إلى dict لتجنب مشاكل serialization
+        result = []
+        for holiday in holidays:
+            result.append({
+                'id': holiday.id,
+                'academic_year_id': holiday.academic_year_id,
+                'session_type': holiday.session_type,
+                'holiday_date': holiday.holiday_date.isoformat(),
+                'holiday_name': holiday.holiday_name,
+                'notes': holiday.notes
+            })
+        
+        return result
+    except Exception as e:
+        # إذا حدث خطأ، أرجع قائمة فارغة بدلاً من 500
+        print(f"Error fetching holidays: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 @router.get("/holidays/{holiday_id}", response_model=HolidayResponse)
 def get_holiday(
@@ -405,7 +426,91 @@ def get_teacher_schedule_for_day(
         "periods": periods
     }
 
-@router.post("/attendance/teachers/bulk", response_model=List[TeacherPeriodAttendanceResponse])
+@router.get("/attendance/teachers")
+def get_teacher_attendance(
+    attendance_date: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """الحصول على حضور جميع الأساتذة في يوم محدد"""
+    attendance_records = db.query(TeacherPeriodAttendance).filter(
+        TeacherPeriodAttendance.attendance_date == attendance_date
+    ).all()
+    
+    result = []
+    for record in attendance_records:
+        result.append({
+            'teacher_id': record.teacher_id,
+            'schedule_id': record.schedule_id,
+            'is_present': record.is_present,
+            'attendance_date': record.attendance_date.isoformat()
+        })
+    
+    return result
+
+@router.post("/attendance/teachers/bulk")
+def create_teacher_attendance_bulk_new(
+    attendance_bulk: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """إدخال جماعي لحضور الأساتذة - نسخة محدثة"""
+    try:
+        academic_year_id = attendance_bulk.get('academic_year_id')
+        attendance_date_str = attendance_bulk.get('attendance_date')
+        records = attendance_bulk.get('records', [])
+        
+        # Validate required fields
+        if not academic_year_id:
+            raise HTTPException(status_code=400, detail="academic_year_id is required")
+        if not attendance_date_str:
+            raise HTTPException(status_code=400, detail="attendance_date is required")
+        if not records:
+            raise HTTPException(status_code=400, detail="records array is required")
+        
+        # Convert string date to Python date object
+        if isinstance(attendance_date_str, str):
+            attendance_date = datetime.strptime(attendance_date_str, '%Y-%m-%d').date()
+        else:
+            attendance_date = attendance_date_str
+        
+        # احذف السجلات السابقة لنفس اليوم
+        db.query(TeacherPeriodAttendance).filter(
+            TeacherPeriodAttendance.attendance_date == attendance_date
+        ).delete(synchronize_session=False)
+        
+        # أنشئ سجلات جديدة
+        attendance_records = []
+        for i, record in enumerate(records):
+            # Validate each record has required fields
+            if 'teacher_id' not in record:
+                raise HTTPException(status_code=400, detail=f"Record {i}: teacher_id is required")
+            # schedule_id is optional (nullable in database)
+            if 'is_present' not in record:
+                raise HTTPException(status_code=400, detail=f"Record {i}: is_present is required")
+            
+            attendance = TeacherPeriodAttendance(
+                teacher_id=record.get('teacher_id'),
+                academic_year_id=academic_year_id,
+                attendance_date=attendance_date,
+                schedule_id=record.get('schedule_id'),  # Can be None
+                is_present=record.get('is_present', True),
+                recorded_by=current_user.id
+            )
+            db.add(attendance)
+            attendance_records.append(attendance)
+        
+        db.commit()
+        
+        return {"message": "تم حفظ الحضور بنجاح", "count": len(attendance_records)}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error saving attendance: {str(e)}")
+
+@router.post("/attendance/teachers/bulk/old", response_model=List[TeacherPeriodAttendanceResponse])
 def create_teacher_attendance_bulk(
     attendance_bulk: TeacherPeriodAttendanceBulk,
     db: Session = Depends(get_db),

@@ -601,6 +601,11 @@ class ScheduleGenerationService:
                 schedule_grid[best_day][best_period] = subject
                 subject_counts_per_day[subject_id][best_day] += 1
                 
+                # CRITICAL FIX: Remove teacher from availability at this slot
+                # This prevents the same teacher from being assigned twice at the same time
+                if (teacher_id, best_day, best_period) in teacher_availability:
+                    del teacher_availability[(teacher_id, best_day, best_period)]
+                
                 # Update scarcity matrix: one teacher is now occupied at this slot
                 if (best_day, best_period) in scarcity_matrix:
                     scarcity_matrix[(best_day, best_period)] -= 1

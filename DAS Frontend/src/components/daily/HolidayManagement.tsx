@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X, AlertCircle, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
@@ -15,14 +14,13 @@ interface Holiday {
   holiday_date: string;
   session_type: string;
   holiday_name?: string;
-  is_for_students: boolean;
-  is_for_teachers: boolean;
   notes?: string;
 }
 
 interface HolidayManagementProps {
   academicYearId: number;
   sessionType: 'morning' | 'evening';
+  selectedDate: string;
 }
 
 interface DailySummary {
@@ -31,27 +29,41 @@ interface DailySummary {
   total_actions: number;
 }
 
-export function HolidayManagement({ academicYearId, sessionType }: HolidayManagementProps) {
+export function HolidayManagement({ academicYearId, sessionType, selectedDate: propSelectedDate }: HolidayManagementProps) {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [showDialog, setShowDialog] = useState(false);
-  const [isForStudents, setIsForStudents] = useState(true);
-  const [isForTeachers, setIsForTeachers] = useState(false);
   const [holidayName, setHolidayName] = useState('');
   const [notes, setNotes] = useState('');
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date(propSelectedDate || new Date()));
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHolidays();
   }, [academicYearId, sessionType]);
 
+  useEffect(() => {
+    // تحديث التقويم ليظهر الشهر المحدد من الصفحة الرئيسية
+    if (propSelectedDate) {
+      setCurrentMonth(new Date(propSelectedDate));
+    }
+  }, [propSelectedDate]);
+
   const fetchHolidays = async () => {
     try {
+      setError(null);
       const response = await api.get(`/daily/holidays?academic_year_id=${academicYearId}&session_type=${sessionType}`);
-      setHolidays(response.data as Holiday[]);
-    } catch (error) {
+      
+      if (response.data && Array.isArray(response.data)) {
+        setHolidays(response.data as Holiday[]);
+      } else {
+        setHolidays([]);
+      }
+    } catch (error: any) {
       console.error('Error fetching holidays:', error);
+      setError('حدث خطأ أثناء تحميل العطل. سيتم إنشاء جدول العطل عند إضافة أول عطلة.');
+      setHolidays([]);
     }
   };
 
@@ -107,11 +119,6 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
   };
 
   const handleSaveHoliday = async () => {
-    if (!isForStudents && !isForTeachers) {
-      alert('يجب اختيار عطلة للطلاب أو الأساتذة أو كليهما');
-      return;
-    }
-    
     setLoading(true);
     try {
       await api.post('/daily/holidays', {
@@ -119,8 +126,6 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
         session_type: sessionType,
         holiday_date: selectedDate,
         holiday_name: holidayName || null,
-        is_for_students: isForStudents,
-        is_for_teachers: isForTeachers,
         notes: notes || null
       });
       
@@ -139,8 +144,6 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
     setSelectedDate('');
     setHolidayName('');
     setNotes('');
-    setIsForStudents(true);
-    setIsForTeachers(false);
   };
 
   const generateCalendarDates = () => {
@@ -208,6 +211,14 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
     return date.getDate() === today.getDate() &&
            date.getMonth() === today.getMonth() &&
            date.getFullYear() === today.getFullYear();
+  };
+
+  const isSelectedDate = (date: Date | null): boolean => {
+    if (!date || !propSelectedDate) return false;
+    const selected = new Date(propSelectedDate);
+    return date.getDate() === selected.getDate() &&
+           date.getMonth() === selected.getMonth() &&
+           date.getFullYear() === selected.getFullYear();
   };
   
   const formatMonthYear = (date: Date): string => {
@@ -315,6 +326,7 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
             const dateStr = `${year}-${month}-${day}`;
             const { isHoliday: isHol, isDefault, holiday } = isHoliday(dateStr, date);
             const isTodayDate = isToday(date);
+            const isSelected = isSelectedDate(date);
             
             return (
               <button
@@ -323,36 +335,32 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
                 className={`
                   aspect-square p-1 text-center rounded-lg border-2 transition-all duration-200
                   ${isTodayDate 
-                    ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900' 
+                    ? 'ring-2 ring-green-500 ring-offset-2 dark:ring-offset-gray-900' 
                     : ''
                   }
-                  ${isHol
-                    ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 hover:bg-amber-200 dark:hover:bg-amber-900/50'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600'
+                  ${isSelected 
+                    ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900 bg-blue-100 dark:bg-blue-900/40' 
+                    : isHol
+                      ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 hover:bg-amber-200 dark:hover:bg-amber-900/50'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600'
                   }
                 `}
                 title={holiday?.holiday_name || (isDefault ? 'عطلة نهاية الأسبوع' : '')}
               >
                 <div className={`text-sm font-semibold ${
-                  isTodayDate 
-                    ? 'text-blue-700 dark:text-blue-400' 
-                    : isHol
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : 'text-gray-900 dark:text-gray-100'
+                  isSelected
+                    ? 'text-blue-700 dark:text-blue-400'
+                    : isTodayDate 
+                      ? 'text-green-700 dark:text-green-400' 
+                      : isHol
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : 'text-gray-900 dark:text-gray-100'
                 }`}>
                   {date.getDate()}
                 </div>
                 {isHol && (
                   <div className="text-[9px] leading-tight mt-0.5 text-amber-700 dark:text-amber-300 font-medium">
-                    {holiday ? (
-                      holiday.is_for_students && holiday.is_for_teachers
-                        ? 'عامة'
-                        : holiday.is_for_students
-                        ? 'طلاب'
-                        : 'معلمين'
-                    ) : (
-                      'عطلة'
-                    )}
+                    عطلة
                   </div>
                 )}
               </button>
@@ -360,6 +368,16 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
           })}
         </div>
         
+        {/* تنبيه الخطأ */}
+        {error && (
+          <Alert className="mt-4 border-amber-400 bg-amber-50 dark:bg-amber-950/30">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* معلومات توضيحية */}
         <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
           <div className="flex items-center gap-1.5">
@@ -371,8 +389,12 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
             <span>عطلة (رسمية أو أسبوعية)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded ring-2 ring-blue-500"></div>
-            <span>اليوم الحالي</span>
+            <div className="w-4 h-4 rounded ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900/40"></div>
+            <span>اليوم المحدد من الصفحة الرئيسية</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded ring-2 ring-green-500"></div>
+            <span>اليوم الفعلي (الحاضر)</span>
           </div>
         </div>
 
@@ -407,40 +429,6 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
                 />
               </div>
 
-              <div className="space-y-3">
-                <Label className="text-gray-900 dark:text-gray-100">العطلة تشمل:</Label>
-                
-                <div className="flex items-center space-x-3 space-x-reverse p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                  <Checkbox
-                    id="forStudents"
-                    checked={isForStudents}
-                    onCheckedChange={(checked) => setIsForStudents(checked as boolean)}
-                    className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                  />
-                  <Label 
-                    htmlFor="forStudents" 
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-gray-900 dark:text-gray-100"
-                  >
-                    الطلاب
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-3 space-x-reverse p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                  <Checkbox
-                    id="forTeachers"
-                    checked={isForTeachers}
-                    onCheckedChange={(checked) => setIsForTeachers(checked as boolean)}
-                    className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                  />
-                  <Label 
-                    htmlFor="forTeachers" 
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-gray-900 dark:text-gray-100"
-                  >
-                    الأساتذة
-                  </Label>
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="notes" className="text-gray-900 dark:text-gray-100">
                   ملاحظات (اختياري)
@@ -453,15 +441,6 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
                   className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                 />
               </div>
-              
-              {!isForStudents && !isForTeachers && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    يجب اختيار الطلاب أو الأساتذة أو كليهما
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
 
             <div className="flex gap-2 justify-end pt-4 border-t dark:border-gray-700">
@@ -478,7 +457,7 @@ export function HolidayManagement({ academicYearId, sessionType }: HolidayManage
               </Button>
               <Button 
                 onClick={handleSaveHoliday}
-                disabled={loading || (!isForStudents && !isForTeachers)}
+                disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 {loading ? 'جاري الحفظ...' : 'حفظ العطلة'}
