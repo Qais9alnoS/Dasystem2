@@ -14,6 +14,7 @@ from app.schemas.academic import (
 )
 from app.core.dependencies import get_current_user, get_director_user, get_school_user
 from app.models.users import User
+from app.utils.history_helper import log_class_action, log_subject_action, log_academic_year_action
 from app.models.system import SystemSetting
 
 router = APIRouter()
@@ -155,6 +156,15 @@ async def create_academic_year(
     db.commit()
     db.refresh(new_year)
     
+    # Log history
+    log_academic_year_action(
+        db=db,
+        action_type="create",
+        year=new_year,
+        current_user=current_user,
+        new_values=year_data.dict()
+    )
+    
     return new_year
 
 @router.put("/years/{year_id}", response_model=AcademicYearResponse)
@@ -186,6 +196,9 @@ async def update_academic_year(
                 detail="Academic year with this name already exists"
             )
     
+    # Store old values for history
+    old_values = {field: getattr(year, field) for field in year_data.dict(exclude_unset=True).keys()}
+    
     # If setting as active, deactivate other years
     if year_data.is_active:
         # Using type: ignore to suppress basedpyright error for working query pattern
@@ -196,6 +209,16 @@ async def update_academic_year(
     
     db.commit()
     db.refresh(year)
+    
+    # Log history
+    log_academic_year_action(
+        db=db,
+        action_type="update",
+        year=year,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=year_data.dict(exclude_unset=True)
+    )
     
     return year
 
@@ -213,6 +236,14 @@ async def delete_academic_year(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Academic year not found"
         )
+    
+    # Log history before deletion
+    log_academic_year_action(
+        db=db,
+        action_type="delete",
+        year=year,
+        current_user=current_user
+    )
     
     # Delete the academic year (no restrictions)
     db.delete(year)
@@ -270,6 +301,15 @@ async def create_class(
     db.commit()
     db.refresh(new_class)
     
+    # Log history
+    log_class_action(
+        db=db,
+        action_type="create",
+        class_obj=new_class,
+        current_user=current_user,
+        new_values=class_data.dict()
+    )
+    
     return new_class
 
 @router.put("/classes/{class_id}", response_model=ClassResponse)
@@ -288,11 +328,24 @@ async def update_class(
             detail="Class not found"
         )
     
+    # Store old values for history
+    old_values = {field: getattr(cls, field) for field in class_data.dict(exclude_unset=True).keys()}
+    
     for field, value in class_data.dict(exclude_unset=True).items():
         setattr(cls, field, value)
     
     db.commit()
     db.refresh(cls)
+    
+    # Log history
+    log_class_action(
+        db=db,
+        action_type="update",
+        class_obj=cls,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=class_data.dict(exclude_unset=True)
+    )
     
     return cls
 
@@ -310,6 +363,14 @@ async def delete_class(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Class not found"
         )
+    
+    # Log history before deletion
+    log_class_action(
+        db=db,
+        action_type="delete",
+        class_obj=cls,
+        current_user=current_user
+    )
     
     db.delete(cls)
     db.commit()
@@ -373,6 +434,15 @@ async def create_subject(
     db.commit()
     db.refresh(new_subject)
     
+    # Log history
+    log_subject_action(
+        db=db,
+        action_type="create",
+        subject=new_subject,
+        current_user=current_user,
+        new_values=subject_data.dict()
+    )
+    
     return new_subject
 
 @router.put("/subjects/{subject_id}", response_model=SubjectResponse)
@@ -408,11 +478,24 @@ async def update_subject(
                 detail=f"يوجد بالفعل مادة باسم '{subject_data.subject_name}' في هذا الصف. يرجى اختيار اسم آخر."
             )
     
+    # Store old values for history
+    old_values = {field: getattr(subject, field) for field in subject_data.dict(exclude_unset=True).keys()}
+    
     for field, value in subject_data.dict(exclude_unset=True).items():
         setattr(subject, field, value)
     
     db.commit()
     db.refresh(subject)
+    
+    # Log history
+    log_subject_action(
+        db=db,
+        action_type="update",
+        subject=subject,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=subject_data.dict(exclude_unset=True)
+    )
     
     return subject
 
@@ -442,6 +525,14 @@ async def delete_subject(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"لا يمكن حذف المادة '{subject.subject_name}' لأنها مرتبطة بتوزيعات للأساتذة. يرجى إزالة التوزيعات أولاً أو تعطيل المادة بدلاً من حذفها."
         )
+    
+    # Log history before deletion
+    log_subject_action(
+        db=db,
+        action_type="delete",
+        subject=subject,
+        current_user=current_user
+    )
     
     db.delete(subject)
     db.commit()

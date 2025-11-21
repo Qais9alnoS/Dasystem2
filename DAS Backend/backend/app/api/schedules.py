@@ -24,6 +24,7 @@ from ..core.dependencies import (
 )
 from ..schemas.schedules import ScheduleGenerationRequest, ScheduleGenerationResponse
 from ..services.schedule_service import ScheduleGenerationService
+from ..utils.history_helper import log_schedule_action, log_system_action
 
 router = APIRouter(tags=["schedules"])
 
@@ -208,6 +209,16 @@ async def create_schedule_entry(
     db.add(db_schedule)
     db.commit()
     db.refresh(db_schedule)
+    
+    # Log history
+    log_schedule_action(
+        db=db,
+        action_type="create",
+        schedule=db_schedule,
+        current_user=current_user,
+        new_values=schedule.dict()
+    )
+    
     return db_schedule
 
 @router.post("/generate", response_model=ScheduleGenerationResponse)
@@ -367,17 +378,32 @@ async def update_schedule(
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule entry not found")
     
+    # Store old values
+    old_values = {field: getattr(schedule, field) for field in schedule_update.dict(exclude_unset=True).keys()}
+    
     update_data = schedule_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(schedule, field, value)
     
     db.commit()
     db.refresh(schedule)
+    
+    # Log history
+    log_schedule_action(
+        db=db,
+        action_type="update",
+        schedule=schedule,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=update_data
+    )
+    
     return schedule
 
 @router.delete("/{schedule_id}")
 async def delete_schedule(
     schedule_id: int,
+    log_history: bool = Query(True, description="Whether to log this deletion to history"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_director_user)
 ):
@@ -385,6 +411,16 @@ async def delete_schedule(
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule entry not found")
+    
+    # Only log if requested (to avoid spam when deleting multiple entries)
+    if log_history:
+        log_schedule_action(
+            db=db,
+            action_type="delete",
+            schedule=schedule,
+            current_user=current_user,
+            description=f"تم حذف حصة من الجدول"
+        )
     
     db.delete(schedule)
     db.commit()
@@ -1007,6 +1043,15 @@ async def publish_schedule(
     schedule.status = "published"
     db.commit()
     
+    # Log history
+    log_schedule_action(
+        db=db,
+        action_type="publish",
+        schedule=schedule,
+        current_user=current_user,
+        new_values={"status": "published"}
+    )
+    
     # Update teacher availability
     availability_service = TeacherAvailabilityService(db)
     availability_service.update_teacher_availability_on_schedule_save(schedule_id)
@@ -1106,11 +1151,41 @@ async def bulk_delete_schedules(
             "section": section
         }
     
+    # Get class and section info for logging
+    class_name = ""
+    section_name = ""
+    if class_id and schedules_to_delete:
+        first_schedule = schedules_to_delete[0]
+        if first_schedule.class_relation:
+            class_name = f"{first_schedule.class_relation.name}"
+        if section:
+            section_name = f" شعبة {section}"
+    
     # Delete all matching schedules
     for schedule in schedules_to_delete:
         db.delete(schedule)
     
     db.commit()
+    
+    # Log single history entry for bulk deletion
+    session_ar = "الفترة الصباحية" if session_type == "morning" else "الفترة المسائية"
+    description = f"تم حذف جدول {class_name}{section_name} - {session_ar} ({deleted_count} حصة)"
+    
+    log_system_action(
+        db=db,
+        action_type="delete",
+        entity_type="schedule",
+        entity_id=academic_year_id,
+        entity_name=f"جدول {class_name}{section_name}",
+        description=description,
+        current_user=current_user,
+        meta_data={
+            "deleted_count": deleted_count,
+            "session_type": session_type,
+            "class_id": class_id,
+            "section": section
+        }
+    )
     
     return {
         "message": f"Successfully deleted {deleted_count} schedules",

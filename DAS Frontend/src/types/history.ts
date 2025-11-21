@@ -90,11 +90,11 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
   schedule: 'جدول',
 };
 
-// Severity colors for UI
+// Severity colors for UI with dark mode support
 export const SEVERITY_COLORS: Record<string, string> = {
-  info: 'text-blue-600 bg-blue-50 border-blue-200',
-  warning: 'text-yellow-600 bg-yellow-50 border-yellow-200',
-  critical: 'text-red-600 bg-red-50 border-red-200',
+  info: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-900/30 dark:border-blue-800',
+  warning: 'text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-400 dark:bg-yellow-900/30 dark:border-yellow-800',
+  critical: 'text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-900/30 dark:border-red-800',
 };
 
 // Action type icons (using lucide-react icon names)

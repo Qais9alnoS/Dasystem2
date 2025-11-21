@@ -21,6 +21,7 @@ from ..schemas.activities import (
     ActivityParticipationReport, StudentActivityReport, ActivitySummaryReport
 )
 from ..core.dependencies import get_current_user, get_director_user, get_school_user
+from ..utils.history_helper import log_activity_action, log_activity_registration
 
 router = APIRouter(tags=["activities"])
 
@@ -126,6 +127,15 @@ async def create_activity(
     db.commit()
     db.refresh(db_activity)
     
+    # Log history
+    log_activity_action(
+        db=db,
+        action_type="create",
+        activity=db_activity,
+        current_user=current_user,
+        new_values=activity.dict()
+    )
+    
     # Create response object with current participants set to 0
     activity_dict = {
         "id": db_activity.id,
@@ -221,11 +231,36 @@ async def update_activity(
         if existing_activity:
             raise HTTPException(status_code=400, detail="Activity name already exists in this academic year")
     
+    # Store old values for history
+    old_values = {field: getattr(activity, field) for field in update_data.keys()}
+    
+    # Track if JSON fields are being updated
+    json_fields_updated = []
+    
     for field, value in update_data.items():
         setattr(activity, field, value)
+        # Track JSON field updates
+        if field in ['target_grades', 'additional_expenses', 'additional_revenues']:
+            json_fields_updated.append(field)
+    
+    # Mark JSON fields as modified so SQLAlchemy detects the change
+    if json_fields_updated:
+        from sqlalchemy.orm.attributes import flag_modified
+        for field in json_fields_updated:
+            flag_modified(activity, field)
     
     db.commit()
     db.refresh(activity)
+    
+    # Log history
+    log_activity_action(
+        db=db,
+        action_type="update",
+        activity=activity,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=update_data
+    )
     
     # Add current participants count to response
     participant_count = db.query(ActivityRegistration).filter(  
@@ -273,6 +308,15 @@ async def delete_activity(
     
     activity.is_active = False
     db.commit()
+    
+    # Log history
+    log_activity_action(
+        db=db,
+        action_type="delete",
+        activity=activity,
+        current_user=current_user
+    )
+    
     return {"message": "Activity deleted successfully"}
 
 # Activity Registration Management
@@ -378,6 +422,16 @@ async def register_student_for_activity(
     db.commit()
     db.refresh(db_registration)
     
+    # Log history
+    log_activity_registration(
+        db=db,
+        action_type="create",
+        registration=db_registration,
+        student_name=student.full_name,
+        activity_name=activity.name,
+        current_user=current_user
+    )
+    
     # Finance integration is now handled in bulk by the finance dashboard sync
     # No individual transactions created here anymore
     
@@ -419,12 +473,24 @@ async def update_activity_registration(
     db.commit()
     db.refresh(registration)
     
-    # Finance sync is now handled in bulk by the finance dashboard
-    # Individual transaction updates not needed
-    
     # Add student and activity names to response
     student = db.query(Student).filter(Student.id == registration.student_id).first()  
-    activity = db.query(Activity).filter(Activity.id == registration.activity_id).first()  
+    activity = db.query(Activity).filter(Activity.id == registration.activity_id).first()
+    
+    # Log history
+    log_activity_registration(
+        db=db,
+        action_type="update",
+        registration=registration,
+        student_name=student.full_name if student else "Unknown",
+        activity_name=activity.name if activity else "Unknown",
+        current_user=current_user,
+        old_values={"payment_status": old_payment_status},
+        new_values=update_data
+    )
+    
+    # Finance sync is now handled in bulk by the finance dashboard
+    # Individual transaction updates not needed  
     
     # Create response object with names
     registration_dict = {

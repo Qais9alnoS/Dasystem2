@@ -19,6 +19,7 @@ from ..services.config_service import config_service
 from ..services.file_service import file_service
 from ..services.reporting_service import reporting_service
 from ..schemas.system import *
+from ..utils.history_helper import log_system_action
 
 router = APIRouter()
 
@@ -127,6 +128,17 @@ async def terminate_session(
             table_name="user_sessions",
             record_id=session.id,
             new_values={"session_token": session_token}
+        )
+        
+        # Log to history
+        log_system_action(
+            db=db,
+            action_type="terminate_session",
+            entity_type="user_session",
+            entity_id=session.id,
+            entity_name=f"جلسة - {session.user_id}",
+            description=f"تم إنهاء جلسة مستخدم",
+            current_user=current_user
         )
         
         return {"message": "Session terminated successfully"}
@@ -243,6 +255,18 @@ async def update_configuration(
         new_values={"key": key, "value": value}
     )
     
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="config_update",
+        entity_type="system_config",
+        entity_id=0,
+        entity_name=key,
+        description=f"تم تحديث إعداد النظام: {key}",
+        current_user=current_user,
+        new_values={"key": key, "value": value, "type": config_type}
+    )
+    
     return {"message": "Configuration updated successfully"}
 
 @router.delete("/config/{key}")
@@ -259,6 +283,17 @@ async def delete_configuration(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Configuration not found or cannot be deleted"
         )
+    
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="config_delete",
+        entity_type="system_config",
+        entity_id=0,
+        entity_name=key,
+        description=f"تم حذف إعداد النظام: {key}",
+        current_user=current_user
+    )
     
     return {"message": "Configuration deleted successfully"}
 
@@ -303,6 +338,23 @@ async def upload_file(
                 "filename": result["filename"],
                 "original_filename": file.filename,
                 "file_size": result["file_size"]
+            }
+        )
+        
+        # Log to history
+        log_system_action(
+            db=db,
+            action_type="file_upload",
+            entity_type="file",
+            entity_id=result["file_id"],
+            entity_name=file.filename or "unnamed_file",
+            description=f"تم رفع ملف: {file.filename} ({result['file_size']} bytes)",
+            current_user=current_user,
+            new_values={
+                "filename": result["filename"],
+                "original_filename": file.filename,
+                "file_size": result["file_size"],
+                "file_type": file.content_type
             }
         )
         
@@ -374,6 +426,9 @@ async def delete_file(
     db: Session = Depends(get_db)
 ):
     """Delete file"""
+    # Get file info before deletion
+    file_info = file_service.get_file(file_id)
+    
     success = file_service.delete_file(file_id, current_user.id)
     
     if not success:
@@ -388,6 +443,17 @@ async def delete_file(
         action="FILE_DELETE",
         table_name="file_uploads",
         record_id=file_id
+    )
+    
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="file_delete",
+        entity_type="file",
+        entity_id=file_id,
+        entity_name=file_info["original_filename"] if file_info else f"File {file_id}",
+        description=f"تم حذف ملف: {file_info['original_filename'] if file_info else file_id}",
+        current_user=current_user
     )
     
     return {"message": "File deleted successfully"}
@@ -586,6 +652,18 @@ async def whitelist_ip(
                 "ip_address": ip_address,
                 "description": description
             }
+        )
+        
+        # Log to history
+        log_system_action(
+            db=db,
+            action_type="ip_whitelist",
+            entity_type="security",
+            entity_id=0,
+            entity_name=ip_address,
+            description=f"تم إضافة عنوان IP إلى القائمة البيضاء: {ip_address}",
+            current_user=current_user,
+            new_values={"ip_address": ip_address, "description": description}
         )
         
         # In a real implementation, this would add the IP to a whitelist table

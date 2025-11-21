@@ -189,26 +189,18 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
     }
 
     try {
-      // Delete all schedule entries for this class/section
-      const schedulesResponse = await schedulesApi.getAll({
+      // Use bulk delete API to avoid logging spam
+      const response = await schedulesApi.bulkDelete({
         academic_year_id: schedule.academic_year_id,
         session_type: schedule.session_type,
-        class_id: schedule.class_id
+        class_id: schedule.class_id,
+        section: schedule.section
       });
 
-      if (schedulesResponse.success && schedulesResponse.data) {
-        const toDelete = schedulesResponse.data.filter(
-          (s: any) => s.section === schedule.section
-        );
-
-        // Delete all entries
-        await Promise.all(
-          toDelete.map((s: any) => schedulesApi.delete(s.id))
-        );
-
+      if (response.success) {
         toast({
           title: "تم الحذف بنجاح",
-          description: "تم حذف الجدول بنجاح"
+          description: `تم حذف الجدول بنجاح (${response.data?.deleted_count || 0} حصة)`
         });
 
         fetchSchedules();

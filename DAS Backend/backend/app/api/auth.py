@@ -15,8 +15,9 @@ from app.utils.security import (
     validate_password_strength,
     generate_session_token
 )
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_director_user
 from app.config import settings
+from app.utils.history_helper import log_system_action, _get_changes
 from app.services.security_service import security_service
 
 router = APIRouter()
@@ -100,6 +101,19 @@ async def login(user_credentials: UserLogin, request: Request, db: Session = Dep
         ip_address=client_ip,
         user_agent=request.headers.get("user-agent", ""),
         success=True
+    )
+    
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="login",
+        entity_type="user",
+        entity_id=user.id,
+        entity_name=user.username,
+        description=f"تسجيل دخول: {user.username}",
+        current_user=user,
+        ip_address=client_ip,
+        user_agent=request.headers.get("user-agent", "")
     )
     
     # Create access token
@@ -199,6 +213,17 @@ async def change_password(
         user_agent=""
     )
     
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="password_change",
+        entity_type="user",
+        entity_id=current_user.id,
+        entity_name=current_user.username,
+        description=f"تم تغيير كلمة المرور للمستخدم: {current_user.username}",
+        current_user=current_user
+    )
+    
     return {"message": "Password changed successfully"}
 
 @router.post("/reset-password")
@@ -276,6 +301,26 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         user_agent=request.headers.get("user-agent", "")
     )
     
+    # Log to history
+    try:
+        db = next(get_db())
+        try:
+            log_system_action(
+                db=db,
+                action_type="logout",
+                entity_type="user",
+                entity_id=current_user.id,
+                entity_name=current_user.username,
+                description=f"تسجيل خروج: {current_user.username}",
+                current_user=current_user,
+                ip_address=client_ip,
+                user_agent=request.headers.get("user-agent", "")
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Failed to log history: {e}")
+    
     return {"message": "Logged out successfully"}
 
 @router.post("/create-user")
@@ -332,6 +377,18 @@ async def create_user(
         new_values={"username": new_user.username, "role": new_user.role},
         ip_address=client_ip,
         user_agent=request.headers.get("user-agent", "")
+    )
+    
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="create",
+        entity_type="user",
+        entity_id=new_user.id,
+        entity_name=new_user.username,
+        description=f"تم إنشاء مستخدم جديد: {new_user.username} ({new_user.role})",
+        current_user=current_user,
+        meta_data={"username": new_user.username, "role": new_user.role, "session_type": new_user.session_type}
     )
     
     return {
@@ -459,6 +516,19 @@ async def update_user(
         user_agent=request.headers.get("user-agent", "")
     )
     
+    # Log to history
+    changes = _get_changes(old_values, {k: v for k, v in user_data.items() if k != 'password'})
+    log_system_action(
+        db=db,
+        action_type="update",
+        entity_type="user",
+        entity_id=user.id,
+        entity_name=user.username,
+        description=f"تم تعديل بيانات المستخدم: {user.username}",
+        current_user=current_user,
+        meta_data={"changes": changes} if changes else {}
+    )
+    
     return {
         "success": True,
         "message": "تم تحديث المستخدم بنجاح",
@@ -567,6 +637,18 @@ async def delete_user(
         old_values={"username": username, "role": user_role},
         ip_address=client_ip,
         user_agent=request.headers.get("user-agent", "")
+    )
+    
+    # Log to history
+    log_system_action(
+        db=db,
+        action_type="delete",
+        entity_type="user",
+        entity_id=user_id,
+        entity_name=username,
+        description=f"تم حذف المستخدم: {username} ({user_role})",
+        current_user=current_user,
+        meta_data={"username": username, "role": user_role}
     )
     
     return {"success": True, "message": "تم حذف المستخدم بنجاح"}

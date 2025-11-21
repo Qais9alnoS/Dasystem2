@@ -107,7 +107,8 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
     if (onValidationChange) {
       onValidationChange(validationResult.can_proceed);
     }
-  }, [validationResult, onValidationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validationResult]);
 
   // Automatically notify parent when validation allows proceeding
   useEffect(() => {
@@ -126,7 +127,8 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       onContinue();
       setHasSignaledReady(true);
     }
-  }, [validationResult, hasSignaledReady, onContinue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validationResult, hasSignaledReady]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {

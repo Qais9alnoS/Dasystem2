@@ -7,6 +7,7 @@ import logging
 from app.database import get_db
 from app.models.users import User
 from app.core.dependencies import get_current_user, get_director_user
+from app.utils.history_helper import log_system_action
 
 logger = logging.getLogger(__name__)
 from app.services.backup_service import backup_service
@@ -47,6 +48,18 @@ async def create_database_backup(
                 f"Database backup '{result['backup_name']}' created successfully",
                 "success"
             )
+            
+            # Log to history
+            log_system_action(
+                db=db,
+                action_type="backup_create",
+                entity_type="database_backup",
+                entity_id=0,
+                entity_name=result['backup_name'],
+                description=f"تم إنشاء نسخة احتياطية لقاعدة البيانات: {result['backup_name']}",
+                current_user=current_user,
+                new_values={"backup_name": result['backup_name'], "backup_type": "database"}
+            )
         
         return BackupResponse(**result)
         
@@ -71,6 +84,18 @@ async def create_files_backup(
                 f"Files backup '{result['backup_name']}' created successfully",
                 "success"
             )
+            
+            # Log to history
+            log_system_action(
+                db=db,
+                action_type="backup_create",
+                entity_type="files_backup",
+                entity_id=0,
+                entity_name=result['backup_name'],
+                description=f"تم إنشاء نسخة احتياطية للملفات: {result['backup_name']}",
+                current_user=current_user,
+                new_values={"backup_name": result['backup_name'], "backup_type": "files"}
+            )
         
         return BackupResponse(**result)
         
@@ -94,6 +119,18 @@ async def create_full_backup(
                 "Full System Backup",
                 f"Full backup '{result['backup_name']}' created successfully",
                 "success"
+            )
+            
+            # Log to history
+            log_system_action(
+                db=db,
+                action_type="backup_create",
+                entity_type="full_backup",
+                entity_id=0,
+                entity_name=result['backup_name'],
+                description=f"تم إنشاء نسخة احتياطية كاملة: {result['backup_name']}",
+                current_user=current_user,
+                new_values={"backup_name": result['backup_name'], "backup_type": "full"}
             )
         
         return BackupResponse(**result)
@@ -150,6 +187,18 @@ async def restore_backup(
                 f"Database restored from backup '{backup_name}'",
                 "warning"
             )
+            
+            # Log to history
+            log_system_action(
+                db=db,
+                action_type="backup_restore",
+                entity_type="database_backup",
+                entity_id=0,
+                entity_name=backup_name,
+                description=f"تم استعادة قاعدة البيانات من النسخة الاحتياطية: {backup_name}",
+                current_user=current_user,
+                new_values={"backup_name": backup_name}
+            )
         
         return result
         
@@ -173,6 +222,18 @@ async def cleanup_old_backups(
                 "Backup Cleanup",
                 f"Removed {result['removed_count']} old backup files",
                 "info"
+            )
+            
+            # Log to history
+            log_system_action(
+                db=db,
+                action_type="backup_cleanup",
+                entity_type="backup_maintenance",
+                entity_id=0,
+                entity_name=f"Cleanup {keep_days} days",
+                description=f"تم تنظيف النسخ الاحتياطية القديمة: حذف {result['removed_count']} ملف",
+                current_user=current_user,
+                new_values={"removed_count": result['removed_count'], "keep_days": keep_days}
             )
         
         return result

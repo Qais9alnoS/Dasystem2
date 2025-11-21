@@ -54,7 +54,7 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       setLoading(true);
       
       // Load classes
-      const classesResponse = await classesApi.getAll(academicYearId);
+      const classesResponse = await classesApi.getAll({ academic_year_id: academicYearId });
       if (classesResponse.success && classesResponse.data) {
         setClasses(classesResponse.data);
       }
@@ -229,9 +229,19 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       // Separate new students from existing ones
       const newStudents = [];
       const updatedStudents = [];
+      const removedStudents = [];
 
       console.log('Saving participants. Total selected:', studentIds.length); // Debug log
       console.log('Existing registrations size:', existingRegistrations.size); // Debug log
+
+      // Check for students that need to be removed (in existing registrations but not in selectedStudents)
+      for (const [studentId, registration] of existingRegistrations.entries()) {
+        if (!selectedStudents.has(studentId)) {
+          console.log(`Deleting registration ${registration.id} for student ${studentId}`); // Debug log
+          promises.push(activitiesApi.deleteRegistration(activity.id!, registration.id));
+          removedStudents.push(studentId);
+        }
+      }
 
       for (const studentId of studentIds) {
         const existingReg = existingRegistrations.get(studentId);
@@ -288,6 +298,7 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       const summaryParts = [];
       if (newStudents.length > 0) summaryParts.push(`${newStudents.length} طالب جديد`);
       if (updatedStudents.length > 0) summaryParts.push(`${updatedStudents.length} تحديث`);
+      if (removedStudents.length > 0) summaryParts.push(`${removedStudents.length} تمت إزالته`);
       
       const paymentSummary = [];
       if (paidCount > 0) paymentSummary.push(`${paidCount} دفع (${totalPaid.toLocaleString('ar-SY')} ل.س)`);

@@ -27,6 +27,7 @@ from ..schemas.finance import (
 )
 from ..schemas.students import StudentFinanceSummary, StudentFinanceDetailedResponse, StudentFinanceUpdate, StudentPaymentCreate
 from ..core.dependencies import get_current_user, get_director_user, get_finance_user
+from ..utils.history_helper import log_finance_action
 
 router = APIRouter(tags=["finance"])
 
@@ -121,6 +122,21 @@ async def create_finance_transaction(
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
+    
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="create",
+        entity_type="finance_transaction",
+        entity_id=db_transaction.id,
+        entity_name=f"{transaction.transaction_type} - {transaction.description[:30] if transaction.description else 'معاملة'}",
+        description=f"معاملة مالية {transaction.transaction_type}: {transaction.amount:,.0f} ل.س",
+        current_user=current_user,
+        academic_year_id=transaction.academic_year_id,
+        amount=float(transaction.amount),
+        new_values=transaction.dict()
+    )
+    
     return db_transaction
 
 @router.get("/transactions/{transaction_id}", response_model=FinanceTransactionResponse)
@@ -150,6 +166,9 @@ async def update_finance_transaction(
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     update_data = transaction_update.dict(exclude_unset=True)
+    
+    # Store old values for history
+    old_values = {"amount": float(transaction.amount), "description": transaction.description}
     
     # Handle category update if provided
     if 'category' in update_data:
@@ -183,6 +202,21 @@ async def update_finance_transaction(
     
     db.commit()
     db.refresh(transaction)
+    
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="update",
+        entity_type="finance_transaction",
+        entity_id=transaction.id,
+        entity_name=f"{transaction.transaction_type} - {transaction.description[:30] if transaction.description else 'معاملة'}",
+        description=f"تم تعديل معاملة مالية",
+        current_user=current_user,
+        amount=float(transaction.amount),
+        old_values=old_values,
+        new_values=update_data
+    )
+    
     return transaction
 
 @router.delete("/transactions/{transaction_id}")
@@ -196,6 +230,18 @@ async def delete_finance_transaction(
     transaction = db.query(FinanceTransaction).filter(FinanceTransaction.id == transaction_id).first()  
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Log history before deletion
+    log_finance_action(
+        db=db,
+        action_type="delete",
+        entity_type="finance_transaction",
+        entity_id=transaction.id,
+        entity_name=f"{transaction.transaction_type} - {transaction.description[:30] if transaction.description else 'معاملة'}",
+        description=f"تم حذف معاملة مالية: {transaction.amount:,.0f} ل.س",
+        current_user=current_user,
+        amount=float(transaction.amount)
+    )
     
     db.delete(transaction)
     db.commit()
@@ -299,6 +345,20 @@ async def create_budget(
     db.commit()
     db.refresh(db_budget)
     
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="create",
+        entity_type="budget",
+        entity_id=db_budget.id,
+        entity_name=f"ميزانية - {db_budget.category}",
+        description=f"تم إنشاء ميزانية: {db_budget.budgeted_amount:,.0f} ل.س",
+        current_user=current_user,
+        academic_year_id=db_budget.academic_year_id,
+        amount=float(db_budget.budgeted_amount),
+        new_values=budget.dict()
+    )
+    
     # Create response with calculated fields
     budget_response = BudgetResponse(
         id=db_budget.id,
@@ -329,12 +389,29 @@ async def update_budget(
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     
+    # Store old values
+    old_values = {field: getattr(budget, field) for field in budget_update.dict(exclude_unset=True).keys()}
+    
     update_data = budget_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(budget, field, value)
     
     db.commit()
     db.refresh(budget)
+    
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="update",
+        entity_type="budget",
+        entity_id=budget.id,
+        entity_name=f"ميزانية - {budget.category}",
+        description=f"تم تعديل ميزانية",
+        current_user=current_user,
+        old_values=old_values,
+        new_values=update_data
+    )
+    
     return budget
 
 # Financial Reports
@@ -1510,20 +1587,21 @@ async def create_finance_card(
     db.commit()
     db.refresh(new_card)
     
-    return new_card
-
-@router.get("/cards/{card_id}", response_model=FinanceCardResponse)
-async def get_finance_card(
-    card_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_finance_user)
-):
-    """Get a specific finance card"""
-    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Finance card not found")
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="create",
+        entity_type="finance_card",
+        entity_id=new_card.id,
+        entity_name=new_card.card_name,
+        description=f"تم إنشاء صندوق جديد: {new_card.card_name}",
+        current_user=current_user,
+        academic_year_id=new_card.academic_year_id,
+        amount=float(new_card.initial_balance) if new_card.initial_balance else 0,
+        new_values={"card_name": new_card.card_name, "initial_balance": float(new_card.initial_balance or 0)}
+    )
     
-    return card
+    return new_card
 
 @router.put("/cards/{card_id}", response_model=FinanceCardResponse)
 async def update_finance_card(
@@ -1544,6 +1622,18 @@ async def update_finance_card(
     db.commit()
     db.refresh(card)
     
+    # Log history
+    log_finance_action(
+        db=db,
+        action_type="update",
+        entity_type="finance_card",
+        entity_id=card.id,
+        entity_name=card.card_name,
+        description=f"تم تعديل بيانات الصندوق: {card.card_name}",
+        current_user=current_user,
+        new_values=update_data
+    )
+    
     return card
 
 @router.delete("/cards/{card_id}")
@@ -1563,94 +1653,22 @@ async def delete_finance_card(
             detail="Cannot delete default finance cards"
         )
     
+    # Log history before deletion
+    log_finance_action(
+        db=db,
+        action_type="delete",
+        entity_type="finance_card",
+        entity_id=card.id,
+        entity_name=card.card_name,
+        description=f"تم حذف الصندوق: {card.card_name}",
+        current_user=current_user,
+        amount=float(card.balance) if hasattr(card, 'balance') else 0
+    )
+    
     db.delete(card)
     db.commit()
     
     return {"message": "Finance card deleted successfully"}
-
-@router.get("/cards/{card_id}/detailed")
-async def get_finance_card_detailed(
-    card_id: int,
-    academic_year_id: int = Query(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_finance_user)
-):
-    """Get detailed information for a finance card including transactions"""
-    card = db.query(FinanceCard).filter(
-        FinanceCard.id == card_id,
-        FinanceCard.academic_year_id == academic_year_id
-    ).first()
-    
-    if not card:
-        raise HTTPException(status_code=404, detail="Finance card not found")
-    
-    # Get all transactions
-    transactions = db.query(FinanceCardTransaction).filter(
-        FinanceCardTransaction.card_id == card_id
-    ).order_by(FinanceCardTransaction.transaction_date.desc()).all()
-    
-    return {
-        "id": card.id,
-        "card_name": card.card_name,
-        "card_type": card.card_type,
-        "category": card.category,
-        "description": card.description,
-        "status": card.status,
-        "academic_year_id": card.academic_year_id,
-        "created_at": card.created_at,
-        "updated_at": card.updated_at,
-        "transactions": transactions
-    }
-
-@router.get("/cards/{card_id}/summary", response_model=FinanceCardSummary)
-async def get_finance_card_summary(
-    card_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_finance_user)
-):
-    """Get financial summary for a specific card"""
-    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Finance card not found")
-    
-    total_income = sum(
-        t.amount for t in card.transactions if t.transaction_type == "income"
-    )
-    total_expenses = sum(
-        t.amount for t in card.transactions if t.transaction_type == "expense"
-    )
-    incomplete_count = sum(
-        1 for t in card.transactions if not t.is_completed
-    )
-    
-    return FinanceCardSummary(
-        card_id=card.id,
-        card_name=card.card_name,
-        card_type=card.card_type,
-        total_income=total_income,
-        total_expenses=total_expenses,
-        net_amount=total_income - total_expenses,
-        incomplete_transactions_count=incomplete_count,
-        status=card.status
-    )
-
-# Finance Card Transactions
-@router.get("/cards/{card_id}/transactions", response_model=List[FinanceCardTransactionResponse])
-async def get_card_transactions(
-    card_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_finance_user)
-):
-    """Get all transactions for a specific card"""
-    card = db.query(FinanceCard).filter(FinanceCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Finance card not found")
-    
-    transactions = db.query(FinanceCardTransaction).filter(
-        FinanceCardTransaction.card_id == card_id
-    ).order_by(FinanceCardTransaction.transaction_date.desc()).all()
-    
-    return transactions
 
 @router.post("/cards/{card_id}/transactions", response_model=FinanceCardTransactionResponse)
 async def add_card_transaction(
@@ -1670,6 +1688,19 @@ async def add_card_transaction(
     db.commit()
     db.refresh(new_transaction)
     
+    # Log history
+    transaction_type = new_transaction.transaction_type
+    log_finance_action(
+        db=db,
+        action_type="create",
+        entity_type="finance_card_transaction",
+        entity_id=new_transaction.id,
+        entity_name=f"{transaction_type} في {card.card_name}",
+        description=f"معاملة في الصندوق ({transaction_type}): {new_transaction.amount:,.0f} ل.س - {new_transaction.description}",
+        current_user=current_user,
+        amount=float(new_transaction.amount),
+        new_values={"type": transaction_type, "amount": float(new_transaction.amount), "category": new_transaction.category}
+    )
     return new_transaction
 
 @router.put("/cards/transactions/{transaction_id}", response_model=FinanceCardTransactionResponse)
@@ -1694,12 +1725,29 @@ async def update_card_transaction(
             detail="لا يمكن تعديل المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين."
         )
     
+    # Store old values
+    old_values = {"amount": float(transaction.amount), "description": transaction.description}
+    
     update_data = transaction_data.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(transaction, field, value)
     
     db.commit()
     db.refresh(transaction)
+    
+    # Log history
+    card = db.query(FinanceCard).filter(FinanceCard.id == transaction.card_id).first()
+    log_finance_action(
+        db=db,
+        action_type="update",
+        entity_type="finance_card_transaction",
+        entity_id=transaction.id,
+        entity_name=f"{transaction.transaction_type} في {card.card_name if card else 'Unknown'}",
+        description=f"تم تعديل معاملة في الصندوق",
+        current_user=current_user,
+        old_values=old_values,
+        new_values=update_data
+    )
     
     return transaction
 
@@ -1723,6 +1771,19 @@ async def delete_card_transaction(
             status_code=403, 
             detail="لا يمكن حذف المعاملات المجمعة للأنشطة. يتم تحديثها تلقائياً عند تغيير حالة الدفع للمشاركين."
         )
+    
+    # Log history before deletion
+    card = db.query(FinanceCard).filter(FinanceCard.id == transaction.card_id).first()
+    log_finance_action(
+        db=db,
+        action_type="delete",
+        entity_type="finance_card_transaction",
+        entity_id=transaction.id,
+        entity_name=f"{transaction.transaction_type} في {card.card_name if card else 'Unknown'}",
+        description=f"تم حذف معاملة في الصندوق",
+        current_user=current_user,
+        amount=float(transaction.amount)
+    )
     
     db.delete(transaction)
     db.commit()

@@ -15,6 +15,7 @@ from ..schemas.teachers import (
     TeacherAttendanceCreate, TeacherAttendanceUpdate, TeacherAttendanceResponse
 )
 from ..core.dependencies import get_current_user, get_school_user, get_director_user, get_finance_user, require_roles
+from app.utils.history_helper import log_teacher_action
 
 router = APIRouter(tags=["teachers"])
 
@@ -106,6 +107,15 @@ async def create_teacher(
     db.commit()
     db.refresh(db_teacher)
     
+    # Log history
+    log_teacher_action(
+        db=db,
+        action_type="create",
+        teacher=db_teacher,
+        current_user=current_user,
+        new_values=teacher.dict()
+    )
+    
     # Convert date back to string for response
     if db_teacher.birth_date:
         db_teacher.birth_date = db_teacher.birth_date.strftime('%Y-%m-%d')
@@ -147,6 +157,9 @@ async def update_teacher(
     elif current_user.role == 'evening_school' and teacher.session_type != 'evening':
         raise HTTPException(status_code=403, detail="Evening school user can only update evening teachers")
     
+    # Store old values for history
+    old_values = {field: getattr(teacher, field) for field in teacher_update.dict(exclude_unset=True).keys()}
+    
     update_data = teacher_update.dict(exclude_unset=True)
     
     # Convert birth_date string to date object if present
@@ -163,6 +176,16 @@ async def update_teacher(
     teacher.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(teacher)
+    
+    # Log history
+    log_teacher_action(
+        db=db,
+        action_type="update",
+        teacher=teacher,
+        current_user=current_user,
+        old_values=old_values,
+        new_values=update_data
+    )
     
     # Convert date to string for response
     if teacher.birth_date:
@@ -189,6 +212,15 @@ async def delete_teacher(
     
     teacher.is_active = False
     db.commit()
+    
+    # Log history
+    log_teacher_action(
+        db=db,
+        action_type="deactivate",
+        teacher=teacher,
+        current_user=current_user
+    )
+    
     return {"message": "Teacher deactivated successfully"}
 
 # Teacher Subject Assignments

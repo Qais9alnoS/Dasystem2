@@ -20,6 +20,7 @@ from app.schemas.daily import (
     DailyPageSummary, WhatsAppMessage, TeacherScheduleInfo
 )
 from app.core.dependencies import get_current_user
+from app.utils.history_helper import log_daily_action
 
 router = APIRouter()
 
@@ -124,6 +125,20 @@ def create_holiday(
     db.add(db_holiday)
     db.commit()
     db.refresh(db_holiday)
+    
+    # Log history
+    log_daily_action(
+        db=db,
+        action_type="create",
+        entity_type="holiday",
+        entity_id=db_holiday.id,
+        entity_name=db_holiday.holiday_name,
+        description=f"تم إضافة يوم عطلة: {db_holiday.holiday_name}",
+        current_user=current_user,
+        academic_year_id=db_holiday.academic_year_id,
+        new_values=holiday.dict()
+    )
+    
     return db_holiday
 
 @router.get("/holidays", response_model=List[HolidayResponse])
@@ -174,11 +189,28 @@ def update_holiday(
     if not db_holiday:
         raise HTTPException(status_code=404, detail="Holiday not found")
     
+    # Store old values
+    old_values = {field: getattr(db_holiday, field) for field in holiday_update.dict(exclude_unset=True).keys()}
+    
     for key, value in holiday_update.dict(exclude_unset=True).items():
         setattr(db_holiday, key, value)
     
     db.commit()
     db.refresh(db_holiday)
+    
+    # Log history
+    log_daily_action(
+        db=db,
+        action_type="update",
+        entity_type="holiday",
+        entity_id=db_holiday.id,
+        entity_name=db_holiday.holiday_name,
+        description=f"تم تعديل يوم عطلة: {db_holiday.holiday_name}",
+        current_user=current_user,
+        old_values=old_values,
+        new_values=holiday_update.dict(exclude_unset=True)
+    )
+    
     return db_holiday
 
 @router.delete("/holidays/{holiday_id}")
@@ -191,6 +223,17 @@ def delete_holiday(
     db_holiday = db.query(Holiday).filter(Holiday.id == holiday_id).first()
     if not db_holiday:
         raise HTTPException(status_code=404, detail="Holiday not found")
+    
+    # Log history before deletion
+    log_daily_action(
+        db=db,
+        action_type="delete",
+        entity_type="holiday",
+        entity_id=db_holiday.id,
+        entity_name=db_holiday.holiday_name,
+        description=f"تم حذف يوم عطلة: {db_holiday.holiday_name}",
+        current_user=current_user
+    )
     
     db.delete(db_holiday)
     db.commit()

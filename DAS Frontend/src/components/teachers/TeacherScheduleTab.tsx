@@ -19,7 +19,8 @@ import {
     Clock,
     Calendar as CalendarIcon,
     Save,
-    AlertCircle
+    AlertCircle,
+    Loader2
 } from 'lucide-react';
 import { Teacher, Class, Subject, FreeTimeSlot } from '@/types/school';
 import { teachersApi, classesApi, subjectsApi } from '@/services/api';
@@ -52,11 +53,14 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
     const [classes, setClasses] = useState<Class[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(false);
-    const [showAddDialog, setShowAddDialog] = useState(false);
-    const [showFreeTimeDialog, setShowFreeTimeDialog] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+    const [activeTab, setActiveTab] = useState<'classes' | 'students'>('classes');
     const [freeTimeSlots, setFreeTimeSlots] = useState<FreeTimeSlot[]>([]);
     const [availableSections, setAvailableSections] = useState<string[]>([]);
     const [occupiedSlots, setOccupiedSlots] = useState<any[]>([]);
+    const [showAddDialog, setShowAddDialog] = useState(false);
+    const [showFreeTimeDialog, setShowFreeTimeDialog] = useState(false);
 
     const [newAssignment, setNewAssignment] = useState({
         class_id: '',
@@ -122,6 +126,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
 
     const loadTeacherSchedule = async () => {
         try {
+            setLoadingSchedule(true);
             const academicYearId = localStorage.getItem('selected_academic_year_id');
             const response = await teachersApi.getSchedule(teacher.id!, {
                 academic_year_id: academicYearId ? parseInt(academicYearId) : undefined
@@ -139,9 +144,12 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     subject: entry.subject_name || 'مادة'
                 }));
                 setOccupiedSlots(occupied);
+                console.log('Loaded occupied slots:', occupied.length); // Debug log
             }
         } catch (error) {
             console.error('Error loading teacher schedule:', error);
+        } finally {
+            setLoadingSchedule(false);
         }
     };
 
@@ -596,7 +604,13 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             </Dialog>
 
             {/* Free Time Slots Dialog */}
-            <Dialog open={showFreeTimeDialog} onOpenChange={setShowFreeTimeDialog}>
+            <Dialog open={showFreeTimeDialog} onOpenChange={(open) => {
+                setShowFreeTimeDialog(open);
+                // Refresh occupied slots when dialog opens to get latest schedule data
+                if (open) {
+                    loadTeacherSchedule();
+                }
+            }}>
                 <DialogContent className="sm:max-w-[900px]" dir="rtl">
                     <DialogHeader>
                         <DialogTitle>تعديل أوقات الفراغ</DialogTitle>
@@ -642,12 +656,20 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     )}
 
                     <div className="py-4">
-                        <FreeTimeSlotsCalendar
-                            slots={freeTimeSlots}
-                            readonly={false}
-                            onSlotsChange={(slots) => setFreeTimeSlots(slots)}
-                            occupiedSlots={occupiedSlots}
-                        />
+                        {loadingSchedule ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                <span className="mr-3 text-muted-foreground">جاري تحميل الجدول...</span>
+                            </div>
+                        ) : (
+                            <FreeTimeSlotsCalendar
+                                key={JSON.stringify(occupiedSlots)}
+                                slots={freeTimeSlots}
+                                readonly={false}
+                                onSlotsChange={(slots) => setFreeTimeSlots(slots)}
+                                occupiedSlots={occupiedSlots}
+                            />
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowFreeTimeDialog(false)}>

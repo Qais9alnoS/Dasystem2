@@ -10,6 +10,9 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..services.template_service import TemplateService
 from ..models.schedule_templates import ScheduleTemplate
+from ..models.users import User
+from ..core.dependencies import get_current_user
+from ..utils.history_helper import log_schedule_action
 
 router = APIRouter(prefix="/schedule-templates", tags=["Schedule Templates"])
 
@@ -76,7 +79,8 @@ def get_template(template_id: int, db: Session = Depends(get_db)):
 @router.post("/", response_model=TemplateResponse)
 def create_template(
     data: TemplateCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new template from an existing schedule"""
     service = TemplateService(db)
@@ -88,6 +92,19 @@ def create_template(
             description=data.description,
             is_public=data.is_public
         )
+        
+        # Log history
+        log_schedule_action(
+            db=db,
+            action_type="create",
+            entity_type="schedule_template",
+            entity_id=template.id,
+            entity_name=data.template_name,
+            description=f"تم إنشاء قالب جدول: {data.template_name}",
+            current_user=current_user,
+            new_values=data.dict()
+        )
+        
         return TemplateResponse(**template.to_dict())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -96,7 +113,8 @@ def create_template(
 def apply_template(
     template_id: int,
     data: TemplateApply,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Apply a template to create a new schedule"""
     service = TemplateService(db)
@@ -107,6 +125,22 @@ def apply_template(
             academic_year_id=data.academic_year_id,
             class_id=data.class_id,
             section=data.section
+        )
+        
+        # Get template name for logging
+        template = db.query(ScheduleTemplate).filter(ScheduleTemplate.id == template_id).first()
+        
+        # Log history
+        log_schedule_action(
+            db=db,
+            action_type="apply_template",
+            entity_type="schedule_template",
+            entity_id=template_id,
+            entity_name=template.template_name if template else f"Template {template_id}",
+            description=f"تم تطبيق قالب جدول لإنشاء جدول جديد",
+            current_user=current_user,
+            academic_year_id=data.academic_year_id,
+            new_values=data.dict()
         )
         
         return {
@@ -124,10 +158,28 @@ def apply_template(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/{template_id}")
-def delete_template(template_id: int, db: Session = Depends(get_db)):
+def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Delete (soft delete) a template"""
+    # Get template name before deletion
+    template = db.query(ScheduleTemplate).filter(ScheduleTemplate.id == template_id).first()
+    
     service = TemplateService(db)
     service.delete_template(template_id)
+    
+    # Log history
+    log_schedule_action(
+        db=db,
+        action_type="delete",
+        entity_type="schedule_template",
+        entity_id=template_id,
+        entity_name=template.template_name if template else f"Template {template_id}",
+        description=f"تم حذف قالب جدول",
+        current_user=current_user
+    )
     
     return {
         "success": True,

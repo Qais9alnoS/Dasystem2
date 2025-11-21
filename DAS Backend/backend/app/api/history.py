@@ -21,7 +21,7 @@ from app.schemas.history import (
 router = APIRouter()
 
 
-@router.get("/", response_model=HistoryListResponse)
+@router.get("", response_model=HistoryListResponse)
 async def get_history_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),

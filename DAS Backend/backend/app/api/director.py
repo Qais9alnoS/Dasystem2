@@ -18,6 +18,7 @@ from ..models.activities import Activity
 from ..models.finance import FinanceTransaction, FinanceCategory
 from ..models.director import DirectorNote, Reward, AssistanceRecord
 from ..core.dependencies import get_director_user
+from ..utils.history_helper import log_director_action
 from ..schemas.director import (
     DirectorNoteCreate, DirectorNoteUpdate, DirectorNoteResponse, DirectorNoteListItem,
     CategorySummary, NoteSearchRequest, NoteSearchResult,
@@ -346,6 +347,20 @@ async def create_reward(
     db.add(reward)
     db.commit()
     db.refresh(reward)
+    
+    # Log history
+    log_director_action(
+        db=db,
+        action_type="create",
+        entity_type="reward",
+        entity_id=reward.id,
+        entity_name=f"مكافأة - {reward.student_id}",
+        description=f"تم إضافة مكافأة جديدة",
+        current_user=current_user,
+        academic_year_id=reward.academic_year_id,
+        new_values=reward_data.dict()
+    )
+    
     return reward
 
 
@@ -377,6 +392,9 @@ async def update_reward(
     if not reward:
         raise HTTPException(status_code=404, detail="Reward not found")
     
+    # Store old values
+    old_values = {field: getattr(reward, field) for field in reward_data.dict(exclude_unset=True).keys()}
+    
     # Update fields
     for field, value in reward_data.dict(exclude_unset=True).items():
         setattr(reward, field, value)
@@ -384,6 +402,20 @@ async def update_reward(
     reward.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(reward)
+    
+    # Log history
+    log_director_action(
+        db=db,
+        action_type="update",
+        entity_type="reward",
+        entity_id=reward.id,
+        entity_name=f"مكافأة - {reward.student_id}",
+        description=f"تم تعديل مكافأة",
+        current_user=current_user,
+        old_values=old_values,
+        new_values=reward_data.dict(exclude_unset=True)
+    )
+    
     return reward
 
 
@@ -398,6 +430,17 @@ async def delete_reward(
     
     if not reward:
         raise HTTPException(status_code=404, detail="Reward not found")
+    
+    # Log history before deletion
+    log_director_action(
+        db=db,
+        action_type="delete",
+        entity_type="reward",
+        entity_id=reward.id,
+        entity_name=f"مكافأة - {reward.student_id}",
+        description=f"تم حذف مكافأة",
+        current_user=current_user
+    )
     
     db.delete(reward)
     db.commit()
@@ -435,6 +478,20 @@ async def create_assistance_record(
     db.add(record)
     db.commit()
     db.refresh(record)
+    
+    # Log history
+    log_director_action(
+        db=db,
+        action_type="create",
+        entity_type="assistance",
+        entity_id=record.id,
+        entity_name=f"مساعدة - {record.student_id}",
+        description=f"تم إضافة سجل مساعدة جديد",
+        current_user=current_user,
+        academic_year_id=record.academic_year_id,
+        new_values=assistance_data.dict()
+    )
+    
     return record
 
 
@@ -466,6 +523,9 @@ async def update_assistance_record(
     if not record:
         raise HTTPException(status_code=404, detail="Assistance record not found")
     
+    # Store old values
+    old_values = {field: getattr(record, field) for field in assistance_data.dict(exclude_unset=True).keys()}
+    
     # Update fields
     for field, value in assistance_data.dict(exclude_unset=True).items():
         setattr(record, field, value)
@@ -473,6 +533,20 @@ async def update_assistance_record(
     record.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(record)
+    
+    # Log history
+    log_director_action(
+        db=db,
+        action_type="update",
+        entity_type="assistance",
+        entity_id=record.id,
+        entity_name=f"مساعدة - {record.student_id}",
+        description=f"تم تعديل سجل مساعدة",
+        current_user=current_user,
+        old_values=old_values,
+        new_values=assistance_data.dict(exclude_unset=True)
+    )
+    
     return record
 
 
@@ -487,6 +561,17 @@ async def delete_assistance_record(
     
     if not record:
         raise HTTPException(status_code=404, detail="Assistance record not found")
+    
+    # Log history before deletion
+    log_director_action(
+        db=db,
+        action_type="delete",
+        entity_type="assistance",
+        entity_id=record.id,
+        entity_name=f"مساعدة - {record.student_id}",
+        description=f"تم حذف سجل مساعدة",
+        current_user=current_user
+    )
     
     db.delete(record)
     db.commit()
