@@ -8,8 +8,6 @@ from decimal import Decimal
 class HolidayBase(BaseModel):
     holiday_date: date
     holiday_name: Optional[str] = None
-    is_for_students: bool = True
-    is_for_teachers: bool = False
     notes: Optional[str] = None
 
 class HolidayCreate(HolidayBase):
@@ -18,8 +16,6 @@ class HolidayCreate(HolidayBase):
 
 class HolidayUpdate(BaseModel):
     holiday_name: Optional[str] = None
-    is_for_students: Optional[bool] = None
-    is_for_teachers: Optional[bool] = None
     notes: Optional[str] = None
 
 class HolidayResponse(HolidayBase):

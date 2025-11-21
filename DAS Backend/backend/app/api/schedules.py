@@ -134,18 +134,21 @@ class ConstraintTemplateResponse(ConstraintTemplateBase):
         from_attributes = True
 
 # Basic Schedule Management
-@router.get("/", response_model=List[ScheduleResponse])
+@router.get("/")
 async def get_schedules(
     academic_year_id: Optional[int] = Query(None),
     session_type: Optional[str] = Query(None),
     class_id: Optional[int] = Query(None),
     teacher_id: Optional[int] = Query(None),
+    day_of_week: Optional[int] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_school_user)
 ):
     """Get schedules with optional filtering"""
+    from app.models import Teacher, Class, Subject
+    
     query = db.query(Schedule)
     
     if academic_year_id:
@@ -160,8 +163,35 @@ async def get_schedules(
     if teacher_id:
         query = query.filter(Schedule.teacher_id == teacher_id)
     
+    if day_of_week is not None:
+        query = query.filter(Schedule.day_of_week == day_of_week)
+    
     schedules = query.offset(skip).limit(limit).all()
-    return schedules
+    
+    # إضافة المعلومات الإضافية
+    result = []
+    for schedule in schedules:
+        teacher = db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
+        class_obj = db.query(Class).filter(Class.id == schedule.class_id).first()
+        subject = db.query(Subject).filter(Subject.id == schedule.subject_id).first()
+        
+        result.append({
+            'id': schedule.id,
+            'academic_year_id': schedule.academic_year_id,
+            'session_type': schedule.session_type,
+            'class_id': schedule.class_id,
+            'section': schedule.section,
+            'subject_id': schedule.subject_id,
+            'teacher_id': schedule.teacher_id,
+            'day_of_week': schedule.day_of_week,
+            'period_number': schedule.period_number,
+            'teacher_name': teacher.full_name if teacher else None,
+            'subject_name': subject.subject_name if subject else None,
+            'grade_number': class_obj.grade_number if class_obj else None,
+            'grade_level': class_obj.grade_level if class_obj else None
+        })
+    
+    return result
 
 @router.post("/", response_model=ScheduleResponse)
 async def create_schedule_entry(

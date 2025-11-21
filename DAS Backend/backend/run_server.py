@@ -11,30 +11,30 @@ try:
     
     # Test config import
     from app.config import settings
-    print("✓ Config imported successfully")
+    print("Config imported successfully")
     
     # Test models import
     from app.models import AcademicYear, User
-    print("✓ Models imported successfully")
+    print("Models imported successfully")
     
     # Test security import
     from app.utils.security import verify_password
-    print("✓ Security utils imported successfully")
+    print("Security utils imported successfully")
     
     # Test API import
     from app.api.auth import router
-    print("✓ Auth API imported successfully")
+    print("Auth API imported successfully")
     
     # Test main app import
     from app.main import app
-    print("✓ Main app imported successfully")
+    print("Main app imported successfully")
     
-    print("\n🎉 All imports successful! Starting server...")
+    print("\nAll imports successful! Starting server...")
     
     import uvicorn
     uvicorn.run(app, host=settings.HOST, port=settings.PORT)
     
 except Exception as e:
-    print(f"❌ Import failed: {e}")
+    print(f"Import failed: {e}")
     import traceback
     traceback.print_exc()

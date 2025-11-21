@@ -88,7 +88,7 @@ def update_database_schema():
         
         if table_sql and 'ON DELETE CASCADE' not in table_sql[0]:
             print("\n" + "="*60)
-            print("⚠️  DATABASE MIGRATION REQUIRED")
+            print("DATABASE MIGRATION REQUIRED")
             print("="*60)
             print("Your database lacks CASCADE DELETE constraints.")
             print("To apply the fix:")
@@ -97,10 +97,10 @@ def update_database_schema():
             print("  3. Restart the server (database will be recreated)")
             print("="*60 + "\n")
         else:
-            print("✅ Database has CASCADE DELETE constraints - Ready to use!")
+            print("Database has CASCADE DELETE constraints - Ready to use!")
         
         conn.commit()
         conn.close()
         
     except Exception as e:
-        print(f"⚠️  Error checking database schema: {e}")
+        print(f"Error checking database schema: {e}")

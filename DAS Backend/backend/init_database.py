@@ -15,26 +15,26 @@ from app.models import *  # Import all models
 def init_db():
     """Initialize database and create all tables"""
     print("="*60)
-    print("🔧 تهيئة قاعدة البيانات")
+    print("تهيئة قاعدة البيانات")
     print("="*60)
     
     try:
         # Create all tables
-        print("\n📝 إنشاء الجداول...")
+        print("\nإنشاء الجداول...")
         Base.metadata.create_all(bind=engine)
-        print("✅ تم إنشاء جميع الجداول بنجاح")
+        print("تم إنشاء جميع الجداول بنجاح")
         
         # List created tables
-        print("\n📋 الجداول المُنشأة:")
+        print("\nالجداول المنشأة:")
         for table_name in Base.metadata.tables.keys():
-            print(f"   • {table_name}")
+            print(f"   - {table_name}")
         
         print("\n" + "="*60)
-        print("✅ تم إنشاء قاعدة البيانات بنجاح!")
+        print("تم إنشاء قاعدة البيانات بنجاح!")
         print("="*60)
         
     except Exception as e:
-        print(f"\n❌ حدث خطأ: {str(e)}")
+        print(f"\nحدث خطأ: {str(e)}")
         import traceback
         traceback.print_exc()
 
