@@ -17,6 +17,7 @@ from ..models.activities import Activity
 from ..models.finance import FinanceTransaction
 from ..models.schedules import Schedule
 from ..models.users import User
+from ..models.director import DirectorNote
 from ..schemas.search import (
     UniversalSearchRequest, UniversalSearchResponse, SearchResultItem,
     QuickSearchRequest, QuickSearchResponse, QuickSearchResult,
@@ -280,7 +281,8 @@ class UniversalSearchService:
         # Determine search scopes
         scopes = [request.scope] if request.scope != SearchScope.ALL else [
             SearchScope.STUDENTS, SearchScope.TEACHERS, SearchScope.CLASSES,
-            SearchScope.SUBJECTS, SearchScope.ACTIVITIES, SearchScope.FINANCE
+            SearchScope.SUBJECTS, SearchScope.ACTIVITIES, SearchScope.FINANCE,
+            SearchScope.SCHEDULES, SearchScope.DIRECTOR_NOTES, SearchScope.PAGES
         ]
         
         all_results = []
@@ -343,6 +345,12 @@ class UniversalSearchService:
             return self._search_activities(request, processed_query)
         elif scope == SearchScope.FINANCE:
             return self._search_finance(request, processed_query)
+        elif scope == SearchScope.SCHEDULES:
+            return self._search_schedules(request, processed_query)
+        elif scope == SearchScope.DIRECTOR_NOTES:
+            return self._search_director_notes(request, processed_query)
+        elif scope == SearchScope.PAGES:
+            return self._search_pages(request, processed_query)
         else:
             return [], 0
     
@@ -632,6 +640,111 @@ class UniversalSearchService:
                     url=f"/finance/transactions/{transaction.id}",
                     category="Finance",
                     tags=["finance", getattr(transaction, 'transaction_type', 'N/A')]
+                ))
+        
+        return results, scanned
+    
+    def _search_schedules(self, request: UniversalSearchRequest, processed_query: str) -> Tuple[List[SearchResultItem], int]:
+        """Search schedules in database by class name"""
+        query = self.db.query(Schedule).join(Class, Schedule.class_id == Class.id)
+        
+        if request.academic_year_id:
+            query = query.filter(Schedule.academic_year_id == request.academic_year_id)
+        if request.session_type:
+            query = query.filter(Schedule.session_type == request.session_type)
+        if not request.include_inactive:
+            query = query.filter(Schedule.is_active == True)
+        
+        schedules = query.all()
+        results = []
+        scanned = len(schedules)
+        
+        for schedule in schedules:
+            # Get class information
+            class_obj = schedule.class_rel if hasattr(schedule, 'class_rel') else None
+            class_name = getattr(class_obj, 'class_name', 'N/A') if class_obj else 'N/A'
+            grade_level = getattr(class_obj, 'grade_level', '') if class_obj else ''
+            section = getattr(schedule, 'section', '') or ''
+            
+            searchable_text = f"{class_name} {grade_level} {section}".strip()
+            relevance_score = self._calculate_relevance(processed_query, searchable_text, request.mode)
+            
+            if relevance_score >= request.min_relevance_score:
+                results.append(SearchResultItem(
+                    id=schedule.id,
+                    type="schedule",
+                    title=f"Schedule: {class_name}",
+                    subtitle=f"Grade: {grade_level} - Section: {section or 'N/A'} - {getattr(schedule, 'session_type', 'N/A')}",
+                    description=getattr(schedule, 'description', 'No description'),
+                    relevance_score=relevance_score,
+                    academic_year_id=getattr(schedule, 'academic_year_id', None),
+                    session_type=getattr(schedule, 'session_type', None),
+                    is_active=getattr(schedule, 'is_active', True),
+                    created_at=getattr(schedule, 'created_at', None),
+                    updated_at=getattr(schedule, 'updated_at', None),
+                    url=f"/schedules?class_id={schedule.class_id}",
+                    category="Schedules",
+                    tags=["schedule", class_name, grade_level],
+                    data={
+                        "class_id": schedule.class_id,
+                        "class_name": class_name,
+                        "grade_level": grade_level,
+                        "section": section
+                    }
+                ))
+        
+        return results, scanned
+    
+    def _search_director_notes(self, request: UniversalSearchRequest, processed_query: str) -> Tuple[List[SearchResultItem], int]:
+        """Search director notes in database by title only"""
+        query = self.db.query(DirectorNote)
+        
+        if request.academic_year_id:
+            query = query.filter(DirectorNote.academic_year_id == request.academic_year_id)
+        
+        # Only search non-folder notes (actual files)
+        query = query.filter(DirectorNote.is_folder == False)
+        
+        notes = query.all()
+        results = []
+        scanned = len(notes)
+        
+        for note in notes:
+            title = getattr(note, 'title', 'N/A')
+            folder_type = getattr(note, 'folder_type', 'N/A')
+            
+            # Search only in title (as per requirements)
+            searchable_text = title
+            relevance_score = self._calculate_relevance(processed_query, searchable_text, request.mode)
+            
+            if relevance_score >= request.min_relevance_score:
+                # Map folder types to Arabic names
+                folder_type_names = {
+                    "goals": "الأهداف",
+                    "projects": "المشاريع",
+                    "blogs": "المدونات",
+                    "educational_admin": "الإدارة التربوية"
+                }
+                folder_name = folder_type_names.get(folder_type, folder_type)
+                
+                results.append(SearchResultItem(
+                    id=note.id,
+                    type="director_note",
+                    title=title,
+                    subtitle=f"Category: {folder_name} - {getattr(note, 'note_date', 'N/A')}",
+                    description=f"Director's note in {folder_name}",
+                    relevance_score=relevance_score,
+                    academic_year_id=getattr(note, 'academic_year_id', None),
+                    created_at=getattr(note, 'created_at', None),
+                    updated_at=getattr(note, 'updated_at', None),
+                    url=f"/director/notes/edit/{note.id}",
+                    category="Director Notes",
+                    tags=["director_note", folder_type, folder_name],
+                    data={
+                        "folder_type": folder_type,
+                        "folder_name": folder_name,
+                        "note_date": str(getattr(note, 'note_date', ''))
+                    }
                 ))
         
         return results, scanned
@@ -1530,6 +1643,51 @@ class UniversalSearchService:
             }
         except Exception as e:
             return {"error": str(e), "success": False}
+    
+    def _search_pages(self, request: UniversalSearchRequest, processed_query: str) -> Tuple[List[SearchResultItem], int]:
+        """Search application pages by name and route"""
+        # Define searchable pages with Arabic names
+        pages = [
+            {"name": "لوحة التحكم", "route": "/dashboard", "category": "Main", "description": "Main dashboard"},
+            {"name": "إدارة السنوات الدراسية", "route": "/academic-years", "category": "Settings", "description": "Manage academic years"},
+            {"name": "معلومات المدرسة", "route": "/school-info", "category": "Settings", "description": "School information and grades"},
+            {"name": "المعلومات الشخصية (طلاب)", "route": "/students/personal-info", "category": "Students", "description": "Student personal information"},
+            {"name": "المعلومات الأكاديمية (طلاب)", "route": "/students/academic-info", "category": "Students", "description": "Student academic information"},
+            {"name": "إدارة المعلمين", "route": "/teachers", "category": "Teachers", "description": "Teacher management"},
+            {"name": "إدارة الجداول الدراسية", "route": "/schedules", "category": "Schedules", "description": "Schedule management"},
+            {"name": "الصفحة اليومية", "route": "/daily", "category": "Daily", "description": "Daily attendance and activities"},
+            {"name": "إدارة النشاطات", "route": "/activities", "category": "Activities", "description": "Activities management"},
+            {"name": "الإدارة المالية", "route": "/finance", "category": "Finance", "description": "Finance management"},
+            {"name": "إدارة تسجيل الدخول", "route": "/user-management", "category": "Settings", "description": "User management and access control"},
+            {"name": "ملاحظات المدير", "route": "/director/notes", "category": "Director", "description": "Director's notes and files"},
+            {"name": "المكافآت والمساعدات", "route": "/director/notes/rewards", "category": "Director", "description": "Rewards management"},
+        ]
+        
+        results = []
+        scanned = len(pages)
+        
+        for idx, page in enumerate(pages):
+            searchable_text = f"{page['name']} {page['category']} {page['description']}"
+            relevance_score = self._calculate_relevance(processed_query, searchable_text, request.mode)
+            
+            if relevance_score >= request.min_relevance_score:
+                results.append(SearchResultItem(
+                    id=idx + 1000,  # Use offset to avoid ID conflicts
+                    type="page",
+                    title=page['name'],
+                    subtitle=f"Category: {page['category']}",
+                    description=page['description'],
+                    relevance_score=relevance_score,
+                    url=page['route'],
+                    category="Pages",
+                    tags=["page", page['category'].lower()],
+                    data={
+                        "route": page['route'],
+                        "page_category": page['category']
+                    }
+                ))
+        
+        return results, scanned
 
 class SearchResultRanker:
     """Handles ranking and sorting of search results"""

@@ -15,9 +15,11 @@ export default {
     },
     extend: {
       fontFamily: {
-        // iOS system fonts
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
-        ios: ['-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        // Modern premium fonts for Arabic and English
+        sans: ['Tajawal', 'Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        arabic: ['Tajawal', 'sans-serif'],
+        english: ['Plus Jakarta Sans', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'Tajawal', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

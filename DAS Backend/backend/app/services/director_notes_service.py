@@ -500,8 +500,8 @@ class DirectorNotesService:
                     category: Optional[str] = None) -> Dict[str, Any]:
         """Search notes by title and content"""
         try:
-            if len(query) < 3:
-                return {"success": False, "error": "Search query too short (minimum 3 characters)"}
+            if len(query) < 1:
+                return {"success": False, "error": "Search query is required"}
             
             # Build search query - include both files and folders
             search_pattern = f"%{query}%"

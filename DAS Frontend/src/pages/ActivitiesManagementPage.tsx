@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ import {
 
 const ActivitiesManagementPage: React.FC = () => {
   const { toast } = useToast();
+  const location = useLocation();
 
   // State
   const [activeTab, setActiveTab] = useState<'activities' | 'reports'>('activities');
@@ -55,6 +57,15 @@ const ActivitiesManagementPage: React.FC = () => {
       }
     }
   }, []);
+
+  // Check if we should open add dialog from navigation state
+  useEffect(() => {
+    if (location.state?.openAddDialog) {
+      setFormDialogOpen(true);
+      // Clear the state to prevent reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Fetch activities
   useEffect(() => {

@@ -53,9 +53,9 @@
   --acrylic-blur: blur(30px);
   --acrylic-tint: rgba(243, 243, 243, 0.7);
 
-  /* ===== Typography ===== */
-  --font-family-arabic: 'Tajawal', 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  --font-family-base: 'Poppins', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* ===== Typography - Modern Premium Fonts ===== */
+  --font-family-arabic: 'Tajawal', 'Segoe UI', sans-serif;
+  --font-family-base: 'Plus Jakarta Sans', 'Tajawal', 'Segoe UI', system-ui, sans-serif;
   --font-family-mono: 'Fira Code', 'JetBrains Mono', monospace;
 
   --font-weight-light: 300;

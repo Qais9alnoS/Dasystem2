@@ -366,3 +366,16 @@ class FinanceCardSummary(BaseModel):
     net_amount: Decimal
     incomplete_transactions_count: int
     status: str
+
+# Finance Card Detailed Schema - with transactions
+class FinanceCardDetailedSummary(BaseModel):
+    total_income: Decimal
+    total_expenses: Decimal
+    net_amount: Decimal
+    completed_transactions_count: int
+    incomplete_transactions_count: int
+
+class FinanceCardDetailed(BaseModel):
+    card: FinanceCardResponse
+    transactions: List[FinanceCardTransactionResponse]
+    summary: FinanceCardDetailedSummary

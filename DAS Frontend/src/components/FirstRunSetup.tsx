@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { IOSSwitch } from '@/components/ui/ios-switch';
 import { useToast } from '@/hooks/use-toast';
 import { academicYearsApi } from '@/services/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -43,8 +43,8 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
       } catch (error) {
         console.error('Error checking first run status:', error);
         toast({
-          title: "Error",
-          description: "Failed to check first run status",
+          title: "خطأ",
+          description: "فشل التحقق من حالة التشغيل الأول",
           variant: "destructive"
         });
       } finally {
@@ -60,8 +60,8 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
     
     if (!formData.year_name.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter the academic year name",
+        title: "خطأ",
+        description: "يرجى إدخال اسم السنة الدراسية",
         variant: "destructive"
       });
       return;
@@ -90,9 +90,15 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
           localStorage.setItem('auto_open_academic_year', 'true');
         }
 
+        // Store the created academic year ID and name
+        if (resultData.id) {
+          localStorage.setItem('selected_academic_year_id', resultData.id.toString());
+          localStorage.setItem('selected_academic_year_name', resultData.year_name);
+        }
+
         toast({
-          title: "Success",
-          description: "First academic year created successfully"
+          title: "نجح",
+          description: "تم إنشاء السنة الدراسية الأولى بنجاح"
         });
         
         // Mark first run as complete
@@ -106,8 +112,8 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
     } catch (error: any) {
       console.error('Error creating first academic year:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create first academic year",
+        title: "خطأ",
+        description: error.message || "فشل إنشاء السنة الدراسية الأولى",
         variant: "destructive"
       });
     } finally {
@@ -135,7 +141,7 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <IOSNavbar title="First Run Setup" largeTitle={true} />
+      <IOSNavbar title="الإعداد الأولي" largeTitle={true} />
       
       <div className="p-4 max-w-2xl mx-auto">
         <Card>
@@ -143,9 +149,9 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
             <div className="flex items-center space-x-3 space-x-reverse">
               <School className="w-8 h-8 text-primary" />
               <div>
-                <CardTitle>Initial Setup</CardTitle>
+                <CardTitle>الإعداد الأولي</CardTitle>
                 <CardDescription>
-                  Let's get started by creating your first academic year
+                  لنبدأ بإنشاء السنة الدراسية الأولى
                 </CardDescription>
               </div>
             </div>
@@ -156,43 +162,43 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
               <Alert>
                 <Calendar className="h-4 w-4" />
                 <AlertDescription>
-                  This is your first time using the system. Let's create your first academic year to get started.
+                  هذه المرة الأولى لاستخدام النظام. لنقم بإنشاء السنة الدراسية الأولى للبدء.
                 </AlertDescription>
               </Alert>
 
               <div className="space-y-2">
-                <Label htmlFor="year_name">Academic Year Name *</Label>
+                <Label htmlFor="year_name">اسم السنة الدراسية *</Label>
                 <Input
                   id="year_name"
                   value={formData.year_name}
                   onChange={(e) => handleInputChange('year_name', e.target.value)}
-                  placeholder="e.g., 2025-2026"
+                  placeholder="مثال: 2025-2026"
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format: Current Year - Next Year (e.g., 2025-2026)
+                  الصيغة: السنة الحالية - السنة التالية (مثال: 2025-2026)
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description (Optional)</Label>
+                <Label htmlFor="description">الوصف (اختياري)</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Brief description of this academic year"
+                  placeholder="وصف مختصر لهذه السنة الدراسية"
                   rows={3}
                 />
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="space-y-1">
-                  <Label className="text-base font-medium">Auto-open Academic Year</Label>
+                  <Label className="text-base font-medium">فتح السنة الدراسية تلقائياً</Label>
                   <p className="text-sm text-muted-foreground">
-                    Automatically open the last active academic year on startup
+                    فتح آخر سنة دراسية نشطة تلقائياً عند بدء التشغيل
                   </p>
                 </div>
-                <Switch
+                <IOSSwitch
                   checked={autoOpenYear}
                   onCheckedChange={setAutoOpenYear}
                 />
@@ -207,12 +213,12 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
                   {creating ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Creating...
+                      جاري الإنشاء...
                     </>
                   ) : (
                     <>
                       <CheckCircle className="w-4 h-4 mr-2" />
-                      Create First Academic Year
+                      إنشاء السنة الدراسية الأولى
                     </>
                   )}
                 </Button>

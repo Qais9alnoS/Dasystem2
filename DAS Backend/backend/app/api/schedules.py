@@ -189,7 +189,9 @@ async def get_schedules(
             'teacher_name': teacher.full_name if teacher else None,
             'subject_name': subject.subject_name if subject else None,
             'grade_number': class_obj.grade_number if class_obj else None,
-            'grade_level': class_obj.grade_level if class_obj else None
+            'grade_level': class_obj.grade_level if class_obj else None,
+            'created_at': schedule.created_at.isoformat() if schedule.created_at else None,
+            'updated_at': schedule.updated_at.isoformat() if schedule.updated_at else None
         })
     
     return result
@@ -383,6 +385,144 @@ async def generate_schedules_for_all_classes(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch generation failed: {str(e)}")
+
+# IMPORTANT: /class-schedule must come BEFORE /{schedule_id} routes
+# FastAPI matches routes in order - specific routes before parameterized routes
+@router.delete("/class-schedule")
+async def delete_class_schedule(
+    academic_year_id: int = Query(..., description="Academic Year ID"),
+    session_type: str = Query(..., description="Session Type: morning, evening"),
+    class_id: int = Query(..., description="Class ID"),
+    section: str = Query(..., description="Section number"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """
+    Delete all schedules for a specific class and section.
+    Also restores teacher availability for the deleted periods.
+    """
+    import json
+    
+    # Validate session_type
+    if session_type not in ['morning', 'evening']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid session_type. Must be 'morning' or 'evening', got '{session_type}'"
+        )
+    
+    # Build query filters
+    filters = [
+        Schedule.academic_year_id == academic_year_id,
+        Schedule.session_type == session_type,
+        Schedule.class_id == class_id,
+        Schedule.section == str(section)
+    ]
+    
+    # Get all schedules that match the filters
+    schedules_to_delete = db.query(Schedule).filter(and_(*filters)).all()
+    
+    if not schedules_to_delete:
+        raise HTTPException(
+            status_code=404,
+            detail="لا توجد جداول مطابقة للمعايير المحددة"
+        )
+    
+    deleted_count = len(schedules_to_delete)
+    
+    # Get class info for logging
+    class_obj = db.query(Class).filter(Class.id == class_id).first()
+    class_name = ""
+    if class_obj:
+        class_name = f"الصف {class_obj.grade_number} {class_obj.grade_level}"
+    
+    # Collect all unique teachers and their slots to restore
+    teacher_slots_to_restore = {}  # teacher_id -> [(day, period), ...]
+    
+    for schedule in schedules_to_delete:
+        if schedule.teacher_id:
+            if schedule.teacher_id not in teacher_slots_to_restore:
+                teacher_slots_to_restore[schedule.teacher_id] = []
+            teacher_slots_to_restore[schedule.teacher_id].append(
+                (schedule.day_of_week, schedule.period_number)
+            )
+    
+    # Delete all matching schedules
+    for schedule in schedules_to_delete:
+        db.delete(schedule)
+    
+    db.commit()
+    
+    # Restore teacher availability for affected teachers
+    restored_teachers = []
+    
+    for teacher_id, slots in teacher_slots_to_restore.items():
+        teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+        if teacher and teacher.free_time_slots:
+            try:
+                slots_data = json.loads(teacher.free_time_slots)
+                
+                # Restore each slot
+                for day_of_week, period_number in slots:
+                    day_idx = day_of_week - 1
+                    period_idx = period_number - 1
+                    slot_idx = day_idx * 6 + period_idx
+                    
+                    if 0 <= slot_idx < len(slots_data):
+                        slot = slots_data[slot_idx]
+                        # Only restore if this slot was assigned to this specific schedule
+                        if slot.get('status') == 'assigned':
+                            assignment = slot.get('assignment', {})
+                            if (assignment.get('class_id') == class_id and 
+                                assignment.get('section') == str(section)):
+                                slots_data[slot_idx] = {
+                                    'day': day_idx,
+                                    'period': period_idx,
+                                    'status': 'free',
+                                    'is_free': True,
+                                    'assignment': None
+                                }
+                
+                # Update teacher's free_time_slots
+                teacher.free_time_slots = json.dumps(slots_data)
+                restored_teachers.append(teacher.full_name)
+                
+            except json.JSONDecodeError as e:
+                print(f"Error parsing free_time_slots for teacher {teacher_id}: {e}")
+            except Exception as e:
+                print(f"Error restoring availability for teacher {teacher_id}: {e}")
+    
+    db.commit()
+    
+    # Log the deletion
+    session_ar = "الفترة الصباحية" if session_type == "morning" else "الفترة المسائية"
+    description = f"تم حذف جدول {class_name} شعبة {section} - {session_ar} ({deleted_count} حصة)"
+    
+    log_system_action(
+        db=db,
+        action_type="delete",
+        entity_type="schedule",
+        entity_id=class_id,
+        entity_name=f"جدول {class_name} شعبة {section}",
+        description=description,
+        current_user=current_user,
+        meta_data={
+            "deleted_count": deleted_count,
+            "session_type": session_type,
+            "class_id": class_id,
+            "section": section,
+            "restored_teachers": restored_teachers
+        }
+    )
+    
+    return {
+        "message": f"تم حذف جدول {class_name} شعبة {section} بنجاح",
+        "deleted_count": deleted_count,
+        "academic_year_id": academic_year_id,
+        "session_type": session_type,
+        "class_id": class_id,
+        "section": section,
+        "restored_teachers": restored_teachers
+    }
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -55,6 +56,9 @@ interface StepConfig {
 const AUTOSAVE_KEY = 'schedule_creation_autosave';
 
 export const ScheduleManagementPage: React.FC = () => {
+  const location = useLocation();
+  const filterSectionRef = useRef<HTMLDivElement>(null);
+  
   // State management
   const [currentStep, setCurrentStep] = useState<Step>('filter');
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
@@ -79,6 +83,23 @@ export const ScheduleManagementPage: React.FC = () => {
     conflicts: false,
     export: false
   });
+
+  // Check if we should scroll to class selection from navigation state
+  useEffect(() => {
+    if (location.state?.scrollToClassSelection) {
+      // Ensure we're on the create tab and filter step
+      setActiveTab('create');
+      setCurrentStep('filter');
+      
+      // Scroll to filter section after a short delay
+      setTimeout(() => {
+        filterSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+      
+      // Clear the state to prevent re-scrolling on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Load autosaved data on mount
   useEffect(() => {
@@ -361,6 +382,8 @@ export const ScheduleManagementPage: React.FC = () => {
 
   const handleExport = () => {
     setShowExporter(true);
+    // Clear autosave cache when exporting since the schedule is now finalized
+    localStorage.removeItem(AUTOSAVE_KEY);
   };
 
   return (
@@ -478,7 +501,7 @@ export const ScheduleManagementPage: React.FC = () => {
                 )}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent ref={filterSectionRef}>
               {/* Filter Step */}
               {currentStep === 'filter' && (
                 <ScheduleFilters onComplete={handleFilterComplete} />

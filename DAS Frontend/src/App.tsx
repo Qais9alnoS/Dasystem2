@@ -21,6 +21,12 @@ import MarkdownNoteEditor from '@/components/director-notes/MarkdownNoteEditor';
 import RewardsManager from '@/components/director-notes/RewardsManager';
 import AssistanceManager from '@/components/director-notes/AssistanceManager';
 import { FinanceManagerPage } from '@/components/finance';
+import { 
+  AnalyticsDashboard, 
+  FinanceAnalyticsDashboard, 
+  DirectorAnalyticsDashboard,
+  StudentAnalyticsPage 
+} from '@/components/analytics';
 
 const queryClient = new QueryClient();
 
@@ -130,6 +136,34 @@ const ProtectedApp = () => {
       checkFirstRunStatus();
     }
   }, [state.isAuthenticated]);
+
+  // Periodically check if academic years still exist
+  useEffect(() => {
+    if (!state.isAuthenticated || needsFirstRunSetup) return;
+
+    const checkAcademicYearsExist = async () => {
+      try {
+        const { academicYearsApi } = await import('@/services/api');
+        const response = await academicYearsApi.checkFirstRun();
+        
+        if (response.success && response.data && response.data.is_first_run) {
+          // All academic years were deleted, force redirect to first run
+          setNeedsFirstRunSetup(true);
+          localStorage.removeItem('first_run_completed');
+          localStorage.removeItem('selected_academic_year_id');
+          localStorage.removeItem('selected_academic_year_name');
+          localStorage.removeItem('auto_open_academic_year');
+        }
+      } catch (error) {
+        console.error('Error checking academic years existence:', error);
+      }
+    };
+
+    // Check every 5 seconds
+    const interval = setInterval(checkAcademicYearsExist, 5000);
+    
+    return () => clearInterval(interval);
+  }, [state.isAuthenticated, needsFirstRunSetup]);
 
   // Show loading while auth is initializing (prevents login flash)
   if (state.isLoading) {
@@ -242,6 +276,43 @@ const ProtectedApp = () => {
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <UserManagementPage />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Analytics Routes */}
+        {/* Morning/Evening Analytics */}
+        <Route 
+          path="analytics" 
+          element={
+            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
+              <AnalyticsDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Student-Specific Analytics */}
+        <Route 
+          path="students/analytics" 
+          element={
+            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
+              <StudentAnalyticsPage />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Finance Analytics */}
+        <Route 
+          path="finance/analytics" 
+          element={
+            <ProtectedRoute allowedRoles={['finance', 'director']} fallback={<AccessDenied />}>
+              <FinanceAnalyticsDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Director Comprehensive Analytics */}
+        <Route 
+          path="director/analytics" 
+          element={
+            <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
+              <DirectorAnalyticsDashboard />
             </ProtectedRoute>
           } 
         />

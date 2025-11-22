@@ -414,6 +414,104 @@ def log_activity_registration(
     )
 
 
+def log_activity_participants_bulk_change(
+    db: Session,
+    activity: Any,
+    current_user: User,
+    added_classes: Optional[list] = None,
+    removed_classes: Optional[list] = None,
+    added_students: Optional[list] = None,
+    removed_students: Optional[list] = None,
+    payment_updates: Optional[Dict] = None
+):
+    """Log bulk participant changes for an activity"""
+    added_classes = added_classes or []
+    removed_classes = removed_classes or []
+    added_students = added_students or []
+    removed_students = removed_students or []
+    payment_updates = payment_updates or {}
+    
+    # Build detailed metadata
+    metadata = {}
+    changes = {}
+    
+    # Track class changes
+    if added_classes:
+        class_names = [f"الصف {c['grade_number']} - {c['session']}" for c in added_classes]
+        changes["added_classes"] = {
+            "old": "لا يوجد",
+            "new": ", ".join(class_names)
+        }
+        metadata["added_classes_count"] = len(added_classes)
+        metadata["added_classes_details"] = class_names
+    
+    if removed_classes:
+        class_names = [f"الصف {c['grade_number']} - {c['session']}" for c in removed_classes]
+        changes["removed_classes"] = {
+            "old": ", ".join(class_names),
+            "new": "تمت الإزالة"
+        }
+        metadata["removed_classes_count"] = len(removed_classes)
+        metadata["removed_classes_details"] = class_names
+    
+    # Track individual student changes (not from class operations)
+    if added_students:
+        student_names = [s['name'] for s in added_students]
+        changes["added_students"] = {
+            "old": "لا يوجد",
+            "new": ", ".join(student_names[:5]) + (f" + {len(student_names) - 5} آخرين" if len(student_names) > 5 else "")
+        }
+        metadata["added_students_count"] = len(added_students)
+    
+    if removed_students:
+        student_names = [s['name'] for s in removed_students]
+        changes["removed_students"] = {
+            "old": ", ".join(student_names[:5]) + (f" + {len(student_names) - 5} آخرين" if len(student_names) > 5 else ""),
+            "new": "تمت الإزالة"
+        }
+        metadata["removed_students_count"] = len(removed_students)
+    
+    # Track payment updates
+    if payment_updates:
+        paid_count = payment_updates.get('paid_count', 0)
+        pending_count = payment_updates.get('pending_count', 0)
+        metadata["payment_status"] = f"{paid_count} مدفوع، {pending_count} معلق"
+    
+    metadata["changes"] = changes
+    
+    # Build description
+    description_parts = []
+    if added_classes:
+        description_parts.append(f"إضافة {len(added_classes)} صف")
+    if removed_classes:
+        description_parts.append(f"إزالة {len(removed_classes)} صف")
+    if added_students:
+        description_parts.append(f"إضافة {len(added_students)} طالب")
+    if removed_students:
+        description_parts.append(f"إزالة {len(removed_students)} طالب")
+    
+    description = f"تم تعديل المشاركين في {activity.name}"
+    if description_parts:
+        description += f" ({', '.join(description_parts)})"
+    
+    history_service.log_action(
+        db=db,
+        action_type="update",
+        action_category="activity",
+        entity_type="activity_participants",
+        entity_id=activity.id,
+        entity_name=activity.name,
+        description=description,
+        user_id=current_user.id,
+        user_name=current_user.username,
+        user_role=current_user.role,
+        academic_year_id=activity.academic_year_id,
+        session_type=activity.session_type,
+        severity="info",
+        meta_data=metadata
+    )
+
+
 def log_schedule_action(
     db: Session,
     action_type: str,

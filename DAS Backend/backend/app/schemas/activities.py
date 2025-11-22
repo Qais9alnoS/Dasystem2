@@ -240,3 +240,24 @@ class ActivitySummaryReport(BaseModel):
     by_type: List[dict]
     by_session: List[dict]
     most_popular_activities: List[dict]
+
+# Bulk Participant Change Schemas
+class ClassChange(BaseModel):
+    grade_number: str
+    session: str
+    student_count: int
+
+class StudentChange(BaseModel):
+    student_id: int
+    name: str
+
+class PaymentUpdate(BaseModel):
+    paid_count: int
+    pending_count: int
+
+class BulkParticipantChange(BaseModel):
+    added_classes: Optional[List[ClassChange]] = []
+    removed_classes: Optional[List[ClassChange]] = []
+    added_students: Optional[List[StudentChange]] = []
+    removed_students: Optional[List[StudentChange]] = []
+    payment_updates: Optional[PaymentUpdate] = None

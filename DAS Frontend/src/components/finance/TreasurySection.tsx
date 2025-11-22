@@ -14,9 +14,12 @@ import { useToast } from '@/hooks/use-toast';
 
 interface TreasurySectionProps {
   academicYearId: number;
+  preselectedCardId?: number;
+  openCardPopup?: boolean;
+  openAddCardDialog?: boolean;
 }
 
-export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId }) => {
+export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId, preselectedCardId, openCardPopup, openAddCardDialog }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -33,6 +36,23 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
       loadDashboard();
     }
   }, [academicYearId]);
+  
+  // Handle preselected card from search navigation
+  useEffect(() => {
+    if (preselectedCardId && openCardPopup && dashboard) {
+      setSelectedCard(preselectedCardId);
+      setShowDetailModal(true);
+    }
+  }, [preselectedCardId, openCardPopup, dashboard]);
+
+  // Handle opening add card dialog from quick actions
+  useEffect(() => {
+    if (openAddCardDialog) {
+      setShowAddModal(true);
+      // Clear the state to prevent reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [openAddCardDialog]);
 
   const loadDashboard = async () => {
     try {

@@ -10,7 +10,7 @@ import os
 from app.config import settings
 from app.database import engine, get_db, update_database_schema, Base
 from app.models import *  # Import all models
-from app.api import auth, academic, students, teachers, finance, activities, schedules, search, system, advanced, monitoring, director, daily, history
+from app.api import auth, academic, students, teachers, finance, activities, schedules, search, system, advanced, monitoring, director, daily, history, analytics
 from app.utils.security import get_password_hash
 from app.core.rate_limiting import rate_limiter, security_headers_middleware, create_custom_rate_limit_handler
 from app.core.exceptions import (
@@ -97,6 +97,7 @@ app.include_router(monitoring.router, prefix="/api/monitoring", tags=["Monitorin
 app.include_router(director.router, prefix="/api/director", tags=["Director Dashboard"])
 app.include_router(daily.router, prefix="/api/daily", tags=["Daily Page"])
 app.include_router(history.router, prefix="/api/history", tags=["History"])
+app.include_router(analytics.router, prefix="/api", tags=["Analytics"])
 
 @app.on_event("startup")
 async def startup_event():

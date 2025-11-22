@@ -18,10 +18,11 @@ from ..schemas.activities import (
     ActivityRegistrationCreate, ActivityRegistrationUpdate, ActivityRegistrationResponse,
     ActivityScheduleCreate, ActivityScheduleUpdate, ActivityScheduleResponse,
     ActivityAttendanceCreate, ActivityAttendanceUpdate, ActivityAttendanceResponse,
-    ActivityParticipationReport, StudentActivityReport, ActivitySummaryReport
+    ActivityParticipationReport, StudentActivityReport, ActivitySummaryReport,
+    BulkParticipantChange
 )
 from ..core.dependencies import get_current_user, get_director_user, get_school_user
-from ..utils.history_helper import log_activity_action, log_activity_registration
+from ..utils.history_helper import log_activity_action, log_activity_registration, log_activity_participants_bulk_change
 
 router = APIRouter(tags=["activities"])
 
@@ -507,6 +508,78 @@ async def update_activity_registration(
         "updated_at": registration.updated_at
     }
     return ActivityRegistrationResponse(**registration_dict)
+
+@router.delete("/{activity_id}/registrations/{registration_id}")
+async def delete_activity_registration(
+    activity_id: int,
+    registration_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Delete an activity registration"""
+    registration = db.query(ActivityRegistration).filter(
+        and_(
+            ActivityRegistration.id == registration_id,
+            ActivityRegistration.activity_id == activity_id
+        )
+    ).first()
+    
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+    
+    # Get student and activity info for logging
+    student = db.query(Student).filter(Student.id == registration.student_id).first()
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    
+    # Log history before deletion
+    log_activity_registration(
+        db=db,
+        action_type="delete",
+        registration=registration,
+        student_name=student.full_name if student else "Unknown",
+        activity_name=activity.name if activity else "Unknown",
+        current_user=current_user
+    )
+    
+    # Delete the registration
+    db.delete(registration)
+    db.commit()
+    
+    return {"message": "Registration deleted successfully"}
+
+@router.post("/{activity_id}/participants/bulk-change")
+async def log_bulk_participant_change(
+    activity_id: int,
+    changes: BulkParticipantChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_school_user)
+):
+    """Log bulk participant changes for history tracking"""
+    # Get activity
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    # Convert Pydantic models to dicts for the history helper
+    added_classes = [c.dict() for c in changes.added_classes] if changes.added_classes else []
+    removed_classes = [c.dict() for c in changes.removed_classes] if changes.removed_classes else []
+    added_students = [s.dict() for s in changes.added_students] if changes.added_students else []
+    removed_students = [s.dict() for s in changes.removed_students] if changes.removed_students else []
+    payment_updates = changes.payment_updates.dict() if changes.payment_updates else {}
+    
+    # Log the bulk change
+    log_activity_participants_bulk_change(
+        db=db,
+        activity=activity,
+        current_user=current_user,
+        added_classes=added_classes,
+        removed_classes=removed_classes,
+        added_students=added_students,
+        removed_students=removed_students,
+        payment_updates=payment_updates
+    )
+    
+    return {"message": "Bulk participant change logged successfully"}
 
 # Activity Schedule Management
 @router.get("/{activity_id}/schedule", response_model=List[ActivityScheduleResponse])

@@ -83,6 +83,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
   const [draggedAssignment, setDraggedAssignment] = useState<ScheduleAssignment | null>(null);
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const [isValidDrop, setIsValidDrop] = useState<boolean>(false);
+  const [swapValidityCache, setSwapValidityCache] = useState<Map<string, boolean>>(new Map());
   const viewMode = 'detailed'; // Always use detailed view
 
   // Create a grid map for quick lookup
@@ -124,25 +125,55 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
   const handleDragStart = (e: React.DragEvent, assignment: ScheduleAssignment) => {
     if (readOnly) return;
     setDraggedAssignment(assignment);
+    setSwapValidityCache(new Map()); // Clear cache when starting new drag
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/json', JSON.stringify(assignment));
   };
 
-  const handleDragOver = (e: React.DragEvent, day: number, period: number) => {
+  const handleDragOver = async (e: React.DragEvent, day: number, period: number) => {
     e.preventDefault();
     if (readOnly || !draggedAssignment) return;
 
     const key = `${day}-${period}`;
     const targetAssignment = gridMap.get(key);
     
-    // Check if drop is valid
-    // Valid if: dropping on a different cell and target has an assignment
-    const valid = targetAssignment !== undefined && 
-                   !(draggedAssignment.day_of_week === day && draggedAssignment.period_number === period);
-    
-    setDragOverCell(key);
-    setIsValidDrop(valid);
-    e.dataTransfer.dropEffect = valid ? 'move' : 'none';
+    // Can't drop on empty cells or on itself
+    if (!targetAssignment || draggedAssignment.id === targetAssignment.id) {
+      setDragOverCell(key);
+      setIsValidDrop(false);
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    // Check cache first
+    const cacheKey = `${draggedAssignment.id}-${targetAssignment.id}`;
+    if (swapValidityCache.has(cacheKey)) {
+      const isValid = swapValidityCache.get(cacheKey)!;
+      setDragOverCell(key);
+      setIsValidDrop(isValid);
+      e.dataTransfer.dropEffect = isValid ? 'move' : 'none';
+      return;
+    }
+
+    // Check if drop is valid based on teacher availability
+    try {
+      const { schedulesApi } = await import('@/services/api');
+      const validityResult = await schedulesApi.checkSwapValidity(draggedAssignment.id, targetAssignment.id);
+      
+      const canSwap = validityResult.data?.can_swap || false;
+      
+      // Cache the result
+      setSwapValidityCache(prev => new Map(prev).set(cacheKey, canSwap));
+      
+      setDragOverCell(key);
+      setIsValidDrop(canSwap);
+      e.dataTransfer.dropEffect = canSwap ? 'move' : 'none';
+    } catch (error) {
+      console.error('Error checking swap validity:', error);
+      setDragOverCell(key);
+      setIsValidDrop(false);
+      e.dataTransfer.dropEffect = 'none';
+    }
   };
 
   const handleDragLeave = () => {
@@ -212,6 +243,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
     setDraggedAssignment(null);
     setDragOverCell(null);
     setIsValidDrop(false);
+    setSwapValidityCache(new Map()); // Clear cache when drag ends
   };
 
   const renderCell = (day: number, period: number) => {

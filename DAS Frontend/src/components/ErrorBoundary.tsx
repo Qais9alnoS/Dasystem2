@@ -113,9 +113,9 @@ export class ErrorBoundary extends Component<Props, State> {
                         <CardContent className="space-y-4">
                             {process.env.NODE_ENV === 'development' && this.state.error && (
                                 <div className="bg-gray-100 p-4 rounded-lg text-sm font-mono text-left" dir="ltr">
-                                    <div className="font-bold text-red-600 mb-2">Error:</div>
+                                    <div className="font-bold text-red-600 mb-2">الخطأ:</div>
                                     <div className="text-gray-800">{this.state.error.message}</div>
-                                    <div className="font-bold text-red-600 mt-4 mb-2">Stack:</div>
+                                    <div className="font-bold text-red-600 mt-4 mb-2">التتبع:</div>
                                     <div className="text-gray-600 text-xs overflow-auto max-h-32">
                                         {this.state.error.stack}
                                     </div>

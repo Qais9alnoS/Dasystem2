@@ -13,39 +13,39 @@ from ..services.telegram_service import telegram_service
 logger = logging.getLogger(__name__)
 
 class AuthenticationError(HTTPException):
-    def __init__(self, detail: str = "Authentication failed"):
+    def __init__(self, detail: str = "فشل التحقق من الهوية"):
         super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 class AuthorizationError(HTTPException):
-    def __init__(self, detail: str = "Insufficient permissions"):
+    def __init__(self, detail: str = "صلاحيات غير كافية"):
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 class ValidationError(HTTPException):
-    def __init__(self, detail: str = "Validation failed"):
+    def __init__(self, detail: str = "فشل التحقق من البيانات"):
         super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
 class NotFoundError(HTTPException):
-    def __init__(self, detail: str = "Resource not found"):
+    def __init__(self, detail: str = "المورد غير موجود"):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 class DatabaseError(HTTPException):
-    def __init__(self, detail: str = "Database operation failed"):
+    def __init__(self, detail: str = "فشلت عملية قاعدة البيانات"):
         super().__init__(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 class FileUploadError(HTTPException):
-    def __init__(self, detail: str = "File upload failed"):
+    def __init__(self, detail: str = "فشل رفع الملف"):
         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 class SecurityError(HTTPException):
-    def __init__(self, detail: str = "Security violation detected"):
+    def __init__(self, detail: str = "تم اكتشاف انتهاك أمني"):
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 class RateLimitError(HTTPException):
-    def __init__(self, detail: str = "Rate limit exceeded"):
+    def __init__(self, detail: str = "تم تجاوز حد الطلبات"):
         super().__init__(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
 
 class BusinessLogicError(HTTPException):
-    def __init__(self, detail: str = "Business logic violation"):
+    def __init__(self, detail: str = "انتهاك منطق العمل"):
         super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
 # Schedule-specific exceptions
@@ -144,15 +144,15 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     security_service.create_system_notification(
         recipient_role="director",
         recipient_id=None,
-        title="System Error Alert",
-        message=f"Unhandled exception occurred: {type(exc).__name__} - {str(exc)[:100]}",
+        title="تنبيه خطأ بالنظام",
+        message=f"حدث خطأ غير متوقع: {type(exc).__name__} - {str(exc)[:100]}",
         notification_type="error"
     )
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": "An internal server error occurred",
+            "detail": "حدث خطأ داخلي في الخادم",
             "error_id": error_id,
             "type": "internal_server_error"
         }
@@ -255,7 +255,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": "Validation error",
+            "detail": "خطأ في التحقق من البيانات",
             "errors": serialized_errors,
             "type": "validation_error"
         }
@@ -307,7 +307,7 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
         }
         
         asyncio.create_task(telegram_service.send_error_report(
-            error_type="Database Error",
+            error_type="خطأ في قاعدة البيانات",
             error_message=str(db_exc),  # type: ignore
             error_location=f"{request.method} {request.url.path}",
             error_details=error_details,
@@ -322,15 +322,15 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
     security_service.create_system_notification(
         recipient_role="director",
         recipient_id=None,
-        title="Database Error Alert",
-        message=f"Database error occurred: {type(db_exc).__name__}",  # type: ignore
+        title="تنبيه خطأ في قاعدة البيانات",
+        message=f"حدث خطأ في قاعدة البيانات: {type(db_exc).__name__}",  # type: ignore
         notification_type="error"
     )
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": "Database operation failed",
+            "detail": "فشلت عملية قاعدة البيانات",
             "type": "database_error"
         }
     )

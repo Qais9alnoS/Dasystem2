@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import { TeacherAddDialog } from '@/components/teachers/TeacherAddDialog';
 
 const TeacherManagementPage = () => {
     const { state: authState } = useAuth();
+    const location = useLocation();
     const [activeTab, setActiveTab] = useState<'personal' | 'schedule'>('personal');
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
@@ -37,6 +39,21 @@ const TeacherManagementPage = () => {
     useEffect(() => {
         loadTeachers();
     }, []);
+
+    // Handle pre-selected teacher from search
+    useEffect(() => {
+        const locationState = location.state as any;
+        if (locationState?.preselectedTeacherId && teachers.length > 0) {
+            const teacherId = locationState.preselectedTeacherId;
+            const teacher = teachers.find(t => t.id === teacherId);
+            if (teacher) {
+                setSelectedTeacher(teacher);
+                console.log('Pre-selected teacher from search:', teacher);
+            }
+            // Clear the state after using it
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state, teachers]);
 
     const loadTeachers = async () => {
         setLoading(true);

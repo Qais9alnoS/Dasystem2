@@ -167,39 +167,54 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
 
   // Mutation for deleting academic years
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await academicYearsApi.delete(id);
-      return response;
-    },
-    onSuccess: () => {
-      // Check if we deleted the current year
-      if (deleteYearId === currentYearId) {
+    mutationFn: (id: number) => academicYearsApi.delete(id),
+    onSuccess: async () => {
+      console.log('=== Delete Year Success ===');
+      
+      // Check if the deleted year was the currently selected year
+      const selectedYearId = localStorage.getItem('selected_academic_year_id');
+      const wasCurrentYear = selectedYearId === deleteYearId?.toString();
+      
+      // Invalidate and refetch to get updated list
+      await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
+      const updatedYears = queryClient.getQueryData(['academicYears']) as AcademicYear[] | undefined;
+      
+      if (wasCurrentYear) {
         // Clear the selected year from localStorage
         localStorage.removeItem('selected_academic_year_id');
         localStorage.removeItem('selected_academic_year_name');
         localStorage.removeItem('auto_open_academic_year');
         
-        toast({
-          title: "تم الحذف",
-          description: "تم حذف السنة الدراسية الحالية. سيتم إعادة تحميل الصفحة...",
-          variant: "default",
-        });
-        
-        // Reload the page after a short delay to show the toast
-        setTimeout(() => {
-          window.location.href = '/academic-years';
-        }, 1500);
+        // If there are other years available, switch to the first one
+        if (updatedYears && updatedYears.length > 0) {
+          const firstYear = updatedYears[0];
+          localStorage.setItem('selected_academic_year_id', firstYear.id?.toString() || '');
+          localStorage.setItem('selected_academic_year_name', firstYear.year_name);
+          if (firstYear.is_active) {
+            localStorage.setItem('auto_open_academic_year', 'true');
+          }
+          
+          toast({
+            title: "تم الحذف والتبديل",
+            description: `تم حذف السنة الدراسية وتم التبديل إلى: ${firstYear.year_name}`,
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "تم الحذف",
+            description: "تم حذف آخر سنة دراسية. سيتم توجيهك للإعداد الأولي...",
+            variant: "default",
+          });
+        }
       } else {
-        // Invalidate queries to refresh the list
-        queryClient.invalidateQueries({ queryKey: ['academicYears'] });
-        setDeleteYearId(null);
-        
         toast({
           title: "نجاح",
           description: "تم حذف السنة الدراسية بنجاح!",
           variant: "default",
         });
       }
+      
+      setDeleteYearId(null);
     },
     onError: (error: Error) => {
       console.error('=== Delete Year Error ===');

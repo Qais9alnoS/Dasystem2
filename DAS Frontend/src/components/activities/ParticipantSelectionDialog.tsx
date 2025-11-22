@@ -1,17 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { useToast } from '@/hooks/use-toast';
-import { classesApi, studentsApi, activitiesApi } from '@/services/api';
-import { Class, Student, Activity } from '@/types/school';
-import { Search, Users, Check, X, Loader2, UserCheck, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useToast } from "@/hooks/use-toast";
+import { classesApi, studentsApi, activitiesApi } from "@/services/api";
+import { Class, Student, Activity } from "@/types/school";
+import {
+  Search,
+  Users,
+  Check,
+  X,
+  Loader2,
+  UserCheck,
+  AlertCircle,
+} from "lucide-react";
 
 interface ParticipantSelectionDialogProps {
   open: boolean;
@@ -21,26 +40,34 @@ interface ParticipantSelectionDialogProps {
   onSave: () => void;
 }
 
-export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProps> = ({
-  open,
-  onOpenChange,
-  activity,
-  academicYearId,
-  onSave,
-}) => {
+export const ParticipantSelectionDialog: React.FC<
+  ParticipantSelectionDialogProps
+> = ({ open, onOpenChange, activity, academicYearId, onSave }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'classes' | 'students'>('classes');
+  const [activeTab, setActiveTab] = useState<"classes" | "students">("classes");
 
   // Data
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedClasses, setSelectedClasses] = useState<Set<number>>(new Set());
-  const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
-  const [existingRegistrations, setExistingRegistrations] = useState<Map<number, any>>(new Map()); // Track existing registrations
-  const [studentPaymentStatus, setStudentPaymentStatus] = useState<Map<number, boolean>>(new Map()); // Track payment status per student
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedClasses, setSelectedClasses] = useState<Set<number>>(
+    new Set()
+  );
+  const [selectedStudents, setSelectedStudents] = useState<Set<number>>(
+    new Set()
+  );
+  const [existingRegistrations, setExistingRegistrations] = useState<
+    Map<number, any>
+  >(new Map()); // Track existing registrations
+  const [studentPaymentStatus, setStudentPaymentStatus] = useState<
+    Map<number, boolean>
+  >(new Map()); // Track payment status per student
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Track initial state for change detection
+  const [initialSelectedClasses, setInitialSelectedClasses] = useState<Set<number>>(new Set());
+  const [initialSelectedStudents, setInitialSelectedStudents] = useState<Set<number>>(new Set());
 
   // Load data
   useEffect(() => {
@@ -52,46 +79,86 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   const loadData = async () => {
     try {
       setLoading(true);
-      
-      // Load classes
-      const classesResponse = await classesApi.getAll({ academic_year_id: academicYearId });
+
+      // Load classes first
+      const classesResponse = await classesApi.getAll({
+        academic_year_id: academicYearId,
+      });
+      let loadedClasses: Class[] = [];
       if (classesResponse.success && classesResponse.data) {
-        setClasses(classesResponse.data);
+        loadedClasses = classesResponse.data;
+        setClasses(loadedClasses);
       }
 
       // Load students
-      const studentsResponse = await studentsApi.getAll({ academic_year_id: academicYearId, is_active: true });
+      const studentsResponse = await studentsApi.getAll({
+        academic_year_id: academicYearId,
+        is_active: true,
+      });
+      let loadedStudents: Student[] = [];
       if (studentsResponse.success && studentsResponse.data) {
-        setStudents(studentsResponse.data);
+        loadedStudents = studentsResponse.data;
+        setStudents(loadedStudents);
       }
 
       // Load existing registrations
-      const registrationsResponse = await activitiesApi.getRegistrations(activity.id!);
+      const registrationsResponse = await activitiesApi.getRegistrations(
+        activity.id!
+      );
       if (registrationsResponse.success && registrationsResponse.data) {
-        console.log('Loaded registrations:', registrationsResponse.data); // Debug log
-        
-        const registeredStudentIds = new Set(registrationsResponse.data.map((r: any) => r.student_id));
+        console.log("Loaded registrations:", registrationsResponse.data); // Debug log
+
+        const registeredStudentIds = new Set(
+          registrationsResponse.data.map((r: any) => r.student_id)
+        );
         setSelectedStudents(registeredStudentIds);
-        
+
         // Store existing registrations with their payment status
         const existingRegsMap = new Map();
         const paymentStatusMap = new Map();
         registrationsResponse.data.forEach((r: any) => {
           existingRegsMap.set(r.student_id, r);
-          paymentStatusMap.set(r.student_id, r.payment_status === 'paid');
-          console.log(`Student ${r.student_id}: registration ${r.id}, status ${r.payment_status}`); // Debug log
+          paymentStatusMap.set(r.student_id, r.payment_status === "paid");
+          console.log(
+            `Student ${r.student_id}: registration ${r.id}, status ${r.payment_status}`
+          ); // Debug log
         });
         setExistingRegistrations(existingRegsMap);
         setStudentPaymentStatus(paymentStatusMap);
+
+        // Determine which classes should be checked based on registered students
+        const classesToCheck = new Set<number>();
+        loadedClasses.forEach((cls) => {
+          const classStudents = loadedStudents.filter(
+            (s) =>
+              s.grade_level === cls.grade_level &&
+              s.grade_number === cls.grade_number &&
+              s.session_type === cls.session_type
+          );
+
+          // Check if all students from this class are registered
+          if (classStudents.length > 0) {
+            const allStudentsRegistered = classStudents.every((s) =>
+              registeredStudentIds.has(s.id!)
+            );
+            if (allStudentsRegistered) {
+              classesToCheck.add(cls.id!);
+            }
+          }
+        });
+        setSelectedClasses(classesToCheck);
+        setInitialSelectedClasses(new Set(classesToCheck));
+        console.log("Classes to check:", classesToCheck); // Debug log
         
-        console.log('Existing registrations map:', existingRegsMap); // Debug log
+        setInitialSelectedStudents(new Set(registeredStudentIds));
+        console.log("Existing registrations map:", existingRegsMap); // Debug log
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error("Error loading data:", error);
       toast({
-        title: 'خطأ',
-        description: 'فشل في تحميل البيانات',
-        variant: 'destructive',
+        title: "خطأ",
+        description: "فشل في تحميل البيانات",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -112,7 +179,7 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   const getStudentsForClass = (classId: number) => {
     const cls = classes.find((c) => c.id === classId);
     if (!cls) return [];
-    
+
     return students.filter(
       (s) =>
         s.grade_level === cls.grade_level &&
@@ -125,12 +192,12 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   const getStudentsFromSelectedClasses = () => {
     const selectedClassesArray = Array.from(selectedClasses);
     const studentsInClasses = new Set<number>();
-    
+
     selectedClassesArray.forEach((classId) => {
       const classStudents = getStudentsForClass(classId);
       classStudents.forEach((s) => studentsInClasses.add(s.id!));
     });
-    
+
     return students.filter((s) => studentsInClasses.has(s.id!));
   };
 
@@ -157,6 +224,19 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
 
   // Handle student toggle
   const handleStudentToggle = (studentId: number) => {
+    const student = students.find((s) => s.id === studentId);
+    
+    // Find the class this student belongs to
+    const studentClass = student ? classes.find(
+      (c) =>
+        c.grade_level === student.grade_level &&
+        c.grade_number === student.grade_number &&
+        c.session_type === student.session_type
+    ) : null;
+    
+    // If the student's class is checked and we're adding this student,
+    // they should be automatically added (already handled by being in selectedStudents)
+    // If unchecking, proceed normally
     const newSelectedStudents = new Set(selectedStudents);
     if (newSelectedStudents.has(studentId)) {
       newSelectedStudents.delete(studentId);
@@ -168,10 +248,31 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       newSelectedStudents.add(studentId);
     }
     setSelectedStudents(newSelectedStudents);
+    
+    // Update class checkboxes based on student selection
+    if (studentClass) {
+      const classStudents = getStudentsForClass(studentClass.id!);
+      const allClassStudentsSelected = classStudents.every((s) => 
+        s.id === studentId ? newSelectedStudents.has(s.id) : newSelectedStudents.has(s.id!)
+      );
+      
+      const newSelectedClasses = new Set(selectedClasses);
+      if (allClassStudentsSelected && classStudents.length > 0) {
+        // All students selected, check the class
+        newSelectedClasses.add(studentClass.id!);
+      } else {
+        // Not all students selected, uncheck the class
+        newSelectedClasses.delete(studentClass.id!);
+      }
+      setSelectedClasses(newSelectedClasses);
+    }
   };
 
   // Handle payment status toggle
-  const handlePaymentStatusToggle = (studentId: number, e: React.MouseEvent) => {
+  const handlePaymentStatusToggle = (
+    studentId: number,
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation(); // Prevent triggering student selection
     const newPaymentStatus = new Map(studentPaymentStatus);
     newPaymentStatus.set(studentId, !newPaymentStatus.get(studentId));
@@ -180,9 +281,10 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
 
   // Handle select all students
   const handleSelectAll = () => {
-    const allStudents = students.filter((student) =>
-      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const allStudents = students.filter(
+      (student) =>
+        student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
     const newSelectedStudents = new Set(selectedStudents);
     allStudents.forEach((s) => newSelectedStudents.add(s.id!));
@@ -191,9 +293,10 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
 
   // Handle deselect all students
   const handleDeselectAll = () => {
-    const allStudents = students.filter((student) =>
-      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const allStudents = students.filter(
+      (student) =>
+        student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
     const newSelectedStudents = new Set(selectedStudents);
     allStudents.forEach((s) => newSelectedStudents.delete(s.id!));
@@ -201,21 +304,24 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   };
 
   // Filter students by search - show all students, not just from selected classes
-  const filteredStudents = students.filter((student) =>
-    student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredStudents = students.filter(
+    (student) =>
+      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.father_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Check if max participants exceeded
-  const isMaxExceeded = activity.max_participants && selectedStudents.size > activity.max_participants;
+  const isMaxExceeded =
+    activity.max_participants &&
+    selectedStudents.size > activity.max_participants;
 
   // Handle save
   const handleSave = async () => {
     if (isMaxExceeded) {
       toast({
-        title: 'خطأ',
+        title: "خطأ",
         description: `عدد المشاركين المحددين (${selectedStudents.size}) يتجاوز الحد الأقصى (${activity.max_participants})`,
-        variant: 'destructive',
+        variant: "destructive",
       });
       return;
     }
@@ -231,14 +337,18 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       const updatedStudents = [];
       const removedStudents = [];
 
-      console.log('Saving participants. Total selected:', studentIds.length); // Debug log
-      console.log('Existing registrations size:', existingRegistrations.size); // Debug log
+      console.log("Saving participants. Total selected:", studentIds.length); // Debug log
+      console.log("Existing registrations size:", existingRegistrations.size); // Debug log
 
       // Check for students that need to be removed (in existing registrations but not in selectedStudents)
       for (const [studentId, registration] of existingRegistrations.entries()) {
         if (!selectedStudents.has(studentId)) {
-          console.log(`Deleting registration ${registration.id} for student ${studentId}`); // Debug log
-          promises.push(activitiesApi.deleteRegistration(activity.id!, registration.id));
+          console.log(
+            `Deleting registration ${registration.id} for student ${studentId}`
+          ); // Debug log
+          promises.push(
+            activitiesApi.deleteRegistration(activity.id!, registration.id)
+          );
           removedStudents.push(studentId);
         }
       }
@@ -246,19 +356,22 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       for (const studentId of studentIds) {
         const existingReg = existingRegistrations.get(studentId);
         const hasPaid = studentPaymentStatus.get(studentId) || false;
-        const newPaymentStatus = hasPaid ? 'paid' : 'pending';
+        const newPaymentStatus = hasPaid ? "paid" : "pending";
 
-        console.log(`Processing student ${studentId}:`, { // Debug log
+        console.log(`Processing student ${studentId}:`, {
+          // Debug log
           hasExistingReg: !!existingReg,
           existingRegId: existingReg?.id,
           existingStatus: existingReg?.payment_status,
-          newStatus: newPaymentStatus
+          newStatus: newPaymentStatus,
         });
 
         if (existingReg) {
           // Update existing registration if payment status changed
           if (existingReg.payment_status !== newPaymentStatus) {
-            console.log(`Updating registration ${existingReg.id} for student ${studentId}`); // Debug log
+            console.log(
+              `Updating registration ${existingReg.id} for student ${studentId}`
+            ); // Debug log
             promises.push(
               activitiesApi.updateRegistration(existingReg.id, {
                 payment_status: newPaymentStatus,
@@ -275,7 +388,7 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
             activitiesApi.createRegistration(activity.id!, {
               student_id: studentId,
               activity_id: activity.id!,
-              registration_date: new Date().toISOString().split('T')[0],
+              registration_date: new Date().toISOString().split("T")[0],
               payment_status: newPaymentStatus,
               payment_amount: activity.cost_per_student,
             })
@@ -289,36 +402,144 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
       }
 
       // Calculate payment summary
-      const paidCount = Array.from(studentIds).filter(id => studentPaymentStatus.get(id)).length;
+      const paidCount = Array.from(studentIds).filter((id) =>
+        studentPaymentStatus.get(id)
+      ).length;
       const unpaidCount = studentIds.length - paidCount;
       const totalPaid = paidCount * (activity.cost_per_student || 0);
       const totalUnpaid = unpaidCount * (activity.cost_per_student || 0);
 
       // Show detailed success message
       const summaryParts = [];
-      if (newStudents.length > 0) summaryParts.push(`${newStudents.length} طالب جديد`);
-      if (updatedStudents.length > 0) summaryParts.push(`${updatedStudents.length} تحديث`);
-      if (removedStudents.length > 0) summaryParts.push(`${removedStudents.length} تمت إزالته`);
-      
+      if (newStudents.length > 0)
+        summaryParts.push(`${newStudents.length} طالب جديد`);
+      if (updatedStudents.length > 0)
+        summaryParts.push(`${updatedStudents.length} تحديث`);
+      if (removedStudents.length > 0)
+        summaryParts.push(`${removedStudents.length} تمت إزالته`);
+
       const paymentSummary = [];
-      if (paidCount > 0) paymentSummary.push(`${paidCount} دفع (${totalPaid.toLocaleString('ar-SY')} ل.س)`);
-      if (unpaidCount > 0) paymentSummary.push(`${unpaidCount} معلق (${totalUnpaid.toLocaleString('ar-SY')} ل.س)`);
+      if (paidCount > 0)
+        paymentSummary.push(
+          `${paidCount} دفع (${totalPaid.toLocaleString("ar-SY")} ل.س)`
+        );
+      if (unpaidCount > 0)
+        paymentSummary.push(
+          `${unpaidCount} معلق (${totalUnpaid.toLocaleString("ar-SY")} ل.س)`
+        );
 
       toast({
-        title: 'نجاح',
-        description: `${summaryParts.join(' • ')}\n${paymentSummary.join(' • ')}`,
+        title: "نجاح",
+        description: `${summaryParts.join(" • ")}\n${paymentSummary.join(
+          " • "
+        )}`,
         duration: 5000,
       });
+
+      // Calculate bulk changes for history logging
+      const addedClasses: Array<{grade_number: string, session: string, student_count: number}> = [];
+      const removedClasses: Array<{grade_number: string, session: string, student_count: number}> = [];
+      const addedStudentsIndividual: Array<{student_id: number, name: string}> = [];
+      const removedStudentsIndividual: Array<{student_id: number, name: string}> = [];
+
+      // Track class changes
+      for (const classId of selectedClasses) {
+        if (!initialSelectedClasses.has(classId)) {
+          const cls = classes.find(c => c.id === classId);
+          if (cls) {
+            const classStudents = getStudentsForClass(classId);
+            addedClasses.push({
+              grade_number: `${cls.grade_number}`,
+              session: cls.session_type === 'morning' ? 'صباحي' : 'مسائي',
+              student_count: classStudents.length
+            });
+          }
+        }
+      }
+
+      for (const classId of initialSelectedClasses) {
+        if (!selectedClasses.has(classId)) {
+          const cls = classes.find(c => c.id === classId);
+          if (cls) {
+            const classStudents = getStudentsForClass(classId);
+            removedClasses.push({
+              grade_number: `${cls.grade_number}`,
+              session: cls.session_type === 'morning' ? 'صباحي' : 'مسائي',
+              student_count: classStudents.length
+            });
+          }
+        }
+      }
+
+      // Track individual student changes (not part of class operations)
+      // Get students from classes
+      const studentsInInitialClasses = new Set<number>();
+      const studentsInCurrentClasses = new Set<number>();
+      
+      for (const classId of initialSelectedClasses) {
+        getStudentsForClass(classId).forEach(s => studentsInInitialClasses.add(s.id!));
+      }
+      
+      for (const classId of selectedClasses) {
+        getStudentsForClass(classId).forEach(s => studentsInCurrentClasses.add(s.id!));
+      }
+
+      // Students added individually (not from class selection)
+      for (const studentId of selectedStudents) {
+        if (!initialSelectedStudents.has(studentId) && !studentsInCurrentClasses.has(studentId)) {
+          const student = students.find(s => s.id === studentId);
+          if (student) {
+            addedStudentsIndividual.push({
+              student_id: studentId,
+              name: student.full_name
+            });
+          }
+        }
+      }
+
+      // Students removed individually (not from class unselection)
+      for (const studentId of initialSelectedStudents) {
+        if (!selectedStudents.has(studentId) && !studentsInInitialClasses.has(studentId)) {
+          const student = students.find(s => s.id === studentId);
+          if (student) {
+            removedStudentsIndividual.push({
+              student_id: studentId,
+              name: student.full_name
+            });
+          }
+        }
+      }
+
+      // Log bulk changes if there are any
+      if (addedClasses.length > 0 || removedClasses.length > 0 || 
+          addedStudentsIndividual.length > 0 || removedStudentsIndividual.length > 0) {
+        try {
+          await activitiesApi.logBulkParticipantChange(activity.id!, {
+            added_classes: addedClasses,
+            removed_classes: removedClasses,
+            added_students: addedStudentsIndividual,
+            removed_students: removedStudentsIndividual,
+            payment_updates: {
+              paid_count: paidCount,
+              pending_count: unpaidCount
+            }
+          });
+        } catch (historyError) {
+          console.error('Failed to log history:', historyError);
+          // Don't fail the whole operation if history logging fails
+        }
+      }
 
       onSave();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error saving participants:', error);
-      const errorMessage = error instanceof Error ? error.message : 'فشل في حفظ المشاركين';
+      console.error("Error saving participants:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "فشل في حفظ المشاركين";
       toast({
-        title: 'خطأ',
+        title: "خطأ",
         description: errorMessage,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setSaving(false);
@@ -326,9 +547,9 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
   };
 
   const gradeLevelLabels = {
-    primary: 'ابتدائي',
-    intermediate: 'إعدادي',
-    secondary: 'ثانوي',
+    primary: "ابتدائي",
+    intermediate: "إعدادي",
+    secondary: "ثانوي",
   };
 
   return (
@@ -355,7 +576,10 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
                   {selectedStudents.size} مشارك محدد
                 </Badge>
                 {activity.max_participants && (
-                  <Badge variant={isMaxExceeded ? 'destructive' : 'outline'} className="text-sm">
+                  <Badge
+                    variant={isMaxExceeded ? "destructive" : "outline"}
+                    className="text-sm"
+                  >
                     الحد الأقصى: {activity.max_participants}
                   </Badge>
                 )}
@@ -368,58 +592,88 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
               )}
             </div>
 
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as any)}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="classes">اختيار الصفوف</TabsTrigger>
                 <TabsTrigger value="students">
-                  ضبط الطلاب {selectedClasses.size > 0 && `(${selectedClasses.size} صف)`}
+                  ضبط الطلاب{" "}
+                  {selectedClasses.size > 0 && `(${selectedClasses.size} صف)`}
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="classes" className="flex-1 overflow-y-auto mt-4">
+              <TabsContent
+                value="classes"
+                className="flex-1 overflow-y-auto mt-4"
+              >
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     اختر الصفوف المشاركة. سيتم تضمين جميع طلاب الصفوف المحددة.
                   </p>
 
-                  {Object.entries(groupedClasses).map(([level, levelClasses]) => (
-                    <Card key={level}>
-                      <CardHeader>
-                        <CardTitle className="text-lg">
-                          {gradeLevelLabels[level as keyof typeof gradeLevelLabels]}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {levelClasses.map((cls) => {
-                          const classStudents = getStudentsForClass(cls.id!);
-                          const isSelected = selectedClasses.has(cls.id!);
-                          
-                          return (
-                            <div
-                              key={cls.id}
-                              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                                isSelected ? 'bg-primary/5 border-primary' : 'hover:bg-muted'
-                              }`}
-                              onClick={() => handleClassToggle(cls.id!)}
-                            >
-                              <div className="flex items-center gap-3">
-                                <Checkbox checked={isSelected} onCheckedChange={() => handleClassToggle(cls.id!)} />
-                                <div>
-                                  <p className="font-medium">
-                                    الصف {cls.grade_number} - {cls.session_type === 'morning' ? 'صباحي' : 'مسائي'}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {classStudents.length} طالب
-                                  </p>
+                  {Object.entries(groupedClasses).map(
+                    ([level, levelClasses]) => (
+                      <Card key={level}>
+                        <CardHeader>
+                          <CardTitle className="text-lg">
+                            {
+                              gradeLevelLabels[
+                                level as keyof typeof gradeLevelLabels
+                              ]
+                            }
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {levelClasses.map((cls) => {
+                            const classStudents = getStudentsForClass(cls.id!);
+                            const isSelected = selectedClasses.has(cls.id!);
+                            const selectedCount = classStudents.filter((s) =>
+                              selectedStudents.has(s.id!)
+                            ).length;
+
+                            return (
+                              <div
+                                key={cls.id}
+                                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? "bg-primary/5 border-primary"
+                                    : "hover:bg-muted"
+                                }`}
+                                onClick={() => handleClassToggle(cls.id!)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() =>
+                                      handleClassToggle(cls.id!)
+                                    }
+                                  />
+                                  <div>
+                                    <p className="font-medium">
+                                      الصف {cls.grade_number} -{" "}
+                                      {cls.session_type === "morning"
+                                        ? "صباحي"
+                                        : "مسائي"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {selectedCount}/{classStudents.length}{" "}
+                                      طالب
+                                    </p>
+                                  </div>
                                 </div>
+                                {isSelected && (
+                                  <Check className="h-5 w-5 text-primary" />
+                                )}
                               </div>
-                              {isSelected && <Check className="h-5 w-5 text-primary" />}
-                            </div>
-                          );
-                        })}
-                      </CardContent>
-                    </Card>
-                  ))}
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
 
                   {classes.length === 0 && (
                     <div className="text-center py-12 text-muted-foreground">
@@ -430,10 +684,14 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
                 </div>
               </TabsContent>
 
-              <TabsContent value="students" className="flex-1 overflow-y-auto mt-4">
+              <TabsContent
+                value="students"
+                className="flex-1 overflow-y-auto mt-4"
+              >
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    يمكنك تحديد الطلاب المشاركين فردياً. الطلاب المحددين من الصفوف يظهرون محددين تلقائياً.
+                    يمكنك تحديد الطلاب المشاركين فردياً. الطلاب المحددين من
+                    الصفوف يظهرون محددين تلقائياً.
                   </p>
 
                   {/* Search and Actions */}
@@ -447,10 +705,18 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
                         className="pr-10"
                       />
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAll}
+                    >
                       تحديد الكل
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeselectAll}
+                    >
                       إلغاء الكل
                     </Button>
                   </div>
@@ -459,40 +725,55 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
                   <div className="space-y-2">
                     {filteredStudents.map((student) => {
                       const isSelected = selectedStudents.has(student.id!);
-                      const hasPaid = studentPaymentStatus.get(student.id!) || false;
-                      
+                      const hasPaid =
+                        studentPaymentStatus.get(student.id!) || false;
+
                       return (
                         <div
                           key={student.id}
                           className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                            isSelected ? 'bg-primary/5 border-primary' : 'hover:bg-muted'
+                            isSelected
+                              ? "bg-primary/5 border-primary"
+                              : "hover:bg-muted"
                           }`}
                           onClick={() => handleStudentToggle(student.id!)}
                         >
                           <div className="flex items-center gap-3 flex-1">
                             <Checkbox
                               checked={isSelected}
-                              onCheckedChange={() => handleStudentToggle(student.id!)}
+                              onCheckedChange={() =>
+                                handleStudentToggle(student.id!)
+                              }
                             />
                             <div className="flex-1">
                               <p className="font-medium">{student.full_name}</p>
                               <p className="text-sm text-muted-foreground">
-                                {student.father_name} - الصف {student.grade_number} {student.section && `شعبة ${student.section}`}
+                                {student.father_name} - الصف{" "}
+                                {student.grade_number}{" "}
+                                {student.section && `شعبة ${student.section}`}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             {isSelected && (
-                              <div 
+                              <div
                                 className="flex items-center gap-2 px-2 py-1 rounded border bg-white dark:bg-gray-800"
-                                onClick={(e) => handlePaymentStatusToggle(student.id!, e)}
+                                onClick={(e) =>
+                                  handlePaymentStatusToggle(student.id!, e)
+                                }
                               >
                                 <Checkbox
                                   checked={hasPaid}
                                   onCheckedChange={() => {}}
                                 />
-                                <span className={`text-sm ${hasPaid ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
-                                  {hasPaid ? 'دفع' : 'لم يدفع'}
+                                <span
+                                  className={`text-sm ${
+                                    hasPaid
+                                      ? "text-green-600 font-medium"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {hasPaid ? "دفع" : "لم يدفع"}
                                 </span>
                               </div>
                             )}
@@ -501,7 +782,9 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
                                 احتياجات خاصة
                               </Badge>
                             )}
-                            {isSelected && <Check className="h-5 w-5 text-primary" />}
+                            {isSelected && (
+                              <Check className="h-5 w-5 text-primary" />
+                            )}
                           </div>
                         </div>
                       );
@@ -519,12 +802,21 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
 
             {/* Footer Actions */}
             <div className="flex items-center justify-between pt-4 border-t">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
                 <X className="h-4 w-4 ml-1" />
                 إلغاء
               </Button>
 
-              <Button onClick={handleSave} disabled={saving || selectedStudents.size === 0 || isMaxExceeded}>
+              <Button
+                onClick={handleSave}
+                disabled={
+                  saving || selectedStudents.size === 0 || isMaxExceeded
+                }
+              >
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-1 animate-spin" />
@@ -544,4 +836,3 @@ export const ParticipantSelectionDialog: React.FC<ParticipantSelectionDialogProp
     </Dialog>
   );
 };
-

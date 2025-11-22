@@ -301,7 +301,7 @@ async def delete_file(
 
 @router.get("/notes/search")
 async def search_notes(
-    query: str = Query(..., min_length=3, description="Search query"),
+    query: str = Query(..., min_length=1, description="Search query"),
     academic_year_id: Optional[int] = Query(None, description="Academic year ID"),
     category: Optional[str] = Query(None, description="Category filter"),
     current_user: User = Depends(get_director_user),
@@ -354,7 +354,7 @@ async def create_reward(
         action_type="create",
         entity_type="reward",
         entity_id=reward.id,
-        entity_name=f"مكافأة - {reward.student_id}",
+        entity_name=f"مكافأة - {reward.recipient_name}",
         description=f"تم إضافة مكافأة جديدة",
         current_user=current_user,
         academic_year_id=reward.academic_year_id,
@@ -409,7 +409,7 @@ async def update_reward(
         action_type="update",
         entity_type="reward",
         entity_id=reward.id,
-        entity_name=f"مكافأة - {reward.student_id}",
+        entity_name=f"مكافأة - {reward.recipient_name}",
         description=f"تم تعديل مكافأة",
         current_user=current_user,
         old_values=old_values,
@@ -437,7 +437,7 @@ async def delete_reward(
         action_type="delete",
         entity_type="reward",
         entity_id=reward.id,
-        entity_name=f"مكافأة - {reward.student_id}",
+        entity_name=f"مكافأة - {reward.recipient_name}",
         description=f"تم حذف مكافأة",
         current_user=current_user
     )
@@ -485,7 +485,7 @@ async def create_assistance_record(
         action_type="create",
         entity_type="assistance",
         entity_id=record.id,
-        entity_name=f"مساعدة - {record.student_id}",
+        entity_name=f"مساعدة - {record.organization}",
         description=f"تم إضافة سجل مساعدة جديد",
         current_user=current_user,
         academic_year_id=record.academic_year_id,
@@ -540,7 +540,7 @@ async def update_assistance_record(
         action_type="update",
         entity_type="assistance",
         entity_id=record.id,
-        entity_name=f"مساعدة - {record.student_id}",
+        entity_name=f"مساعدة - {record.organization}",
         description=f"تم تعديل سجل مساعدة",
         current_user=current_user,
         old_values=old_values,
@@ -568,7 +568,7 @@ async def delete_assistance_record(
         action_type="delete",
         entity_type="assistance",
         entity_id=record.id,
-        entity_name=f"مساعدة - {record.student_id}",
+        entity_name=f"مساعدة - {record.organization}",
         description=f"تم حذف سجل مساعدة",
         current_user=current_user
     )

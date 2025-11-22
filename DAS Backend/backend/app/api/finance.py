@@ -22,7 +22,7 @@ from ..schemas.finance import (
     IncomeCategoryCreate, IncomeCategoryUpdate, IncomeCategoryResponse,
     PaymentMethodCreate, PaymentMethodUpdate, PaymentMethodResponse,
     FinancialSummary, MonthlyFinancialReport, AnnualFinancialReport,
-    FinanceCardCreate, FinanceCardUpdate, FinanceCardResponse, FinanceCardSummary,
+    FinanceCardCreate, FinanceCardUpdate, FinanceCardResponse, FinanceCardSummary, FinanceCardDetailed, FinanceCardDetailedSummary,
     FinanceCardTransactionCreate, FinanceCardTransactionUpdate, FinanceCardTransactionResponse
 )
 from ..schemas.students import StudentFinanceSummary, StudentFinanceDetailedResponse, StudentFinanceUpdate, StudentPaymentCreate
@@ -1597,8 +1597,8 @@ async def create_finance_card(
         description=f"تم إنشاء صندوق جديد: {new_card.card_name}",
         current_user=current_user,
         academic_year_id=new_card.academic_year_id,
-        amount=float(new_card.initial_balance) if new_card.initial_balance else 0,
-        new_values={"card_name": new_card.card_name, "initial_balance": float(new_card.initial_balance or 0)}
+        amount=0,
+        new_values={"card_name": new_card.card_name, "card_type": new_card.card_type, "category": new_card.category}
     )
     
     return new_card
@@ -1669,6 +1669,54 @@ async def delete_finance_card(
     db.commit()
     
     return {"message": "Finance card deleted successfully"}
+
+@router.get("/cards/{card_id}/detailed", response_model=FinanceCardDetailed)
+async def get_finance_card_detailed(
+    card_id: int,
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get detailed information about a finance card including all transactions"""
+    # Get the card
+    card = db.query(FinanceCard).filter(
+        FinanceCard.id == card_id,
+        FinanceCard.academic_year_id == academic_year_id
+    ).first()
+    
+    if not card:
+        raise HTTPException(status_code=404, detail="Finance card not found")
+    
+    # Get all transactions for this card
+    transactions = db.query(FinanceCardTransaction).filter(
+        FinanceCardTransaction.card_id == card_id
+    ).order_by(FinanceCardTransaction.transaction_date.desc()).all()
+    
+    # Calculate summary
+    total_income = sum(
+        float(t.amount) for t in transactions 
+        if t.transaction_type == 'income'
+    )
+    total_expenses = sum(
+        float(t.amount) for t in transactions 
+        if t.transaction_type == 'expense'
+    )
+    net_amount = total_income - total_expenses
+    completed_count = sum(1 for t in transactions if t.is_completed)
+    incomplete_count = sum(1 for t in transactions if not t.is_completed)
+    
+    # Build the response
+    return FinanceCardDetailed(
+        card=card,
+        transactions=transactions,
+        summary=FinanceCardDetailedSummary(
+            total_income=Decimal(str(total_income)),
+            total_expenses=Decimal(str(total_expenses)),
+            net_amount=Decimal(str(net_amount)),
+            completed_transactions_count=completed_count,
+            incomplete_transactions_count=incomplete_count
+        )
+    )
 
 @router.post("/cards/{card_id}/transactions", response_model=FinanceCardTransactionResponse)
 async def add_card_transaction(

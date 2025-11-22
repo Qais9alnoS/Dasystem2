@@ -189,8 +189,8 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
     }
 
     try {
-      // Use bulk delete API to avoid logging spam
-      const response = await schedulesApi.bulkDelete({
+      // Use the new specific delete endpoint with teacher availability restoration
+      const response = await schedulesApi.deleteClassSchedule({
         academic_year_id: schedule.academic_year_id,
         session_type: schedule.session_type,
         class_id: schedule.class_id,
@@ -198,9 +198,14 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
       });
 
       if (response.success) {
+        const teachersRestored = response.data?.restored_teachers || [];
+        const restoredInfo = teachersRestored.length > 0 
+          ? ` (تم استعادة أوقات فراغ ${teachersRestored.length} معلمين)` 
+          : '';
+        
         toast({
           title: "تم الحذف بنجاح",
-          description: `تم حذف الجدول بنجاح (${response.data?.deleted_count || 0} حصة)`
+          description: `تم حذف الجدول بنجاح (${response.data?.deleted_count || 0} حصة)${restoredInfo}`
         });
 
         fetchSchedules();
@@ -356,7 +361,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
                 sessionType: selectedSchedule?.session_type || 'morning'
               }}
               assignments={scheduleAssignments}
-              readOnly={true}
+              readOnly={false}
             />
           )}
         </DialogContent>

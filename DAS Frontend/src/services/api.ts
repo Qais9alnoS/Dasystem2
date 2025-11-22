@@ -698,11 +698,22 @@ export const activitiesApi = {
     return apiClient.delete<void>(`/activities/${activity_id}/registrations/${registration_id}`);
   },
 
+  logBulkParticipantChange: async (activity_id: number, changes: {
+    added_classes?: Array<{grade_number: string, session: string, student_count: number}>,
+    removed_classes?: Array<{grade_number: string, session: string, student_count: number}>,
+    added_students?: Array<{student_id: number, name: string}>,
+    removed_students?: Array<{student_id: number, name: string}>,
+    payment_updates?: {paid_count: number, pending_count: number}
+  }) => {
+    return apiClient.post<void>(`/activities/${activity_id}/participants/bulk-change`, changes);
+  },
+
   // Activity Attendance Functions
   getAttendance: async (activity_id: number) => {
     return apiClient.get<ActivityAttendance[]>(`/activities/${activity_id}/attendance`);
   },
 
+// ... (rest of the code remains the same)
   recordAttendance: async (activity_id: number, attendance: Omit<ActivityAttendance, 'id' | 'created_at' | 'updated_at' | 'student_name' | 'activity_name'>) => {
     return apiClient.post<ActivityAttendance>(`/activities/${activity_id}/attendance`, attendance);
   },
@@ -1139,6 +1150,15 @@ export const schedulesApi = {
     }>('/schedules/swap', { schedule1_id, schedule2_id });
   },
 
+  // Check Swap Validity (for drag-and-drop highlighting)
+  checkSwapValidity: async (schedule1_id: number, schedule2_id: number) => {
+    return apiClient.post<{
+      can_swap: boolean;
+      reason?: string;
+      conflicts: string[];
+    }>('/schedules/check-swap-validity', { schedule1_id, schedule2_id });
+  },
+
   // Get Diagnostics
   getDiagnostics: async (academicYearId: number, sessionType: string) => {
     const params = new URLSearchParams({
@@ -1153,7 +1173,7 @@ export const schedulesApi = {
     academic_year_id: number;
     session_type: string;
     class_id?: number;
-    section?: string;
+    section?: string | number;
   }) => {
     const queryParams = new URLSearchParams({
       academic_year_id: params.academic_year_id.toString(),
@@ -1174,9 +1194,33 @@ export const schedulesApi = {
       academic_year_id: number;
       session_type: string;
       class_id?: number;
-      section?: string;
+      section?: string | number;
     }>(`/schedules/bulk-delete?${queryParams.toString()}`);
   },
+
+  // Delete Class Schedule (Recommended)
+  deleteClassSchedule: async (params: {
+    academic_year_id: number;
+    session_type: string;
+    class_id: number;
+    section: string | number;
+  }) => {
+    const queryParams = new URLSearchParams({
+      academic_year_id: params.academic_year_id.toString(),
+      session_type: params.session_type,
+      class_id: params.class_id.toString(),
+      section: String(params.section)
+    });
+    
+    return apiClient.delete<{
+      message: string;
+      deleted_count: number;
+      academic_year_id: number;
+      session_type: string;
+      class_id: number;
+      section: string | number;
+    }>(`/schedules/delete-class-schedule?${queryParams.toString()}`);
+  }
 };
 
 // Search API
@@ -1192,6 +1236,38 @@ export const searchApi = {
     sort_order?: string;
   }) => {
     const searchParams: any = { query, ...params };
+    const queryString = '?' + new URLSearchParams(
+      Object.entries(searchParams)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return apiClient.get<any>(`/search/universal${queryString}`);
+  },
+
+  universalSearch: async (query: string, options?: {
+    scope?: string;
+    mode?: string;
+    filters?: {
+      academic_year_id?: number;
+      session_type?: string;
+      date_from?: string;
+      date_to?: string;
+      scopes?: string[];
+      include_inactive?: boolean;
+      min_relevance_score?: number;
+    };
+    skip?: number;
+    limit?: number;
+  }) => {
+    const { filters, ...otherParams } = options || {};
+    const searchParams: any = { 
+      query, 
+      ...otherParams,
+      ...(filters?.academic_year_id && { academic_year_id: filters.academic_year_id }),
+      ...(filters?.session_type && { session_type: filters.session_type }),
+      ...(filters?.include_inactive !== undefined && { include_inactive: filters.include_inactive })
+    };
+    
     const queryString = '?' + new URLSearchParams(
       Object.entries(searchParams)
         .filter(([_, v]) => v !== undefined && v !== null)

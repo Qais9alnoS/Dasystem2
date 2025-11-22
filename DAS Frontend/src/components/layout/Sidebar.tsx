@@ -220,6 +220,11 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           href: '/students/academic-info',
           icon: BookOpen,
         },
+        {
+          name: 'تحليلات الطلاب',
+          href: '/students/analytics',
+          icon: BarChart3,
+        },
       ],
     },
     {
@@ -247,6 +252,18 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       allowedRoles: ['director'], // Director only
     },
     {
+      name: 'التحليلات',
+      href: '/analytics',
+      icon: TrendingUp,
+      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+    },
+    {
+      name: 'التحليلات الشاملة',
+      href: '/director/analytics',
+      icon: BarChart3,
+      allowedRoles: ['director'], // Director only
+    },
+    {
       name: 'إدارة تسجيل الدخول',
       href: '/user-management',
       icon: Key,
@@ -270,6 +287,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       href: '/finance?tab=year',
       icon: Calendar,
       allowedRoles: ['finance'], // Finance only
+    },
+    {
+      name: 'التحليلات المالية',
+      href: '/finance/analytics',
+      icon: PieChart,
+      allowedRoles: ['finance', 'director'], // Finance and Director
     },
     // Add more navigation items here as needed
   ];

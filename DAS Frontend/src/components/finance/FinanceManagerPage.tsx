@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { TreasurySection } from './TreasurySection';
 import { StudentsFinanceSection } from './StudentsFinanceSection';
 import { YearSelectionSection } from './YearSelectionSection';
@@ -10,8 +10,14 @@ import { useToast } from '@/hooks/use-toast';
 export const FinanceManagerPage: React.FC = () => {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
   const activeTab = searchParams.get('tab') || 'treasury';
+  
+  // Get preselected card from navigation state (from search or quick actions)
+  const preselectedCardId = (location.state as any)?.preselectedCardId;
+  const openCardPopup = (location.state as any)?.openCardPopup;
+  const openAddCardDialog = (location.state as any)?.openAddCardDialog;
 
   useEffect(() => {
     loadActiveYear();
@@ -63,7 +69,12 @@ export const FinanceManagerPage: React.FC = () => {
   const renderSection = () => {
     switch (activeTab) {
       case 'treasury':
-        return <TreasurySection academicYearId={selectedYearId} />;
+        return <TreasurySection 
+          academicYearId={selectedYearId} 
+          preselectedCardId={preselectedCardId}
+          openCardPopup={openCardPopup}
+          openAddCardDialog={openAddCardDialog}
+        />;
       case 'students':
         return <StudentsFinanceSection academicYearId={selectedYearId} />;
       case 'year':

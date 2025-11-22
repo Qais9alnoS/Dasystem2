@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Users, BookOpen, GraduationCap, Layers, AlertTriangle, Edit, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/services/api';
@@ -10,6 +10,7 @@ import { defaultGradeTemplates, getGradeLabel } from '@/lib/defaultSchoolData';
 
 const SchoolInfoManagementPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -19,15 +20,37 @@ const SchoolInfoManagementPage = () => {
   const [hasDefaultClasses, setHasDefaultClasses] = useState(false);
 
   useEffect(() => {
-    // Load selected academic year from localStorage
-    const yearId = localStorage.getItem('selected_academic_year_id');
-    if (yearId) {
-      const parsedId = parseInt(yearId, 10);
-      if (!isNaN(parsedId)) {
-        setSelectedAcademicYear(parsedId);
+    // Check if academic year is passed from search navigation
+    const stateYearId = (location.state as any)?.academicYearId;
+    
+    if (stateYearId) {
+      // Use the year from navigation state
+      setSelectedAcademicYear(stateYearId);
+    } else {
+      // Load selected academic year from localStorage
+      const yearId = localStorage.getItem('selected_academic_year_id');
+      if (yearId) {
+        const parsedId = parseInt(yearId, 10);
+        if (!isNaN(parsedId)) {
+          setSelectedAcademicYear(parsedId);
+        }
       }
     }
-  }, []);
+    
+    // Listen for academic year changes
+    const handleYearChange = (event: CustomEvent) => {
+      const newYearId = event.detail?.yearId;
+      if (newYearId) {
+        setSelectedAcademicYear(newYearId);
+      }
+    };
+    
+    window.addEventListener('academicYearChanged' as any, handleYearChange);
+    
+    return () => {
+      window.removeEventListener('academicYearChanged' as any, handleYearChange);
+    };
+  }, [location.state]);
 
   useEffect(() => {
     if (selectedAcademicYear) {
@@ -41,8 +64,8 @@ const SchoolInfoManagementPage = () => {
     try {
       setLoading(true);
       
-      // Load classes
-      const classesResponse = await api.academic.getClasses(selectedAcademicYear);
+      // Load classes filtered by academic year
+      const classesResponse = await api.academic.getClasses({ academic_year_id: selectedAcademicYear });
       const allClasses = Array.isArray(classesResponse) ? classesResponse : (classesResponse?.data || []);
       setClasses(allClasses);
       

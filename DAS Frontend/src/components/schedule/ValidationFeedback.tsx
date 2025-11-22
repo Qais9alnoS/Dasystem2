@@ -179,21 +179,40 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
     );
   }
 
-  if (!validationResult) {
+  if (!validationResult || !validationResult.summary) {
     return (
       <Alert variant="destructive">
         <XCircle className="h-4 w-4" />
         <AlertTitle>خطأ</AlertTitle>
         <AlertDescription>
-          فشل تحميل نتائج التحقق. يرجى المحاولة مرة أخرى.
+          فشل تحميل نتائج التحقق. قد تكون البيانات غير صالحة أو السنة الدراسية محذوفة. يرجى المحاولة مرة أخرى.
         </AlertDescription>
       </Alert>
     );
   }
 
-  const completionPercentage = validationResult.summary.total_subjects > 0
-    ? (validationResult.summary.teachers_with_sufficient_time / validationResult.summary.total_subjects) * 100
-    : 0;
+  // Calculate percentage considering both subject-level and system-level checks
+  const completionPercentage = (() => {
+    if (!validationResult.summary || validationResult.summary.total_subjects === 0) return 0;
+    
+    // Subject-level: percentage of subjects with sufficient teacher availability
+    const subjectReadiness = 
+      (validationResult.summary.teachers_with_sufficient_time / validationResult.summary.total_subjects) * 100;
+    
+    // System-level: check for critical validation errors that block schedule generation
+    // These are errors that prevent can_proceed from being true
+    const hasCriticalErrors = !validationResult.can_proceed;
+    
+    // If there are critical errors (like exclusive period conflicts, missing teachers in slots, etc.)
+    // reduce the percentage significantly since the schedule cannot be generated
+    if (hasCriticalErrors) {
+      // Apply a penalty: percentage is at most 50% if critical errors exist
+      // This ensures errors like "فترة حصرية زائدة" are reflected in the percentage
+      return Math.min(subjectReadiness * 0.5, 50);
+    }
+    
+    return subjectReadiness;
+  })();
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -415,20 +434,13 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       )}
 
       {/* Action Buttons (بدون تغيير للخطوة، فقط إجراءات مساعدة) */}
-      <div className="flex justify-between items-center pt-4 border-t">
-        <Button
-          variant="outline"
-          onClick={() => window.location.href = '/teachers'}
-        >
-          إدارة المعلمين
-        </Button>
-
-        {!validationResult.can_proceed && (
+      {!validationResult.can_proceed && (
+        <div className="flex justify-end items-center pt-4 border-t">
           <Button variant="secondary" onClick={validateSchedule}>
             إعادة التحقق
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

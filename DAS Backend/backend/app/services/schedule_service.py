@@ -838,6 +838,29 @@ class ScheduleGenerationService:
                         periods_per_day=request.periods_per_day
                     )
                     
+                    # CRITICAL VALIDATION: Ensure NO empty slots in the grid
+                    empty_slots = []
+                    day_names_ar = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+                    for day_idx_check in range(len(schedule_grid)):
+                        for period_idx_check in range(len(schedule_grid[day_idx_check])):
+                            if schedule_grid[day_idx_check][period_idx_check] is None:
+                                day_name_ar = day_names_ar[day_idx_check] if day_idx_check < len(day_names_ar) else f"يوم {day_idx_check+1}"
+                                empty_slots.append(f"{day_name_ar} - الحصة {period_idx_check + 1}")
+                    
+                    if empty_slots:
+                        error_details = ", ".join(empty_slots[:5])  # Show first 5 examples
+                        if len(empty_slots) > 5:
+                            error_details += f" و {len(empty_slots) - 5} فترة أخرى"
+                        
+                        raise ScheduleValidationError(
+                            detail=f"⚠️ خطأ حرج: لا يمكن إنشاء جدول كامل. يوجد {len(empty_slots)} فترة فارغة في الجدول المُخطط.",
+                            errors=[
+                                f"الفترات الفارغة: {error_details}",
+                                "السبب: أوقات فراغ المعلمين لا تغطي جميع الفترات المطلوبة",
+                                "الحل: قم بتحديث أوقات الفراغ للمعلمين أو قم بتعيين معلمين إضافيين"
+                            ]
+                        )
+                    
                     day_idx = 0
                     for day_name in request.working_days:
                         day_num = day_mapping.get(day_name.lower() if isinstance(day_name, str) else day_name.value, 1)
@@ -846,9 +869,12 @@ class ScheduleGenerationService:
                             # Get the subject from the evenly distributed schedule grid
                             subject = schedule_grid[day_idx][period - 1]  # period is 1-based, array is 0-based
                             
-                            # Skip if no subject assigned (shouldn't happen with our algorithm)
+                            # This should never happen after our validation, but check anyway
                             if not subject:
-                                continue
+                                raise ScheduleValidationError(
+                                    detail=f"خطأ داخلي: فترة فارغة غير متوقعة في {day_names_ar[day_idx]} الحصة {period}",
+                                    errors=["هذا خطأ في النظام. يرجى الاتصال بالدعم الفني."]
+                                )
                             
                             # Find an available teacher for this subject at this specific time slot
                             teacher = self._find_available_teacher_for_subject_and_slot(
@@ -860,15 +886,29 @@ class ScheduleGenerationService:
                             )
                             
                             if not teacher:
-                                # NO FALLBACK - If no teacher is free, add to conflicts and skip this period
+                                # CRITICAL ERROR - Cannot proceed without a teacher
                                 error_msg = (
-                                    f"خطأ: لا يوجد معلم متاح للمادة {subject.subject_name} "
-                                    f"في اليوم {day_num} الحصة {period}. "
-                                    f"جميع المعلمين المكلفين بهذه المادة إما غير متاحين أو مشغولين في هذا الوقت."
+                                    f"⚠️ خطأ حرج: لا يوجد معلم متاح للمادة '{subject.subject_name}' "
+                                    f"في {day_names_ar[day_idx]} الحصة {period}."
                                 )
-                                self.conflicts.append(error_msg)
-                                print(f"CRITICAL: {error_msg}")
-                                continue
+                                print(f"CRITICAL ERROR: {error_msg}")
+                                
+                                # Rollback any changes made so far
+                                self.db.rollback()
+                                
+                                # Restore teacher states
+                                if teacher_states:
+                                    self._restore_teacher_states(teacher_states)
+                                
+                                raise ScheduleValidationError(
+                                    detail=error_msg,
+                                    errors=[
+                                        f"الفترة المتأثرة: {day_names_ar[day_idx]} - الحصة {period}",
+                                        f"المادة: {subject.subject_name}",
+                                        "السبب المحتمل: جميع المعلمين المكلفين بهذه المادة غير متاحين في هذا الوقت أو مشغولين في صف آخر",
+                                        "الحل: تحديث أوقات فراغ المعلمين أو إعادة توزيع المواد"
+                                    ]
+                                )
                             
                             # Create schedule entry for ALL periods (including breaks)
                             schedule_entry = Schedule()

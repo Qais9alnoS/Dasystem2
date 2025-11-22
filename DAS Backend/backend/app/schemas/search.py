@@ -13,6 +13,8 @@ class SearchScope(str, Enum):
     ACTIVITIES = "activities"
     FINANCE = "finance"
     SCHEDULES = "schedules"
+    DIRECTOR_NOTES = "director_notes"
+    PAGES = "pages"
     USERS = "users"
 
 class SearchMode(str, Enum):
