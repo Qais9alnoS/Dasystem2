@@ -1,7 +1,7 @@
 # Database Models Package
 
 from .base import BaseModel
-from .academic import AcademicYear, Class, Subject
+from .academic import AcademicYear, Class, Subject, AcademicSettings
 from .users import User
 from .students import Student, StudentFinance, StudentPayment, StudentAcademic
 from .teachers import Teacher, TeacherAssignment, TeacherAttendance, TeacherFinance
@@ -21,7 +21,7 @@ from .daily import (
 
 __all__ = [
     "BaseModel",
-    "AcademicYear", "Class", "Subject",
+    "AcademicYear", "Class", "Subject", "AcademicSettings",
     "User",
     "Student", "StudentFinance", "StudentPayment", "StudentAcademic",
     "Teacher", "TeacherAssignment", "TeacherAttendance", "TeacherFinance",

@@ -103,6 +103,18 @@ const StudentAcademicInfoPage = () => {
     activity_grade: 'percentage',
   });
   
+  // Calculation type: 'direct' or 'automatic_average'
+  const [calculationTypes, setCalculationTypes] = useState<Record<GradeType, 'direct' | 'automatic_average'>>({
+    board_grades: 'direct',
+    recitation_grades: 'direct',
+    first_exam_grades: 'direct',
+    midterm_grades: 'direct',
+    second_exam_grades: 'direct',
+    final_exam_grades: 'direct',
+    behavior_grade: 'direct',
+    activity_grade: 'direct',
+  });
+  
   // Overall percentage threshold (default 50%)
   const [overallPercentageThreshold, setOverallPercentageThreshold] = useState<number>(50);
   
@@ -111,6 +123,7 @@ const StudentAcademicInfoPage = () => {
   const [tempMaxGrade, setTempMaxGrade] = useState<number>(100);
   const [tempPassingThreshold, setTempPassingThreshold] = useState<number>(50);
   const [tempThresholdType, setTempThresholdType] = useState<'percentage' | 'absolute'>('percentage');
+  const [tempCalculationType, setTempCalculationType] = useState<'direct' | 'automatic_average'>('direct');
   
   // Dialog state for overall percentage threshold
   const [editingOverallPercentage, setEditingOverallPercentage] = useState<boolean>(false);
@@ -277,6 +290,7 @@ const StudentAcademicInfoPage = () => {
             const newBaseMaxGrades: Record<GradeType, number> = { ...newMaxGrades };
             const newPassingThresholds: Record<GradeType, number> = { ...passingThresholds };
             const newThresholdTypes: Record<GradeType, 'percentage' | 'absolute'> = { ...thresholdTypes };
+            const newCalculationTypes: Record<GradeType, 'direct' | 'automatic_average'> = { ...calculationTypes };
             
             const gradeTypesList: GradeType[] = [
               'board_grades', 'recitation_grades', 'first_exam_grades',
@@ -290,6 +304,7 @@ const StudentAcademicInfoPage = () => {
                 newBaseMaxGrades[gradeType] = settings[gradeType].max_grade || 100;
                 newPassingThresholds[gradeType] = settings[gradeType].passing_threshold || 50;
                 newThresholdTypes[gradeType] = settings[gradeType].threshold_type || 'percentage';
+                newCalculationTypes[gradeType] = settings[gradeType].calculation_type || 'direct';
               }
             });
             
@@ -297,6 +312,7 @@ const StudentAcademicInfoPage = () => {
             setBaseMaxGrades(newBaseMaxGrades);
             setPassingThresholds(newPassingThresholds);
             setThresholdTypes(newThresholdTypes);
+            setCalculationTypes(newCalculationTypes);
             
             if (settings.overall_percentage_threshold) {
               setOverallPercentageThreshold(settings.overall_percentage_threshold);
@@ -358,6 +374,23 @@ const StudentAcademicInfoPage = () => {
       }
     }
   }, [students, subjects, selectedSubject, isTotalView]);
+
+  // إعادة تحميل البيانات عند العودة إلى الصفحة
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && selectedSubject && students.length > 0) {
+        console.log('🔄 Page became visible, reloading academic records...');
+        if (isTotalView) {
+          loadTotalAcademicRecords();
+        } else {
+          loadAcademicRecords();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [selectedSubject, students.length, isTotalView]);
 
   // إظهار تحذير عند وجود تغييرات غير محفوظة
   useEffect(() => {
@@ -1177,11 +1210,13 @@ const StudentAcademicInfoPage = () => {
     setTempMaxGrade(isTotalView ? maxGrades[gradeType] : baseMaxGrades[gradeType]);
     setTempPassingThreshold(passingThresholds[gradeType]);
     setTempThresholdType(thresholdTypes[gradeType]);
+    setTempCalculationType(calculationTypes[gradeType]);
     console.log(`📝 Opening dialog for ${gradeType}:`, {
       isTotalView,
       maxGrade: isTotalView ? maxGrades[gradeType] : baseMaxGrades[gradeType],
       passingThreshold: passingThresholds[gradeType],
-      thresholdType: thresholdTypes[gradeType]
+      thresholdType: thresholdTypes[gradeType],
+      calculationType: calculationTypes[gradeType]
     });
   };
 
@@ -1236,6 +1271,10 @@ const StudentAcademicInfoPage = () => {
         ...thresholdTypes,
         [editingGradeType]: tempThresholdType,
       });
+      setCalculationTypes({
+        ...calculationTypes,
+        [editingGradeType]: tempCalculationType,
+      });
       
       // حفظ الإعدادات في الباك إند
       if (selectedAcademicYear && selectedClass) {
@@ -1247,12 +1286,26 @@ const StudentAcademicInfoPage = () => {
             [editingGradeType]: {
               max_grade: tempMaxGrade,
               passing_threshold: tempPassingThreshold,
-              threshold_type: tempThresholdType
+              threshold_type: tempThresholdType,
+              calculation_type: tempCalculationType
             }
           };
           
           await retryWithTokenRefresh(() => api.academic.saveSettings(settings));
           console.log('✅ Settings saved to backend');
+          
+          // إعادة تحميل البيانات إذا تم تغيير calculation_type
+          const oldCalculationType = calculationTypes[editingGradeType];
+          if (oldCalculationType !== tempCalculationType && selectedSubject && students.length > 0) {
+            console.log('🔄 Calculation type changed, reloading academic records...');
+            setTimeout(() => {
+              if (isTotalView) {
+                loadTotalAcademicRecords();
+              } else {
+                loadAcademicRecords();
+              }
+            }, 500);
+          }
         } catch (error) {
           console.error('❌ Failed to save settings:', error);
           toast({
@@ -1362,7 +1415,8 @@ const StudentAcademicInfoPage = () => {
     studentIndex,
     gradeIndex,
     placeholder = '--',
-    isFailing = false
+    isFailing = false,
+    isReadOnly = false
   }: { 
     initialValue: number | undefined, 
     onSave: (value: number) => void,
@@ -1373,7 +1427,8 @@ const StudentAcademicInfoPage = () => {
     studentIndex: number,
     gradeIndex: number,
     placeholder?: string,
-    isFailing?: boolean
+    isFailing?: boolean,
+    isReadOnly?: boolean
   }) => {
     // تحويل القيمة الأولية وإزالة .00 إذا كان رقم صحيح
     const getDisplayValue = (value: number | undefined): string => {
@@ -1474,8 +1529,11 @@ const StudentAcademicInfoPage = () => {
         onFocus={handleFocus}
         onKeyDown={(e) => handleKeyDown(e, studentIndex, gradeIndex, saveValue)}
         placeholder={placeholder}
-        className={`w-24 text-center rounded-lg ${isFailing ? 'text-red-800 dark:text-red-400 font-semibold' : ''}`}
+        className={`w-24 text-center rounded-lg ${isFailing ? 'text-red-800 dark:text-red-400 font-semibold' : ''} ${isReadOnly ? 'bg-muted/50 cursor-not-allowed' : ''}`}
         autoComplete="off"
+        readOnly={isReadOnly}
+        disabled={isReadOnly}
+        title={isReadOnly ? 'هذا الحقل محسوب تلقائياً من الصفحة اليومية' : ''}
       />
     );
   };
@@ -1839,6 +1897,7 @@ const StudentAcademicInfoPage = () => {
                                       gradeIndex={gradeIndex}
                                       placeholder="--"
                                       isFailing={failing}
+                                      isReadOnly={calculationTypes[gt] === 'automatic_average'}
                                     />
                                   )}
                                 </td>
@@ -2028,6 +2087,33 @@ const StudentAcademicInfoPage = () => {
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
                     مجموع العلامات القصوى من جميع المواد
+                  </p>
+                </div>
+              )}
+              
+              {/* فقط للسبر والتسميع والنشاط */}
+              {!isTotalView && (editingGradeType === 'board_grades' || editingGradeType === 'recitation_grades' || editingGradeType === 'activity_grade') && (
+                <div className="space-y-2">
+                  <Label htmlFor="calculationType">طريقة إدخال العلامات</Label>
+                  <Select
+                    value={tempCalculationType}
+                    onValueChange={(value: 'direct' | 'automatic_average') => {
+                      setTempCalculationType(value);
+                    }}
+                  >
+                    <SelectTrigger className="rounded-2xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="direct">إدخال مباشر</SelectItem>
+                      <SelectItem value="automatic_average">متوسط حسابي تلقائي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {tempCalculationType === 'direct' 
+                      ? '✏️ يمكنك إدخال العلامة مباشرة. العلامات من الصفحة اليومية لن تؤثر على هذا الحقل.'
+                      : '🔄 سيتم حساب المتوسط تلقائياً من العلامات المدخلة في الصفحة اليومية. لا يمكن التعديل اليدوي.'
+                    }
                   </p>
                 </div>
               )}

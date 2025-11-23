@@ -276,7 +276,7 @@ async def create_student_finance(
         action_type="create",
         entity_type="student_finance",
         entity_id=new_finance.id,
-        entity_name=f"سجل مالي - {student.student_name if student else student_id}",
+        entity_name=f"سجل مالي - {student.full_name if student else student_id}",
         description=f"تم إنشاء سجل مالي للطالب: {new_finance.total_amount:,.0f} ل.س",
         current_user=current_user,
         academic_year_id=new_finance.academic_year_id,
@@ -310,8 +310,8 @@ async def record_student_payment(
         action_type="create",
         entity_type="student_payment",
         entity_id=new_payment.id,
-        entity_name=f"دفعة - {student.student_name if student else student_id}",
-        description=f"تم تسجيل دفعة للطالب {student.student_name if student else student_id}: {new_payment.payment_amount:,.0f} ل.س",
+        entity_name=f"دفعة - {student.full_name if student else student_id}",
+        description=f"تم تسجيل دفعة للطالب {student.full_name if student else student_id}: {new_payment.payment_amount:,.0f} ل.س",
         current_user=current_user,
         academic_year_id=new_payment.academic_year_id,
         amount=float(new_payment.payment_amount),
@@ -321,6 +321,26 @@ async def record_student_payment(
     return new_payment
 
 # Student Academic Records
+@router.get("/{student_id}/academics", response_model=List[StudentAcademicResponse])
+async def get_student_academics(
+    student_id: int,
+    academic_year_id: Optional[int] = Query(None),
+    subject_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get student academic records"""
+    query = db.query(StudentAcademic).filter(StudentAcademic.student_id == student_id)
+    
+    if academic_year_id:
+        query = query.filter(StudentAcademic.academic_year_id == academic_year_id)
+    
+    if subject_id:
+        query = query.filter(StudentAcademic.subject_id == subject_id)
+    
+    academics = query.all()
+    return academics
+
 @router.post("/{student_id}/academics", response_model=StudentAcademicResponse)
 async def create_student_academic(
     student_id: int,
@@ -339,18 +359,14 @@ async def create_student_academic(
     student = db.query(Student).filter(Student.id == student_id).first()
     
     # Log history
-    log_student_action(
-        db=db,
-        action_type="create",
-        entity_type="student_academic",
-        entity_id=new_academic.id,
-        entity_name=f"سجل أكاديمي - {student.student_name if student else student_id}",
-        description=f"تم إنشاء سجل أكاديمي للطالب",
-        current_user=current_user,
-        student_id=student_id,
-        academic_year_id=new_academic.academic_year_id,
-        new_values=academic_data.dict()
-    )
+    if student:
+        log_student_action(
+            db=db,
+            action_type="create",
+            student=student,
+            current_user=current_user,
+            new_values=academic_data.dict()
+        )
     
     return new_academic
 
@@ -387,18 +403,15 @@ async def update_student_academic(
     student = db.query(Student).filter(Student.id == student_id).first()
     
     # Log history
-    log_student_action(
-        db=db,
-        action_type="update",
-        entity_type="student_academic",
-        entity_id=academic.id,
-        entity_name=f"سجل أكاديمي - {student.student_name if student else student_id}",
-        description=f"تم تعديل سجل أكاديمي للطالب",
-        current_user=current_user,
-        student_id=student_id,
-        old_values=old_values,
-        new_values=academic_data.dict(exclude_unset=True)
-    )
+    if student:
+        log_student_action(
+            db=db,
+            action_type="update",
+            student=student,
+            current_user=current_user,
+            old_values=old_values,
+            new_values=academic_data.dict(exclude_unset=True)
+        )
     
     return academic
 
