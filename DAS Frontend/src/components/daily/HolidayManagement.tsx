@@ -238,18 +238,14 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
   
   return (
     <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white rounded-t-lg">
+      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               إدارة أيام العطلة
             </CardTitle>
-            <Badge className={`${
-              sessionType === 'morning' 
-                ? 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700' 
-                : 'bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700'
-            } text-white`}>
+            <Badge className="bg-accent text-accent-foreground">
               {sessionType === 'morning' ? '🌅 الفترة الصباحية' : '🌆 الفترة المسائية'}
             </Badge>
           </div>
@@ -258,7 +254,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
               size="sm"
               variant="outline" 
               onClick={goToToday}
-              className="text-white border-white hover:bg-white/20 flex items-center gap-1.5"
+              className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground/20 flex items-center gap-1.5"
             >
               <CalendarDays className="h-4 w-4" />
               العودة لليوم
@@ -268,23 +264,23 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
       </CardHeader>
       <CardContent className="p-6">
         {/* شريط التنقل بين الأشهر */}
-        <div className="flex items-center justify-between mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+        <div className="flex items-center justify-between mb-6 bg-muted p-3 rounded-lg">
           <Button
             variant="outline"
             size="sm"
             onClick={goToPreviousMonth}
-            className="hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            className="hover:bg-primary/10"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           
           <div className="text-center">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            <h3 className="text-lg font-bold text-foreground">
               {formatMonthYear(currentMonth)}
             </h3>
             {currentMonth.getMonth() === today.getMonth() && 
              currentMonth.getFullYear() === today.getFullYear() && (
-              <p className="text-xs text-blue-600 dark:text-blue-400">
+              <p className="text-xs text-primary">
                 {getArabicDayName(today)} - {today.getDate()} {formatMonthYear(today).split(' ')[0]}
               </p>
             )}
@@ -294,7 +290,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             variant="outline"
             size="sm"
             onClick={goToNextMonth}
-            className="hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            className="hover:bg-primary/10"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -305,7 +301,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
           {['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day) => (
             <div 
               key={day} 
-              className="text-center font-semibold text-xs py-2 rounded text-gray-700 dark:text-gray-300"
+              className="text-center font-semibold text-xs py-2 rounded text-muted-foreground"
             >
               {day}
             </div>
@@ -335,31 +331,31 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
                 className={`
                   aspect-square p-1 text-center rounded-lg border-2 transition-all duration-200
                   ${isTodayDate 
-                    ? 'ring-2 ring-green-500 ring-offset-2 dark:ring-offset-gray-900' 
+                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-background' 
                     : ''
                   }
                   ${isSelected 
-                    ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900 bg-blue-100 dark:bg-blue-900/40' 
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/10' 
                     : isHol
-                      ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 hover:bg-amber-200 dark:hover:bg-amber-900/50'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600'
+                      ? 'bg-accent/10 border-accent hover:bg-accent/20'
+                      : 'bg-card border-border hover:bg-primary/5 hover:border-primary'
                   }
                 `}
                 title={holiday?.holiday_name || (isDefault ? 'عطلة نهاية الأسبوع' : '')}
               >
                 <div className={`text-sm font-semibold ${
                   isSelected
-                    ? 'text-blue-700 dark:text-blue-400'
+                    ? 'text-primary'
                     : isTodayDate 
-                      ? 'text-green-700 dark:text-green-400' 
+                      ? 'text-accent' 
                       : isHol
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-gray-900 dark:text-gray-100'
+                        ? 'text-accent'
+                        : 'text-foreground'
                 }`}>
                   {date.getDate()}
                 </div>
                 {isHol && (
-                  <div className="text-[9px] leading-tight mt-0.5 text-amber-700 dark:text-amber-300 font-medium">
+                  <div className="text-[9px] leading-tight mt-0.5 text-accent font-medium">
                     عطلة
                   </div>
                 )}
@@ -370,30 +366,30 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
         
         {/* تنبيه الخطأ */}
         {error && (
-          <Alert className="mt-4 border-amber-400 bg-amber-50 dark:bg-amber-950/30">
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="text-amber-800 dark:text-amber-200">
+          <Alert className="mt-4 border-accent bg-accent/10">
+            <AlertCircle className="h-4 w-4 text-accent" />
+            <AlertDescription className="text-accent-foreground">
               {error}
             </AlertDescription>
           </Alert>
         )}
 
         {/* معلومات توضيحية */}
-        <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+        <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700"></div>
+            <div className="w-4 h-4 rounded bg-card border-2 border-border"></div>
             <span>يوم عادي</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600"></div>
+            <div className="w-4 h-4 rounded bg-accent/10 border-2 border-accent"></div>
             <span>عطلة (رسمية أو أسبوعية)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900/40"></div>
+            <div className="w-4 h-4 rounded ring-2 ring-primary bg-primary/10"></div>
             <span>اليوم المحدد من الصفحة الرئيسية</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded ring-2 ring-green-500"></div>
+            <div className="w-4 h-4 rounded ring-2 ring-accent"></div>
             <span>اليوم الفعلي (الحاضر)</span>
           </div>
         </div>
@@ -405,7 +401,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle className="text-xl">إضافة عطلة</DialogTitle>
-              <DialogDescription className="text-gray-600 dark:text-gray-400">
+              <DialogDescription className="text-muted-foreground">
                 {selectedDate && new Date(selectedDate).toLocaleDateString('ar-EG', { 
                   weekday: 'long', 
                   year: 'numeric', 
@@ -417,7 +413,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="holidayName" className="text-gray-900 dark:text-gray-100">
+                <Label htmlFor="holidayName" className="text-foreground">
                   اسم العطلة (اختياري)
                 </Label>
                 <Input
@@ -425,12 +421,11 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
                   value={holidayName}
                   onChange={(e) => setHolidayName(e.target.value)}
                   placeholder="مثال: عيد الفطر، عيد الأضحى..."
-                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes" className="text-gray-900 dark:text-gray-100">
+                <Label htmlFor="notes" className="text-foreground">
                   ملاحظات (اختياري)
                 </Label>
                 <Input
@@ -438,12 +433,11 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="ملاحظات إضافية..."
-                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                 />
               </div>
             </div>
 
-            <div className="flex gap-2 justify-end pt-4 border-t dark:border-gray-700">
+            <div className="flex gap-2 justify-end pt-4 border-t border-border">
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -451,14 +445,12 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
                   resetForm();
                 }}
                 disabled={loading}
-                className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
               >
                 إلغاء
               </Button>
               <Button 
                 onClick={handleSaveHoliday}
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 {loading ? 'جاري الحفظ...' : 'حفظ العطلة'}
               </Button>

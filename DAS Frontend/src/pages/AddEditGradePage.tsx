@@ -319,8 +319,8 @@ const AddEditGradePage = () => {
           : (existingSubjectsResponse?.data || []);
         
         // Create maps for efficient lookup
-        const existingSubjectsMap = new Map(
-          existingSubjects.map((s: Subject) => [s.id, s])
+        const existingSubjectsMap = new Map<number, Subject>(
+          existingSubjects.filter((s: Subject) => s.id !== undefined).map((s: Subject) => [s.id!, s])
         );
         const newSubjectsMap = new Map(
           subjects.map((s, index) => [s.subject_name.toLowerCase().trim(), { ...s, index }])
@@ -332,8 +332,8 @@ const AddEditGradePage = () => {
           
           // Find existing subject with same name (case-insensitive)
           const existingSubject = Array.from(existingSubjectsMap.values()).find(
-            (s: Subject) => s.subject_name.toLowerCase().trim() === normalizedName
-          );
+            (s) => s.subject_name.toLowerCase().trim() === normalizedName
+          ) as Subject | undefined;
 
           if (existingSubject && existingSubject.id) {
             // Update existing subject if weekly_hours changed
@@ -388,29 +388,29 @@ const AddEditGradePage = () => {
 
         // Delete subjects that are no longer in the new list
         // Only delete if they have no teacher assignments (to preserve assignments)
+        let hasDeleteErrors = false;
+        const failedSubjects: string[] = [];
+        
         for (const [subjectId, existingSubject] of existingSubjectsMap.entries()) {
           if (existingSubject.id) {
             try {
               // Try to delete - backend will check for assignments
               await api.subjects.delete(existingSubject.id);
             } catch (error: any) {
-              // If deletion fails due to existing assignments, mark as inactive instead
-              const errorMessage = error.response?.data?.detail || error.message || '';
-              const hasAssignments = errorMessage.includes('assignments') || 
-                                    errorMessage.includes('توزيعات') ||
-                                    errorMessage.includes('مرتبطة بتوزيعات');
+              // If deletion fails, show warning to user
+              const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'خطأ غير معروف';
+              const statusCode = error.response?.status || error.status;
               
-              if (hasAssignments) {
-                // Subject has assignments, mark as inactive instead of deleting
-                try {
-                  await api.subjects.update(existingSubject.id, {
-                    is_active: false,
-                  });
-                  console.log(`Subject ${existingSubject.subject_name} marked as inactive due to existing assignments`);
-                } catch (updateError) {
-                  console.warn(`Could not deactivate subject ${existingSubject.id}:`, updateError);
-                  // Don't throw - just log the warning and continue
-                }
+              console.log('DEBUG - Full Error:', error);
+              console.log('DEBUG - Status Code:', statusCode);
+              console.log('DEBUG - Error Message:', errorMessage);
+              
+              // Show toast for any deletion error (most likely due to assignments)
+              // Since the error message exists, it means deletion failed
+              if (errorMessage && errorMessage !== 'خطأ غير معروف') {
+                hasDeleteErrors = true;
+                failedSubjects.push(existingSubject.subject_name);
+                console.log('DEBUG - Cannot delete subject:', existingSubject.subject_name, errorMessage);
               } else {
                 // Other error (e.g., not found), log but don't throw to allow process to continue
                 console.warn(`Could not delete subject ${existingSubject.id}:`, errorMessage);
@@ -419,10 +419,21 @@ const AddEditGradePage = () => {
           }
         }
 
-        toast({
-          title: 'نجح',
-          description: 'تم تحديث الصف والمواد بنجاح',
-        });
+        // Show success message with appropriate text
+        if (hasDeleteErrors) {
+          const failedSubjectsList = failedSubjects.join('، ');
+          toast({
+            title: '⚠️ تحديث جزئي',
+            description: `تم تحديث الصف بنجاح، لكن لم يتم حذف المواد التالية لارتباطها بتوزيعات أساتذة: ${failedSubjectsList}. يرجى إزالة التوزيعات أولاً إذا أردت حذف هذه المواد.`,
+            variant: 'destructive',
+            duration: 12000,
+          });
+        } else {
+          toast({
+            title: 'نجح',
+            description: 'تم تحديث الصف والمواد بنجاح',
+          });
+        }
       } else {
         // Create new class
         const response = await api.classes.create({

@@ -376,20 +376,16 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
   return (
     <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-purple-600 to-violet-700 dark:from-purple-800 dark:to-violet-900 text-white rounded-t-lg">
+      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
         <CardTitle className="flex items-center gap-2 justify-between">
           <div className="flex items-center gap-3">
             <FileText className="h-5 w-5" />
             <span>الإجراءات السريعة على الطلاب</span>
-            <Badge className={`${
-              sessionType === 'morning' 
-                ? 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700' 
-                : 'bg-purple-900 hover:bg-purple-950 dark:bg-purple-950 dark:hover:bg-black'
-            } text-white`}>
+            <Badge className="bg-accent text-accent-foreground">
               {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
             </Badge>
           </div>
-          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm" className="text-white border-white hover:bg-white/20">
+          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm" className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground/20">
             <Send className="h-4 w-4 ml-2" />
             إرسال للأهل
           </Button>
@@ -399,13 +395,13 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
         {/* اختيار المرحلة والصف والشعبة */}
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">المرحلة</label>
+            <label className="block text-sm font-semibold mb-2 text-foreground">المرحلة</label>
             <Select value={selectedGradeLevel} onValueChange={(val) => {
               setSelectedGradeLevel(val);
               setSelectedClassId(null);
               setSelectedSection('');
             }}>
-              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+              <SelectTrigger>
                 <SelectValue placeholder="اختر المرحلة" />
               </SelectTrigger>
               <SelectContent>
@@ -419,12 +415,12 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">الصف</label>
+            <label className="block text-sm font-semibold mb-2 text-foreground">الصف</label>
             <Select value={selectedClassId?.toString()} onValueChange={(val) => {
               setSelectedClassId(parseInt(val));
               setSelectedSection('');
             }} disabled={!selectedGradeLevel}>
-              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+              <SelectTrigger>
                 <SelectValue placeholder="اختر الصف" />
               </SelectTrigger>
               <SelectContent>
@@ -438,9 +434,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">الشعبة</label>
+            <label className="block text-sm font-semibold mb-2 text-foreground">الشعبة</label>
             <Select value={selectedSection} onValueChange={setSelectedSection} disabled={!selectedClassId}>
-              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+              <SelectTrigger>
                 <SelectValue placeholder="اختر الشعبة" />
               </SelectTrigger>
               <SelectContent>
@@ -462,13 +458,13 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
           <>
             {/* شريط البحث */}
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 type="text"
                 placeholder="ابحث عن طالب..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-10 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                className="pr-10"
               />
             </div>
 
@@ -477,13 +473,12 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
               {filteredStudents.map(student => (
                 <div
                   key={student.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                 >
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{student.full_name}</span>
+                  <span className="font-semibold text-foreground">{student.full_name}</span>
                   <Button
                     size="sm"
                     onClick={() => openActionDialog(student)}
-                    className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
                   >
                     إضافة إجراء
                   </Button>
@@ -494,41 +489,41 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             {/* إجراءات اليوم */}
             {todayActions.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">
+                <h3 className="text-lg font-bold mb-4 text-foreground">
                   📋 إجراءات اليوم ({todayActions.length})
                 </h3>
                 <div className="space-y-3">
                   {todayActions.map(action => (
-                    <Card key={action.id} className="border-purple-200 dark:border-purple-800">
+                    <Card key={action.id} className="border-primary">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <span className="font-bold text-gray-900 dark:text-gray-100">
+                              <span className="font-bold text-foreground">
                                 {action.student_name}
                               </span>
-                              <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                              <Badge className="bg-primary/10 text-primary">
                                 {action.action_type_label}
                               </Badge>
                               {action.subject_name && (
-                                <Badge variant="outline" className="dark:border-gray-600 dark:text-gray-300">
+                                <Badge variant="outline">
                                   📚 {action.subject_name}
                                 </Badge>
                               )}
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                              <span className="text-xs text-muted-foreground">
                                 {new Date(action.action_date).toLocaleDateString('ar-SA')}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            <p className="text-sm text-foreground mb-2">
                               {action.description}
                             </p>
                             {action.grade !== null && action.max_grade !== null && (
-                              <div className="text-sm text-gray-600 dark:text-gray-400">
+                              <div className="text-sm text-muted-foreground">
                                 <span className="font-medium">العلامة:</span> {action.grade}/{action.max_grade}
                               </div>
                             )}
                             {action.notes && (
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              <div className="text-sm text-muted-foreground mt-1">
                                 <span className="font-medium">ملاحظات:</span> {action.notes}
                               </div>
                             )}
@@ -538,7 +533,6 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                               size="sm"
                               variant="outline"
                               onClick={() => handleEditAction(action)}
-                              className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                             >
                               تعديل
                             </Button>
@@ -562,30 +556,30 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
         {/* نافذة إضافة إجراء */}
         <Dialog open={showActionDialog} onOpenChange={setShowActionDialog}>
-          <DialogContent className="max-w-2xl dark:bg-gray-900 dark:border-gray-700">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="dark:text-white">
+              <DialogTitle className="text-foreground">
                 {editingAction ? 'تعديل إجراء' : 'إضافة إجراء'} - {selectedStudent?.full_name}
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">نوع الإجراء</label>
+                <label className="block text-sm font-semibold mb-2 text-foreground">نوع الإجراء</label>
                 <Select value={actionType} onValueChange={setActionType}>
-                  <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                  <SelectTrigger>
                     <SelectValue placeholder="اختر نوع الإجراء" />
                   </SelectTrigger>
                   <SelectContent>
-                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">إجراءات بدون مادة</div>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">إجراءات بدون مادة</div>
                     {Object.entries(ACTION_TYPES.WITHOUT_SUBJECT).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
-                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400 mt-2">إجراءات مع مادة</div>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground mt-2">إجراءات مع مادة</div>
                     {Object.entries(ACTION_TYPES.WITH_SUBJECT).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
-                    <div className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400 mt-2">إجراءات أكاديمية</div>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground mt-2">إجراءات أكاديمية</div>
                     {Object.entries(ACTION_TYPES.ACADEMIC).map(([key, label]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
@@ -595,9 +589,9 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
               {requiresSubject() && (
                 <div>
-                  <label className="block text-sm font-semibold mb-2 dark:text-gray-200">المادة</label>
+                  <label className="block text-sm font-semibold mb-2 text-foreground">المادة</label>
                   <Select value={selectedSubjectId?.toString()} onValueChange={(val) => setSelectedSubjectId(parseInt(val))}>
-                    <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                    <SelectTrigger>
                       <SelectValue placeholder="اختر المادة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -612,48 +606,44 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
               )}
 
               <div>
-                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">التفاصيل / السبب</label>
+                <label className="block text-sm font-semibold mb-2 text-foreground">التفاصيل / السبب</label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="اكتب تفاصيل الإجراء أو السبب..."
                   rows={3}
-                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
 
               {isAcademicAction() && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold mb-2 dark:text-gray-200">العلامة</label>
+                    <label className="block text-sm font-semibold mb-2 text-foreground">العلامة</label>
                     <Input
                       type="number"
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
                       placeholder="0"
-                      className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold mb-2 dark:text-gray-200">العلامة الكاملة</label>
+                    <label className="block text-sm font-semibold mb-2 text-foreground">العلامة الكاملة</label>
                     <Input
                       type="number"
                       value={maxGrade}
                       onChange={(e) => setMaxGrade(e.target.value)}
                       placeholder="10"
-                      className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                     />
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">ملاحظات إضافية</label>
+                <label className="block text-sm font-semibold mb-2 text-foreground">ملاحظات إضافية</label>
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="ملاحظات..."
-                  className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
 
@@ -675,20 +665,20 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
         {/* نافذة رسالة الواتساب */}
         <Dialog open={showWhatsAppDialog} onOpenChange={setShowWhatsAppDialog}>
-          <DialogContent className="max-w-2xl dark:bg-gray-900 dark:border-gray-700">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="dark:text-white">إرسال التقرير اليومي للأهل</DialogTitle>
+              <DialogTitle className="text-foreground">إرسال التقرير اليومي للأهل</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">رابط مجموعة الواتساب</label>
+                <label className="block text-sm font-semibold mb-2 text-foreground">رابط مجموعة الواتساب</label>
                 <div className="flex gap-2">
                   <Input
                     value={whatsappLink}
                     onChange={(e) => setWhatsappLink(e.target.value)}
                     placeholder="https://chat.whatsapp.com/..."
-                    className="flex-1 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                    className="flex-1"
                   />
                   <Button
                     onClick={async () => {
@@ -710,7 +700,6 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                       }
                     }}
                     variant="outline"
-                    className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                   >
                     حفظ
                   </Button>
@@ -718,12 +707,12 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2 dark:text-gray-200">محتوى الرسالة</label>
+                <label className="block text-sm font-semibold mb-2 text-foreground">محتوى الرسالة</label>
                 <Textarea
                   value={whatsappMessage}
                   onChange={(e) => setWhatsappMessage(e.target.value)}
                   rows={10}
-                  className="font-mono text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                  className="font-mono text-sm"
                 />
               </div>
 
@@ -731,7 +720,7 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                 <Button variant="outline" onClick={() => setShowWhatsAppDialog(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleSendToWhatsApp} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleSendToWhatsApp}>
                   <Send className="h-4 w-4 ml-2" />
                   إرسال عبر الواتساب
                 </Button>

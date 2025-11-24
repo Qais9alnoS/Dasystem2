@@ -147,31 +147,26 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   const actualWidth = customWidth || (isCollapsed ? 80 : 288);
   const showText = actualWidth > 150;
 
-  // Navigation items with role-based access control
+  // Navigation items with role-based access control and grouping
   const allNavItems = [
+    // المجموعة 1: لوحة التحكم والصفحة اليومية وملاحظات المدير
     {
       name: 'لوحة التحكم',
       href: '/dashboard',
       icon: LayoutDashboard,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
     },
     {
-      name: 'السنوات الدراسية',
-      href: '/academic-years',
-      icon: Calendar,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
-    },
-    {
-      name: 'معلومات المدرسة',
-      href: '/school-info',
-      icon: School,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+      name: 'الصفحة اليومية',
+      href: '/daily',
+      icon: ClipboardList,
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
     },
     {
       name: 'ملاحظات المدير',
       href: '/director/notes',
       icon: StickyNote,
-      allowedRoles: ['director'], // Director only
+      allowedRoles: ['director'],
       subItems: [
         {
           name: 'الأهداف',
@@ -205,10 +200,19 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
         },
       ],
     },
+    { divider: true, allowedRoles: ['director'] },
+    
+    // المجموعة 2: معلومات المدرسة والطلاب والأساتذة
+    {
+      name: 'معلومات المدرسة',
+      href: '/school-info',
+      icon: School,
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
+    },
     {
       name: 'الطلاب',
       icon: GraduationCap,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
       subItems: [
         {
           name: 'معلومات شخصية',
@@ -225,82 +229,109 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           href: '/students/analytics',
           icon: BarChart3,
         },
+        {
+          name: 'معلومات مالية',
+          href: '/finance?tab=students',
+          icon: DollarSign,
+          allowedRoles: ['director'],
+        },
       ],
     },
     {
       name: 'الأساتذة',
       href: '/teachers',
       icon: Users,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
+    },
+    { divider: true, allowedRoles: ['director'] },
+    
+    // المجموعة 3: الصندوق وإدارة الجداول والنشاطات
+    {
+      name: 'الصندوق',
+      href: '/finance?tab=treasury',
+      icon: Wallet,
+      allowedRoles: ['finance', 'director'],
     },
     {
       name: 'إدارة الجداول',
       href: '/schedules',
       icon: CalendarDays,
-      allowedRoles: ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'], // All supervisors and directors
-    },
-    {
-      name: 'الصفحة اليومية',
-      href: '/daily',
-      icon: ClipboardList,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Morning and Evening school staff
+      allowedRoles: ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'],
     },
     {
       name: 'النشاطات',
       href: '/activities',
       icon: Trophy,
-      allowedRoles: ['director'], // Director only
+      allowedRoles: ['director'],
     },
+    { divider: true, allowedRoles: ['director'] },
+    
+    // المجموعة 4: التحليلات
     {
       name: 'التحليلات',
       href: '/analytics',
       icon: TrendingUp,
-      allowedRoles: ['director', 'morning_school', 'evening_school'], // Not for finance
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
     },
     {
       name: 'التحليلات الشاملة',
       href: '/director/analytics',
       icon: BarChart3,
-      allowedRoles: ['director'], // Director only
-    },
-    {
-      name: 'إدارة تسجيل الدخول',
-      href: '/user-management',
-      icon: Key,
-      allowedRoles: ['director'], // Director only
-    },
-    // Finance Manager specific sections
-    {
-      name: 'الصندوق',
-      href: '/finance?tab=treasury',
-      icon: Wallet,
-      allowedRoles: ['finance'], // Finance only
-    },
-    {
-      name: 'الطلاب',
-      href: '/finance?tab=students',
-      icon: Users,
-      allowedRoles: ['finance'], // Finance only
-    },
-    {
-      name: 'السنة الدراسية',
-      href: '/finance?tab=year',
-      icon: Calendar,
-      allowedRoles: ['finance'], // Finance only
+      allowedRoles: ['director'],
     },
     {
       name: 'التحليلات المالية',
       href: '/finance/analytics',
       icon: PieChart,
-      allowedRoles: ['finance', 'director'], // Finance and Director
+      allowedRoles: ['finance', 'director'],
     },
-    // Add more navigation items here as needed
+    { divider: true, allowedRoles: ['director'] },
+    
+    // المجموعة 5: السنوات الدراسية وإدارة تسجيل الدخول
+    {
+      name: 'السنوات الدراسية',
+      href: '/academic-years',
+      icon: Calendar,
+      allowedRoles: ['director', 'morning_school', 'evening_school'],
+    },
+    {
+      name: 'إدارة تسجيل الدخول',
+      href: '/user-management',
+      icon: Key,
+      allowedRoles: ['director'],
+    },
+    
+    // Finance Manager specific sections
+    {
+      name: 'الطلاب',
+      href: '/finance?tab=students',
+      icon: Users,
+      allowedRoles: ['finance'],
+    },
+    {
+      name: 'السنة الدراسية',
+      href: '/finance?tab=year',
+      icon: Calendar,
+      allowedRoles: ['finance'],
+    },
   ];
 
   // Filter navigation items based on user role
   const navItems = allNavItems.filter(item => {
     if (!item.allowedRoles) return true; // If no roles specified, show to all
     return authState.user && item.allowedRoles.includes(authState.user.role);
+  }).map(item => {
+    // Filter sub-items based on user role if they have allowedRoles
+    if ('subItems' in item && item.subItems) {
+      return {
+        ...item,
+        subItems: item.subItems.filter(subItem => {
+          if (!('allowedRoles' in subItem) || !subItem.allowedRoles) return true;
+          return authState.user && Array.isArray((subItem as any).allowedRoles) && (subItem as any).allowedRoles.includes(authState.user.role);
+        })
+      };
+    }
+    return item;
   });
 
   return (
@@ -352,7 +383,16 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1.5 px-3 py-4 overflow-y-auto">
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
+          // Handle dividers
+          if ('divider' in item && item.divider) {
+            return (
+              <div key={`divider-${index}`} className="py-2">
+                <div className="border-t border-border/50"></div>
+              </div>
+            );
+          }
+
           const Icon = item.icon;
           const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
           const isExpanded = expandedSections.includes(item.name);
@@ -369,7 +409,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                     <NavLink
                       to={item.href}
                       className={({ isActive }) =>
-                        `w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                        `w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
                           isActive || isActiveSection
                             ? 'bg-primary/10 text-primary'
                             : 'text-foreground hover:bg-muted'
@@ -388,7 +428,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                   ) : (
                     <button
                       onClick={() => toggleSection(item.name)}
-                      className={`w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
                         isActiveSection
                           ? 'bg-primary/10 text-primary'
                           : 'text-foreground hover:bg-muted'
@@ -422,7 +462,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                             key={subItem.name}
                             to={subItem.href}
                             className={({ isActive }) =>
-                              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
                                 isActive
                                   ? 'bg-primary text-primary-foreground'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -453,7 +493,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                 const isActive = currentPath === item.href || 
                                 (item.href.includes('?') && currentPath.startsWith(item.href));
                 
-                return `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                return `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted'

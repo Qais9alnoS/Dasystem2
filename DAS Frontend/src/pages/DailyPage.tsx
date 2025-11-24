@@ -152,9 +152,9 @@ export default function DailyPage() {
       </Card>
 
       {/* Date Indicator */}
-      <Card className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 shadow-md animate-in fade-in slide-in-from-top-2 duration-300" key={dateKey}>
+      <Card className="border-2 border-primary/30 bg-primary/5 shadow-md animate-in fade-in slide-in-from-top-2 duration-300" key={dateKey}>
         <CardContent className="py-3">
-          <div className="flex items-center justify-center gap-3 text-blue-900 dark:text-blue-100">
+          <div className="flex items-center justify-center gap-3 text-primary">
             <CalendarDays className="h-5 w-5" />
             <span className="font-bold text-lg">
               البيانات المعروضة لتاريخ: {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ar', { 
@@ -178,7 +178,7 @@ export default function DailyPage() {
                 className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
                   sessionType === 'morning'
                     ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 🌅 الفترة الصباحية
@@ -188,7 +188,7 @@ export default function DailyPage() {
                 className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
                   sessionType === 'evening'
                     ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 🌆 الفترة المسائية
@@ -216,15 +216,15 @@ export default function DailyPage() {
 
         <TabsContent value="attendance" className="space-y-6">
           {isHoliday ? (
-            <Card className="border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30">
+            <Card className="border-2 border-accent bg-accent/10">
               <CardContent className="py-12">
                 <div className="text-center space-y-4">
                   <div className="text-6xl">🏖️</div>
                   <div>
-                    <h3 className="text-2xl font-bold text-amber-900 dark:text-amber-100 mb-2">
+                    <h3 className="text-2xl font-bold text-accent-foreground mb-2">
                       يوم عطلة
                     </h3>
-                    <p className="text-amber-700 dark:text-amber-300 text-lg">
+                    <p className="text-muted-foreground text-lg">
                       {holidayInfo?.holiday_name || holidayInfo?.name || 'لا يوجد حضور في أيام العطل'}
                     </p>
                   </div>
