@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+import re
 
 class AcademicYearBase(BaseModel):
     year_name: str
@@ -8,12 +9,55 @@ class AcademicYearBase(BaseModel):
     is_active: bool = False
 
 class AcademicYearCreate(AcademicYearBase):
-    pass
+    @field_validator('year_name')
+    @classmethod
+    def validate_year_name_format(cls, v: str) -> str:
+        """
+        Validate that year_name follows the format 20xx-20xy where y = x + 1
+        Examples: 2023-2024, 2024-2025, etc.
+        """
+        pattern = r'^20(\d{2})-20(\d{2})$'
+        match = re.match(pattern, v)
+        
+        if not match:
+            raise ValueError('اسم السنة يجب أن يكون بصيغة 20xx-20xy (مثال: 2023-2024)')
+        
+        first_year = int(match.group(1))
+        second_year = int(match.group(2))
+        
+        if second_year != first_year + 1:
+            raise ValueError('السنة الثانية يجب أن تكون أكبر من السنة الأولى بسنة واحدة (مثال: 2023-2024)')
+        
+        return v
 
 class AcademicYearUpdate(BaseModel):
     year_name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    
+    @field_validator('year_name')
+    @classmethod
+    def validate_year_name_format(cls, v: Optional[str]) -> Optional[str]:
+        """
+        Validate that year_name follows the format 20xx-20xy where y = x + 1
+        Examples: 2023-2024, 2024-2025, etc.
+        """
+        if v is None:
+            return v
+            
+        pattern = r'^20(\d{2})-20(\d{2})$'
+        match = re.match(pattern, v)
+        
+        if not match:
+            raise ValueError('اسم السنة يجب أن يكون بصيغة 20xx-20xy (مثال: 2023-2024)')
+        
+        first_year = int(match.group(1))
+        second_year = int(match.group(2))
+        
+        if second_year != first_year + 1:
+            raise ValueError('السنة الثانية يجب أن تكون أكبر من السنة الأولى بسنة واحدة (مثال: 2023-2024)')
+        
+        return v
 
 class AcademicYearResponse(AcademicYearBase):
     id: int
@@ -61,6 +105,7 @@ class GradeSettings(BaseModel):
     max_grade: int
     passing_threshold: float
     threshold_type: str  # 'percentage' or 'absolute'
+    calculation_type: str = 'direct'  # 'direct' or 'automatic_average'
 
 class AcademicSettingsBase(BaseModel):
     academic_year_id: int

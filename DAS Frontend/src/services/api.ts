@@ -127,6 +127,22 @@ class ApiClient {
           );
         }
 
+        // Handle validation errors (422)
+        if (response.status === 422 && errorData?.errors && Array.isArray(errorData.errors)) {
+          // Extract validation error messages
+          const validationMessages = errorData.errors
+            .map((err: any) => err.msg || err.message)
+            .filter(Boolean)
+            .join(', ');
+          
+          throw new ApiError(
+            validationMessages || errorData?.detail || 'خطأ في التحقق من البيانات',
+            response.status,
+            'VALIDATION_ERROR',
+            errorData
+          );
+        }
+
         throw new ApiError(
           errorData?.message || errorData?.detail || `HTTP ${response.status}`,
           response.status,

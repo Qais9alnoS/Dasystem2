@@ -227,30 +227,43 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
     validation_exc = exc  # type: ignore
     client_ip = request.client.host if request.client else "unknown"
     
-    # Log validation errors
+    # Ensure errors are JSON-serializable (avoid bytes and exceptions)
+    def ensure_jsonable(value):
+        # Handle None, bool, int, float, str - basic JSON types
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        # Handle bytes and bytearray
+        if isinstance(value, (bytes, bytearray)):
+            return value.decode("utf-8", errors="ignore")
+        # Handle Exception objects (including ValueError, etc.)
+        if isinstance(value, BaseException):
+            return str(value)
+        # Handle dictionaries recursively
+        if isinstance(value, dict):
+            return {str(k): ensure_jsonable(v) for k, v in value.items()}
+        # Handle lists and tuples recursively
+        if isinstance(value, (list, tuple)):
+            return [ensure_jsonable(item) for item in value]
+        # Handle datetime objects
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        # For any other type, convert to string
+        return str(value)
+
+    serialized_errors = [ensure_jsonable(err) for err in validation_exc.errors()]  # type: ignore
+    
+    # Log validation errors with serialized data
     security_service.log_audit_event(
         user_id=None,
         action="VALIDATION_ERROR",
         table_name="validation_errors",
         ip_address=client_ip,
         new_values={
-            "errors": validation_exc.errors(),  # type: ignore
+            "errors": serialized_errors,
             "path": str(request.url),
             "method": request.method
         }
     )
-    
-    # Ensure errors are JSON-serializable (avoid bytes)
-    def ensure_jsonable(value):
-        if isinstance(value, (bytes, bytearray)):
-            return value.decode("utf-8", errors="ignore")
-        if isinstance(value, dict):
-            return {k: ensure_jsonable(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [ensure_jsonable(v) for v in value]
-        return value
-
-    serialized_errors = [ensure_jsonable(err) for err in validation_exc.errors()]  # type: ignore
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

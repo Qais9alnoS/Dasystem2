@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models import (
     Holiday, StudentDailyAttendance, TeacherPeriodAttendance, 
     StudentAction, WhatsAppGroupConfig, Student, Teacher, 
-    Class, Schedule, AcademicYear, Subject, User, StudentAcademic
+    Class, Schedule, AcademicYear, Subject, User, StudentAcademic,
+    AcademicSettings
 )
 from app.schemas.daily import (
     HolidayCreate, HolidayUpdate, HolidayResponse,
@@ -28,6 +29,12 @@ router = APIRouter()
 
 def update_academic_averages(db: Session, student_id: int, academic_year_id: int, subject_id: int, action_type: str):
     """تحديث المتوسطات الأكاديمية للطالب في مادة معينة"""
+    print(f"\n{'='*60}")
+    print(f"🔄 update_academic_averages called:")
+    print(f"   student_id={student_id}, academic_year_id={academic_year_id}")
+    print(f"   subject_id={subject_id}, action_type={action_type}")
+    print(f"{'='*60}")
+    
     # احصل أو أنشئ سجل StudentAcademic
     student_academic = db.query(StudentAcademic).filter(
         and_(
@@ -38,15 +45,52 @@ def update_academic_averages(db: Session, student_id: int, academic_year_id: int
     ).first()
     
     if not student_academic:
+        print(f"📝 Creating new StudentAcademic record for student {student_id}")
         student_academic = StudentAcademic(
             student_id=student_id,
             academic_year_id=academic_year_id,
             subject_id=subject_id
         )
         db.add(student_academic)
+    else:
+        print(f"✅ Found existing StudentAcademic record (id={student_academic.id})")
+    
+    # احصل على معلومات الطالب لجلب class_id
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        print(f"❌ Student not found!")
+        return
+    
+    print(f"👤 Student: {student.full_name}, class_id={student.class_id}")
+    
+    # احصل على AcademicSettings للمادة
+    academic_settings = db.query(AcademicSettings).filter(
+        and_(
+            AcademicSettings.academic_year_id == academic_year_id,
+            AcademicSettings.class_id == student.class_id,
+            AcademicSettings.subject_id == subject_id
+        )
+    ).first()
+    
+    if academic_settings:
+        print(f"⚙️  Found AcademicSettings (id={academic_settings.id})")
+    else:
+        print(f"⚠️  No AcademicSettings found for year={academic_year_id}, class={student.class_id}, subject={subject_id}")
+        print(f"    This means calculation won't happen (need settings first)")
+        return
     
     # احسب المتوسط حسب نوع الإجراء
     if action_type == 'recitation':
+        # تحقق من أن calculation_type = automatic_average
+        # إذا لم توجد إعدادات أو كان calculation_type != 'automatic_average'، لا نحدث
+        if not academic_settings or not academic_settings.recitation_grades:
+            return
+        
+        calc_type = academic_settings.recitation_grades.get('calculation_type', 'direct')
+        if calc_type != 'automatic_average':
+            # لا تقم بالتحديث إذا كان الإدخال مباشر
+            return
+        
         # احسب متوسط التسميع
         recitations = db.query(StudentAction).filter(
             and_(
@@ -59,11 +103,32 @@ def update_academic_averages(db: Session, student_id: int, academic_year_id: int
         ).all()
         
         if recitations:
-            # حساب النسبة المئوية لكل تسميع ثم المتوسط
-            percentages = [(r.grade / r.max_grade * 100) if r.max_grade else 0 for r in recitations]
-            student_academic.recitation_grades = sum(percentages) / len(percentages)
+            # حساب مجموع الدرجات ومجموع الدرجات القصوى
+            total_grades = sum(float(r.grade) for r in recitations)
+            total_max_grades = sum(float(r.max_grade) if r.max_grade else 0 for r in recitations)
+            
+            # حساب النسبة المئوية
+            percentage = (total_grades / total_max_grades * 100) if total_max_grades else 0
+            
+            # تطبيق النسبة على القيمة القصوى من AcademicSettings
+            if academic_settings and academic_settings.recitation_grades:
+                max_grade = academic_settings.recitation_grades.get('max_grade', 100)
+                student_academic.recitation_grades = (percentage / 100) * max_grade
+            else:
+                # إذا لم يتم تعيين AcademicSettings، استخدم النسبة المئوية فقط
+                student_academic.recitation_grades = percentage
     
     elif action_type == 'activity':
+        # تحقق من أن calculation_type = automatic_average
+        # إذا لم توجد إعدادات أو كان calculation_type != 'automatic_average'، لا نحدث
+        if not academic_settings or not academic_settings.activity_grade:
+            return
+        
+        calc_type = academic_settings.activity_grade.get('calculation_type', 'direct')
+        if calc_type != 'automatic_average':
+            # لا تقم بالتحديث إذا كان الإدخال مباشر
+            return
+        
         # احسب متوسط النشاط
         activities = db.query(StudentAction).filter(
             and_(
@@ -76,11 +141,44 @@ def update_academic_averages(db: Session, student_id: int, academic_year_id: int
         ).all()
         
         if activities:
-            percentages = [(a.grade / a.max_grade * 100) if a.max_grade else 0 for a in activities]
-            student_academic.activity_grade = sum(percentages) / len(percentages)
+            # حساب مجموع الدرجات ومجموع الدرجات القصوى
+            total_grades = sum(float(a.grade) for a in activities)
+            total_max_grades = sum(float(a.max_grade) if a.max_grade else 0 for a in activities)
+            
+            # حساب النسبة المئوية
+            percentage = (total_grades / total_max_grades * 100) if total_max_grades else 0
+            
+            # تطبيق النسبة على القيمة القصوى من AcademicSettings
+            if academic_settings and academic_settings.activity_grade:
+                max_grade = academic_settings.activity_grade.get('max_grade', 100)
+                student_academic.activity_grade = (percentage / 100) * max_grade
+            else:
+                # إذا لم يتم تعيين AcademicSettings، استخدم النسبة المئوية فقط
+                student_academic.activity_grade = percentage
     
     elif action_type == 'quiz':
-        # احسب متوسط السبر (يُحفظ في first_exam_grades)
+        print(f"🔍 Processing quiz action...")
+        
+        # تحقق من أن calculation_type = automatic_average
+        # إذا لم توجد إعدادات أو كان calculation_type != 'automatic_average'، لا نحدث
+        if not academic_settings or not academic_settings.board_grades:
+            print(f"⚠️  No board_grades settings found in AcademicSettings")
+            print(f"    academic_settings exists: {academic_settings is not None}")
+            if academic_settings:
+                print(f"    board_grades exists: {academic_settings.board_grades is not None}")
+                print(f"    board_grades value: {academic_settings.board_grades}")
+            return
+        
+        calc_type = academic_settings.board_grades.get('calculation_type', 'direct')
+        print(f"📊 board_grades calculation_type: '{calc_type}'")
+        
+        if calc_type != 'automatic_average':
+            print(f"⏭️  Skipping update because calculation_type is '{calc_type}' (not automatic_average)")
+            return
+        
+        print(f"✅ calculation_type is 'automatic_average' - proceeding with calculation")
+        
+        # احسب متوسط السبر (يُحفظ في board_grades)
         quizzes = db.query(StudentAction).filter(
             and_(
                 StudentAction.student_id == student_id,
@@ -91,9 +189,38 @@ def update_academic_averages(db: Session, student_id: int, academic_year_id: int
             )
         ).all()
         
+        print(f"📚 Found {len(quizzes)} quiz records")
+        
         if quizzes:
-            percentages = [(q.grade / q.max_grade * 100) if q.max_grade else 0 for q in quizzes]
-            student_academic.board_grades = sum(percentages) / len(percentages)
+            # حساب مجموع الدرجات ومجموع الدرجات القصوى
+            total_grades = sum(float(q.grade) for q in quizzes)
+            total_max_grades = sum(float(q.max_grade) if q.max_grade else 0 for q in quizzes)
+            
+            print(f"   Total grades: {total_grades}, Total max grades: {total_max_grades}")
+            
+            # حساب النسبة المئوية
+            percentage = (total_grades / total_max_grades * 100) if total_max_grades else 0
+            print(f"   Percentage: {percentage:.2f}%")
+            
+            # تطبيق النسبة على القيمة القصوى من AcademicSettings
+            if academic_settings and academic_settings.board_grades:
+                max_grade = academic_settings.board_grades.get('max_grade', 100)
+                calculated_grade = (percentage / 100) * max_grade
+                print(f"   Max grade from settings: {max_grade}")
+                print(f"   Calculated board_grades: {calculated_grade:.2f}")
+                student_academic.board_grades = calculated_grade
+            else:
+                # إذا لم يتم تعيين AcademicSettings، استخدم النسبة المئوية فقط
+                print(f"   Using percentage only: {percentage:.2f}")
+                student_academic.board_grades = percentage
+        else:
+            print(f"⚠️  No quiz records found - cannot calculate average")
+    
+    print(f"\n💾 Committing changes to database...")
+    print(f"   Final board_grades: {student_academic.board_grades}")
+    print(f"   Final recitation_grades: {student_academic.recitation_grades}")
+    print(f"   Final activity_grade: {student_academic.activity_grade}")
+    print(f"{'='*60}\n")
     
     db.commit()
 

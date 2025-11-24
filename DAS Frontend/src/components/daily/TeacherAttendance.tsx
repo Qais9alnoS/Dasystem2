@@ -214,17 +214,13 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
 
   return (
     <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-800 dark:to-indigo-900 text-white rounded-t-lg">
+      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
         <div className="flex items-center gap-3">
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
             حضور الأساتذة
           </CardTitle>
-          <Badge className={`${
-            sessionType === 'morning' 
-              ? 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700' 
-              : 'bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700'
-          } text-white`}>
+          <Badge className="bg-accent text-accent-foreground">
             {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
           </Badge>
         </div>
@@ -232,59 +228,59 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
       <CardContent className="space-y-6 p-6">
         {/* إحصائيات */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 p-4 rounded-xl border border-green-200 dark:border-green-800">
+          <div className="bg-primary/10 p-4 rounded-xl border border-primary">
             <div className="flex items-center justify-between mb-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-              <Badge className="bg-green-600 dark:bg-green-700 text-white">{presentClasses}</Badge>
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <Badge className="bg-primary text-primary-foreground">{presentClasses}</Badge>
             </div>
-            <div className="text-sm font-medium text-green-900 dark:text-green-100">حصص حضور</div>
+            <div className="text-sm font-medium text-primary">حصص حضور</div>
           </div>
-          <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 p-4 rounded-xl border border-red-200 dark:border-red-800">
+          <div className="bg-destructive/10 p-4 rounded-xl border border-destructive">
             <div className="flex items-center justify-between mb-2">
-              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <Badge className="bg-red-600 dark:bg-red-700 text-white">{absentClasses}</Badge>
+              <XCircle className="h-5 w-5 text-destructive" />
+              <Badge className="bg-destructive text-destructive-foreground">{absentClasses}</Badge>
             </div>
-            <div className="text-sm font-medium text-red-900 dark:text-red-100">حصص غياب</div>
+            <div className="text-sm font-medium text-destructive">حصص غياب</div>
           </div>
-          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+          <div className="bg-accent/10 p-4 rounded-xl border border-accent">
             <div className="flex items-center justify-between mb-2">
-              <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <Badge className="bg-blue-600 dark:bg-blue-700 text-white">{totalClasses}</Badge>
+              <BookOpen className="h-5 w-5 text-accent" />
+              <Badge className="bg-accent text-accent-foreground">{totalClasses}</Badge>
             </div>
-            <div className="text-sm font-medium text-blue-900 dark:text-blue-100">مجموع الحصص</div>
+            <div className="text-sm font-medium text-accent">مجموع الحصص</div>
           </div>
         </div>
 
         {/* شريط البحث */}
         <div className="relative">
-          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             type="text"
             placeholder="ابحث عن أستاذ..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pr-10 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+            className="pr-10"
           />
         </div>
 
         {/* قائمة الأساتذة */}
         <div className="max-h-[600px] overflow-y-auto space-y-4 pr-2">
           {loading ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <div className="text-center py-8 text-muted-foreground">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-2"></div>
               <p>جاري تحميل جداول الأساتذة...</p>
             </div>
           ) : filteredTeachers.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>لا يوجد أساتذة لديهم حصص في هذا اليوم</p>
             </div>
           ) : (
             filteredTeachers.map(teacher => (
-              <Card key={teacher.teacher_id} className="border-2 border-gray-200 dark:border-gray-700">
-                <CardHeader className="pb-3 bg-gray-50 dark:bg-gray-800/50">
+              <Card key={teacher.teacher_id} className="border-2 border-border">
+                <CardHeader className="pb-3 bg-muted/50">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <Users className="h-5 w-5 text-primary" />
                     {teacher.teacher_name}
                     <Badge variant="outline" className="mr-auto">
                       {teacher.classes.length} حصة
@@ -297,25 +293,25 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
                       key={cls.schedule_id ?? `${teacher.teacher_id}-${cls.period_number}-${idx}`}
                       className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all duration-200 ${
                         cls.is_present
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                          ? 'bg-primary/10 border-primary'
+                          : 'bg-destructive/10 border-destructive'
                       }`}
                     >
                       <div className="flex items-center gap-3 flex-1">
                         {cls.is_present ? (
-                          <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          <UserCheck className="h-5 w-5 text-primary" />
                         ) : (
-                          <UserX className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          <UserX className="h-5 w-5 text-destructive" />
                         )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                            <span className="font-semibold text-foreground">
                               الحصة {cls.period_number}
                             </span>
                             <Badge variant="secondary" className="text-xs">
                               {cls.subject_name}
                             </Badge>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="text-sm text-muted-foreground">
                               {getGradeLevelLabel(cls.grade_level)} - الصف {cls.grade_number} / {cls.section}
                             </span>
                           </div>
@@ -325,11 +321,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
                         size="sm"
                         variant={cls.is_present ? 'default' : 'destructive'}
                         onClick={() => toggleClassAttendance(teacher.teacher_id, cls.schedule_id ?? null, cls.period_number)}
-                        className={`min-w-[80px] ${
-                          cls.is_present
-                            ? 'bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800'
-                            : 'bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800'
-                        }`}
+                        className="min-w-[80px]"
                       >
                         {cls.is_present ? 'حاضر' : 'غائب'}
                       </Button>
@@ -345,7 +337,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
         {filteredTeachers.length > 0 && (
           <Button 
             onClick={handleSaveAttendance} 
-            className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800" 
+            className="w-full" 
             size="lg"
             disabled={saving}
           >
