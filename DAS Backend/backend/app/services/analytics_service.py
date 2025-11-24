@@ -138,33 +138,56 @@ class AnalyticsService:
         try:
             stats = {}
             
-            # Student count
-            student_query = db.query(func.count(Student.id)).filter(
+            # Student counts - get morning, evening, and total
+            morning_students = db.query(func.count(Student.id)).filter(
                 Student.academic_year_id == academic_year_id,
-                Student.is_active == True
-            )
-            if session_type and session_type in ["morning", "evening"]:
-                student_query = student_query.filter(Student.session_type == session_type)
-            stats["total_students"] = student_query.scalar() or 0
+                Student.is_active == True,
+                Student.session_type == "morning"
+            ).scalar() or 0
             
-            # Teacher count
-            teacher_query = db.query(func.count(Teacher.id)).filter(
+            evening_students = db.query(func.count(Student.id)).filter(
+                Student.academic_year_id == academic_year_id,
+                Student.is_active == True,
+                Student.session_type == "evening"
+            ).scalar() or 0
+            
+            stats["morning_students"] = morning_students
+            stats["evening_students"] = evening_students
+            stats["total_students"] = morning_students + evening_students
+            
+            # Teacher counts - get morning, evening, and total
+            morning_teachers = db.query(func.count(Teacher.id)).filter(
                 Teacher.academic_year_id == academic_year_id,
-                Teacher.is_active == True
-            )
-            if session_type and session_type in ["morning", "evening"]:
-                teacher_query = teacher_query.filter(Teacher.session_type == session_type)
-            stats["total_teachers"] = teacher_query.scalar() or 0
+                Teacher.is_active == True,
+                Teacher.session_type == "morning"
+            ).scalar() or 0
             
-            # Class count
-            class_query = db.query(func.count(Class.id)).filter(
-                Class.academic_year_id == academic_year_id
-            )
-            if session_type and session_type in ["morning", "evening"]:
-                class_query = class_query.filter(Class.session_type == session_type)
-            stats["total_classes"] = class_query.scalar() or 0
+            evening_teachers = db.query(func.count(Teacher.id)).filter(
+                Teacher.academic_year_id == academic_year_id,
+                Teacher.is_active == True,
+                Teacher.session_type == "evening"
+            ).scalar() or 0
             
-            # Activity count
+            stats["morning_teachers"] = morning_teachers
+            stats["evening_teachers"] = evening_teachers
+            stats["total_teachers"] = morning_teachers + evening_teachers
+            
+            # Class counts - get morning, evening, and total
+            morning_classes = db.query(func.count(Class.id)).filter(
+                Class.academic_year_id == academic_year_id,
+                Class.session_type == "morning"
+            ).scalar() or 0
+            
+            evening_classes = db.query(func.count(Class.id)).filter(
+                Class.academic_year_id == academic_year_id,
+                Class.session_type == "evening"
+            ).scalar() or 0
+            
+            stats["morning_classes"] = morning_classes
+            stats["evening_classes"] = evening_classes
+            stats["total_classes"] = morning_classes + evening_classes
+            
+            # Activity count (not session-specific for total)
             activity_query = db.query(func.count(Activity.id)).filter(
                 Activity.academic_year_id == academic_year_id,
                 Activity.is_active == True

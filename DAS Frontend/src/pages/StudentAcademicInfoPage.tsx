@@ -54,6 +54,8 @@ const StudentAcademicInfoPage = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState<boolean>(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [highlightedStudentId, setHighlightedStudentId] = useState<number | null>(null);
+  const studentRowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   
   // Max grades for each type (default 100)
   const [maxGrades, setMaxGrades] = useState<Record<GradeType, number>>({
@@ -245,6 +247,61 @@ const StudentAcademicInfoPage = () => {
       loadSubjects();
     }
   }, [selectedClass, selectedSection]);
+
+  // Handle preselected student from navigation (e.g., from search)
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.preselected && classes.length > 0) {
+      const { gradeLevel, gradeNumber, section, studentId, scrollToStudent, highlightStudent } = state.preselected;
+      
+      console.log('=== Processing Preselected Student for Academic Info ===');
+      console.log('Grade Level:', gradeLevel);
+      console.log('Grade Number:', gradeNumber);
+      console.log('Section:', section);
+      console.log('Student ID:', studentId);
+      console.log('Scroll:', scrollToStudent);
+      console.log('Highlight:', highlightStudent);
+      
+      // Find the class that matches both grade_level AND grade_number
+      const matchingClass = classes.find(c => 
+        c.grade_level === gradeLevel && c.grade_number === gradeNumber
+      );
+      
+      if (matchingClass) {
+        console.log('Found matching class:', matchingClass);
+        setSelectedClass(matchingClass.id);
+        setSelectedSection(section);
+        setIsTotalView(true); // Switch to total view
+        
+        // Wait for students to load, then scroll and highlight
+        if (scrollToStudent && highlightStudent && studentId) {
+          // Set a timeout to allow students to load first
+          setTimeout(() => {
+            const studentRow = studentRowRefs.current.get(studentId);
+            if (studentRow) {
+              console.log('Scrolling to student row:', studentId);
+              studentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Highlight student
+              setHighlightedStudentId(studentId);
+              
+              // Remove highlight after 500ms
+              setTimeout(() => {
+                setHighlightedStudentId(null);
+              }, 500);
+            } else {
+              console.warn('Student row ref not found for ID:', studentId);
+            }
+          }, 1000); // Wait 1 second for students to load
+        }
+      } else {
+        console.warn('No matching class found for grade level:', gradeLevel, 'grade number:', gradeNumber);
+      }
+      
+      // Clear the state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, classes]);
 
   // تحميل الإعدادات من الباك إند
   useEffect(() => {
@@ -1791,7 +1848,18 @@ const StudentAcademicInfoPage = () => {
                         return (
                           <tr 
                             key={student.id}
-                            className="border-b border-border hover:bg-muted/30 transition-colors last:border-b-0"
+                            ref={(el) => {
+                              if (el) {
+                                studentRowRefs.current.set(student.id, el);
+                              } else {
+                                studentRowRefs.current.delete(student.id);
+                              }
+                            }}
+                            className={`border-b border-border hover:bg-muted/30 transition-all last:border-b-0 ${
+                              highlightedStudentId === student.id 
+                                ? 'bg-primary/20 ring-2 ring-primary' 
+                                : ''
+                            }`}
                           >
                             <td className="px-2 py-3 text-sm sticky right-0 bg-background">{studentIndex + 1}</td>
                             <td className="px-2 py-3 text-sm font-medium sticky right-0 bg-background min-w-[150px]">

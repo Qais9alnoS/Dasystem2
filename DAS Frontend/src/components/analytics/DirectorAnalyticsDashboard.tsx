@@ -32,6 +32,8 @@ const DirectorAnalyticsDashboard: React.FC = () => {
         period_type: period
       }).toString();
 
+      console.log('Fetching analytics with params:', queryParams);
+
       const [overview, dist, financial, attend, academic] = await Promise.all([
         api.get(`/analytics/overview?${queryParams}`),
         api.get(`/analytics/students/distribution?${queryParams}`),
@@ -40,6 +42,9 @@ const DirectorAnalyticsDashboard: React.FC = () => {
         api.get(`/analytics/academic/performance?${queryParams}`)
       ]);
 
+      console.log('Analytics responses:', { overview, dist, financial, attend, academic });
+      console.log('Overview data:', overview.data);
+
       setOverviewStats(overview.data);
       setDistribution(dist.data);
       setFinancialOverview(financial.data);
@@ -47,6 +52,7 @@ const DirectorAnalyticsDashboard: React.FC = () => {
       setAcademicPerformance(academic.data);
     } catch (error) {
       console.error('Failed to fetch director analytics:', error);
+      console.error('Error details:', error);
     } finally {
       setLoading(false);
     }

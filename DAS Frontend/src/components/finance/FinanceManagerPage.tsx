@@ -18,6 +18,11 @@ export const FinanceManagerPage: React.FC = () => {
   const preselectedCardId = (location.state as any)?.preselectedCardId;
   const openCardPopup = (location.state as any)?.openCardPopup;
   const openAddCardDialog = (location.state as any)?.openAddCardDialog;
+  
+  // Get preselected student from navigation state (from search)
+  const preselectedStudentId = (location.state as any)?.preselectedStudentId;
+  const openFinancePopup = (location.state as any)?.openFinancePopup;
+  const studentData = (location.state as any)?.studentData;
 
   useEffect(() => {
     loadActiveYear();
@@ -76,7 +81,12 @@ export const FinanceManagerPage: React.FC = () => {
           openAddCardDialog={openAddCardDialog}
         />;
       case 'students':
-        return <StudentsFinanceSection academicYearId={selectedYearId} />;
+        return <StudentsFinanceSection 
+          academicYearId={selectedYearId}
+          preselectedStudentId={preselectedStudentId}
+          openFinancePopup={openFinancePopup}
+          studentData={studentData}
+        />;
       case 'year':
         return (
           <YearSelectionSection

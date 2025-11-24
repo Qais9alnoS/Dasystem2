@@ -448,7 +448,9 @@ class ScheduleGenerationService:
         self,
         subjects: List[Subject],
         num_days: int,
-        periods_per_day: int
+        periods_per_day: int,
+        class_id: int,
+        section: Optional[str] = None
     ) -> List[List[Optional[Subject]]]:
         """
         Distribute subjects evenly across the week BASED ON TEACHER AVAILABILITY
@@ -459,6 +461,8 @@ class ScheduleGenerationService:
             subjects: List of subjects with weekly_hours
             num_days: Number of days in the week (typically 5)
             periods_per_day: Number of periods per day (typically 6)
+            class_id: Class ID for filtering teacher assignments
+            section: Section number for filtering teacher assignments (None for all sections)
             
         Returns:
             2D list representing the week's schedule [day][period]
@@ -502,18 +506,42 @@ class ScheduleGenerationService:
         print(f"  - Total slots required: {total_slots}")
         print(f"  - Total hours to assign: {total_hours}")
         print(f"  - Status: {'✅ Exact match' if total_hours == total_slots else '⚠️ Adjusted'}")
+        print(f"  - Class ID: {class_id}")
+        print(f"  - Section: {section if section else 'جميع الشعب'}")
         
-        # Get teacher-subject assignments
-        teacher_assignments = self.db.query(TeacherAssignment).all()
+        # Get teacher-subject assignments for this specific class and section
+        # This is CRITICAL to prevent period count mismatches across sections
+        if section:
+            # Look for section-specific assignments first
+            teacher_assignments = self.db.query(TeacherAssignment).filter(
+                TeacherAssignment.class_id == class_id,
+                TeacherAssignment.section == section
+            ).all()
+            
+            # If no section-specific assignments, fall back to "all sections" (NULL)
+            if not teacher_assignments:
+                teacher_assignments = self.db.query(TeacherAssignment).filter(
+                    TeacherAssignment.class_id == class_id,
+                    or_(TeacherAssignment.section == None, TeacherAssignment.section == '')
+                ).all()
+        else:
+            # No specific section requested - get all assignments for this class
+            teacher_assignments = self.db.query(TeacherAssignment).filter(
+                TeacherAssignment.class_id == class_id
+            ).all()
+        
         subject_teacher_map = {}  # subject_id -> teacher_id
         for assignment in teacher_assignments:
             subject_teacher_map[assignment.subject_id] = assignment.teacher_id
+        
+        print(f"  - Found {len(teacher_assignments)} teacher assignments for this class/section")
         
         # Get all teachers with their availability
         teachers = self.db.query(Teacher).filter(Teacher.is_active == True).all()
         teacher_map = {t.id: t for t in teachers}
         
         # Build teacher availability matrix: (teacher_id, day, period) -> is_free
+        # Include both free slots AND slots assigned to the same class (for multi-section scheduling)
         teacher_availability = {}
         for teacher in teachers:
             if not teacher.free_time_slots:
@@ -526,9 +554,18 @@ class ScheduleGenerationService:
                 status = slot.get('status')
                 is_free = slot.get('is_free')
                 
-                # Teacher is available if status='free' AND is_free=True
+                # Teacher is available if:
+                # 1. Status='free' AND is_free=True (standard free slot)
+                # 2. Status='assigned' but to the SAME class (multi-section case)
                 if status == 'free' and is_free == True:
                     teacher_availability[(teacher.id, day, period)] = True
+                elif status == 'assigned':
+                    # Check if assigned to same class
+                    assignment_info = slot.get('assignment', {})
+                    assigned_class_id = assignment_info.get('class_id')
+                    if assigned_class_id == class_id:
+                        # Same class - can reuse for different section
+                        teacher_availability[(teacher.id, day, period)] = True
         
         print(f"\n📋 Teacher-aware placement:")
         print(f"  - Loaded {len(teacher_map)} teachers")
@@ -832,10 +869,13 @@ class ScheduleGenerationService:
                     }
                     
                     # Use even distribution algorithm to avoid clustering
+                    # CRITICAL: Pass class_id and section to ensure proper teacher assignment filtering
                     schedule_grid = self._distribute_subjects_evenly(
                         subjects=class_subjects,
                         num_days=len(request.working_days),
-                        periods_per_day=request.periods_per_day
+                        periods_per_day=request.periods_per_day,
+                        class_id=cls.id,
+                        section=str(section_num)
                     )
                     
                     # CRITICAL VALIDATION: Ensure NO empty slots in the grid
@@ -2034,15 +2074,30 @@ class ScheduleGenerationService:
                     print(f"Invalid slot index {slot_index} for teacher {teacher.full_name}")
                     continue
                 
-                # Check if slot is free
+                # Check if slot is free or assigned to same class
                 slot = slots[slot_index]
-                # A slot is free ONLY if status is 'free' AND (is_free is True OR not present) AND no assignment
                 slot_status = slot.get('status', 'unavailable')
                 slot_is_free = slot.get('is_free', slot_status == 'free')
                 slot_has_assignment = slot.get('assignment') is not None
                 
-                # Teacher is available only if: status is 'free' AND is_free is True AND no assignment
-                is_free = (slot_status == 'free' and slot_is_free and not slot_has_assignment)
+                # Check if this slot is available:
+                # 1. Status is 'free' with no assignment (standard case)
+                # 2. Status is 'assigned' but for the SAME class (multi-section case)
+                is_free = False
+                
+                if slot_status == 'free' and slot_is_free and not slot_has_assignment:
+                    # Standard free slot
+                    is_free = True
+                elif slot_status == 'assigned' and slot_has_assignment:
+                    # Check if assigned to same class - if so, can be reused for different section
+                    assignment_info = slot.get('assignment', {})
+                    assigned_class_id = assignment_info.get('class_id')
+                    # Get the class for this subject
+                    subject = self.db.query(Subject).filter(Subject.id == subject_id).first()
+                    if subject and subject.class_id == assigned_class_id:
+                        # Same class - teacher can teach different section at same slot
+                        is_free = True
+                        print(f"  -> Slot assigned to same class, reusing for different section")
                 
                 print(f"DEBUG: Teacher {teacher.full_name}, day={day}, period={period}, slot_index={slot_index}")
                 print(f"  Slot data: {slot}")
@@ -2056,14 +2111,30 @@ class ScheduleGenerationService:
                 print(f"  -> Teacher {teacher.full_name} IS FREE at day {day} period {period}")
                 
                 # Check for conflicts in existing schedules
+                # Allow same teacher for different sections of the same class
+                # Only conflict if teaching a DIFFERENT class at the same time
                 has_conflict = False
                 for schedule in existing_schedules:
                     if (schedule.teacher_id == teacher.id and 
                         schedule.day_of_week == day and 
                         schedule.period_number == period):
-                        has_conflict = True
-                        print(f"Teacher {teacher.full_name} has conflict at day {day} period {period}")
-                        break
+                        # Check if it's a different class - if so, it's a real conflict
+                        # If it's the same class but different section, it's allowed
+                        # (Different sections of the same class can be taught by the same teacher at the same slot position)
+                        current_class_id = schedule.class_id
+                        # We need to check which class we're currently generating for
+                        # This is passed implicitly through the context
+                        # For now, if there's ANY existing schedule, check if it's a different class
+                        # We'll get the class context from the subject
+                        subject = self.db.query(Subject).filter(Subject.id == subject_id).first()
+                        if subject and subject.class_id != current_class_id:
+                            has_conflict = True
+                            print(f"Teacher {teacher.full_name} has conflict: teaching different class at day {day} period {period}")
+                            break
+                        else:
+                            # Same class, different section - this is OK
+                            print(f"Teacher {teacher.full_name} teaching same class (different section) at day {day} period {period} - allowed")
+                            continue
                 
                 if not has_conflict:
                     available_teachers.append({

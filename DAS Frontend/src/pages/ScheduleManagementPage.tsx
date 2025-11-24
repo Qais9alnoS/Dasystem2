@@ -58,6 +58,7 @@ const AUTOSAVE_KEY = 'schedule_creation_autosave';
 export const ScheduleManagementPage: React.FC = () => {
   const location = useLocation();
   const filterSectionRef = useRef<HTMLDivElement>(null);
+  const isNavigatingFromDashboard = useRef(false);
   
   // State management
   const [currentStep, setCurrentStep] = useState<Step>('filter');
@@ -84,25 +85,28 @@ export const ScheduleManagementPage: React.FC = () => {
     export: false
   });
 
-  // Check if we should scroll to class selection from navigation state
+  // Check if we should navigate to class selection from navigation state
   useEffect(() => {
     if (location.state?.scrollToClassSelection) {
+      isNavigatingFromDashboard.current = true;
       // Ensure we're on the create tab and filter step
       setActiveTab('create');
       setCurrentStep('filter');
       
-      // Scroll to filter section after a short delay
+      // Reset flag after state is set
       setTimeout(() => {
-        filterSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
-      
-      // Clear the state to prevent re-scrolling on refresh
-      window.history.replaceState({}, document.title);
+        isNavigatingFromDashboard.current = false;
+      }, 100);
     }
-  }, [location]);
+  }, [location.key]);
 
   // Load autosaved data on mount
   useEffect(() => {
+    // Don't load autosave if we're navigating from dashboard with specific state
+    if (location.state?.scrollToClassSelection) {
+      return;
+    }
+    
     const savedData = localStorage.getItem(AUTOSAVE_KEY);
     if (savedData) {
       try {

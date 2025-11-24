@@ -462,7 +462,15 @@ class UniversalSearchService:
                     updated_at=getattr(student, 'updated_at', None),
                     url=f"/students/{student.id}",
                     category="Students",
-                    tags=["student", str(student.grade_level) if student.grade_level else "N/A"]
+                    tags=["student", str(student.grade_level) if student.grade_level else "N/A"],
+                    data={
+                        "grade_level": getattr(student, 'grade_level', None),
+                        "grade_number": getattr(student, 'grade_number', None),
+                        "section": getattr(student, 'section', None),
+                        "full_name": full_name,
+                        "father_phone": getattr(student, 'father_phone', None),
+                        "mother_phone": getattr(student, 'mother_phone', None),
+                    }
                 ))
         
         return results, scanned

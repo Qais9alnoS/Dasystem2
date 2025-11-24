@@ -1219,12 +1219,13 @@ export const schedulesApi = {
       session_type: string;
       class_id: number;
       section: string | number;
-    }>(`/schedules/delete-class-schedule?${queryParams.toString()}`);
+    }>(`/schedules/class-schedule?${queryParams.toString()}`);
   }
 };
 
 // Search API
 export const searchApi = {
+  // ... (rest of the code remains the same)
   universal: async (query: string, params?: {
     scope?: string;
     mode?: string;

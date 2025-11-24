@@ -13,6 +13,7 @@ import {
 import { searchApi, classesApi, schedulesApi, activitiesApi, directorApi, financeApi, financeManagerApi, academicYearsApi } from '@/services/api';
 import { SearchResults } from './SearchResults';
 import { FilterPanel } from './FilterPanel';
+import { StudentNavigationPopup } from './StudentNavigationPopup';
 
 interface UniversalSearchBarProps {
   className?: string;
@@ -28,6 +29,8 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showStudentPopup, setShowStudentPopup] = useState(false);
+  const [selectedStudentData, setSelectedStudentData] = useState<any>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [results, setResults] = useState<UniversalSearchResult[]>([]);
   const [groupedResults, setGroupedResults] = useState<GroupedSearchResults>({});
@@ -132,6 +135,12 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
         console.log('🔍 Searching for:', query);
         const academicYearId = parseInt(localStorage.getItem('selected_academic_year_id') || '0');
         const userRole = authState.user?.role || '';
+        const userSessionType = authState.user?.session_type; // Get user's session type
+        
+        // Determine session filter: director sees all, others see only their session
+        const sessionFilter = userRole === 'director' ? undefined : userSessionType;
+        
+        console.log('🔒 Session filter:', sessionFilter, '(Role:', userRole, ')');
         
         // Parallel search across all entity types
         const searchPromises: Promise<any>[] = [];
@@ -143,7 +152,11 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           response = await searchApi.universalSearch(query, {
             scope: 'all',
             mode: 'partial',
-            filters: { ...filters, academic_year_id: academicYearId },
+            filters: { 
+              ...filters, 
+              academic_year_id: academicYearId,
+              session_type: sessionFilter as any
+            },
             limit: 50
           });
           console.log('✅ Universal search response:', response);
@@ -240,7 +253,10 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           // 3. Search Classes (restricted to school management roles)
           if (['director', 'morning_school', 'evening_school'].includes(userRole)) {
             try {
-            const classesResponse = await classesApi.getAll({ academic_year_id: academicYearId });
+            const classesResponse = await classesApi.getAll({ 
+              academic_year_id: academicYearId,
+              session_type: sessionFilter
+            });
             if (classesResponse.success && classesResponse.data) {
               // Helper to convert grade number to Arabic ordinal
               const gradeNumberToArabic: Record<number, string> = {
@@ -311,7 +327,8 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           if (['director', 'morning_school', 'evening_school'].includes(userRole)) {
             try {
             const schedulesResponse = await schedulesApi.getAll({
-              academic_year_id: academicYearId
+              academic_year_id: academicYearId,
+              session_type: sessionFilter
             });
             if (schedulesResponse.success && schedulesResponse.data) {
               const matchingSchedules = schedulesResponse.data
@@ -342,7 +359,8 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           if (['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'].includes(userRole)) {
             try {
             const activitiesResponse = await activitiesApi.getAll({
-              academic_year_id: academicYearId
+              academic_year_id: academicYearId,
+              session_type: sessionFilter
             });
             if (activitiesResponse.success && activitiesResponse.data) {
               const matchingActivities = activitiesResponse.data
@@ -470,6 +488,12 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           console.log(`📄 Found ${pageResults.length} matching pages`);
           searchResults = [...searchResults, ...pageResults];
 
+          // Filter out teachers for finance role
+          if (userRole === 'finance') {
+            searchResults = searchResults.filter(r => r.type !== 'teacher');
+            console.log(`🔒 Finance role: Filtered out teachers. Remaining results: ${searchResults.length}`);
+          }
+          
           console.log(`✨ Final processed results (${searchResults.length}):`, searchResults);
           setResults(searchResults);
           setGroupedResults(groupResultsByCategory(searchResults));
@@ -531,40 +555,68 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
     } else if (result.type === 'student') {
       const studentData = result.data;
       
-      // Role-based navigation for students
+      console.log('=== Student Search Result Clicked ===');
+      console.log('Result:', result);
+      console.log('Student Data:', studentData);
+      console.log('Grade Level:', studentData?.grade_level);
+      console.log('Grade Number:', studentData?.grade_number);
+      console.log('Section:', studentData?.section);
+      
+      // Finance role: Direct navigation to finance page (no popup)
       if (userRole === 'finance') {
-        // Finance user: Open finance popup for student
-        navigate('/finance', {
+        // Navigate directly with available data (finance users don't have permission to fetch full student data)
+        navigate('/finance?tab=students', {
           state: {
             preselectedStudentId: result.id,
             openFinancePopup: true,
-            studentData: studentData
+            studentData: studentData || { id: result.id, full_name: result.title }
           }
         });
-      } else if (userRole === 'director') {
-        // Director can access both - default to personal info with option
-        navigate('/students/personal-info', {
-          state: {
-            preselected: {
-              grade: studentData?.grade_level || studentData?.grade,
-              section: studentData?.section,
-              studentId: result.id,
-              openPopup: true
-            }
-          }
+        return;
+      }
+      
+      // For other roles: Show navigation popup
+      // If student data is incomplete, fetch it first
+      if (!studentData?.grade_level || !studentData?.grade_number || !studentData?.section) {
+        console.warn('⚠️ Student data incomplete, fetching full record...');
+        toast({
+          title: 'جاري تحميل بيانات الطالب...',
+          description: 'يرجى الانتظار',
+        });
+        
+        import('@/services/api').then(({ api }) => {
+          api.students.getById(result.id).then((response: any) => {
+            const fullStudent = response.data || response;
+            console.log('✅ Fetched full student data:', fullStudent);
+            
+            // Store student data and show popup
+            setSelectedStudentData({
+              id: result.id,
+              name: result.title,
+              gradeLevel: fullStudent.grade_level,
+              gradeNumber: fullStudent.grade_number,
+              section: fullStudent.section,
+            });
+            setShowStudentPopup(true);
+          }).catch((error: any) => {
+            console.error('❌ Failed to fetch student data:', error);
+            toast({
+              title: 'خطأ',
+              description: 'فشل في تحميل بيانات الطالب',
+              variant: 'destructive',
+            });
+          });
         });
       } else {
-        // Other users: Navigate to students page with pre-selected filters and open popup
-        navigate('/students/personal-info', {
-          state: {
-            preselected: {
-              grade: studentData?.grade_level || studentData?.grade,
-              section: studentData?.section,
-              studentId: result.id,
-              openPopup: true
-            }
-          }
+        // Data is complete, show popup
+        setSelectedStudentData({
+          id: result.id,
+          name: result.title,
+          gradeLevel: studentData.grade_level,
+          gradeNumber: studentData.grade_number,
+          section: studentData.section,
         });
+        setShowStudentPopup(true);
       }
       
     } else if (result.type === 'teacher') {
@@ -625,8 +677,22 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
       });
       
     } else if (result.type === 'director_note') {
-      // Navigate directly to the note edit page
-      navigate(`/director/notes/edit/${result.id}`);
+      // Check if it's a folder or a file
+      const isFolder = result.data?.is_folder;
+      const folderType = result.data?.folder_type;
+      
+      if (isFolder) {
+        // Navigate to the category browse page with folder opened
+        navigate(`/director/notes/browse/${folderType}`, {
+          state: {
+            openFolderId: result.id,
+            folderData: result.data
+          }
+        });
+      } else {
+        // Navigate directly to the note/file edit page
+        navigate(`/director/notes/edit/${result.id}`);
+      }
       
     } else if (result.type === 'finance_card') {
       // Open finance page with card popup
@@ -681,8 +747,56 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
     }
   };
 
+  const handleStudentNavigation = (destination: 'personal' | 'academic' | 'finance') => {
+    if (!selectedStudentData) return;
+
+    const { id, gradeLevel, gradeNumber, section } = selectedStudentData;
+
+    if (destination === 'personal') {
+      navigate('/students/personal-info', {
+        state: {
+          preselected: {
+            gradeLevel,
+            gradeNumber,
+            section,
+            studentId: id,
+            openPopup: true
+          }
+        }
+      });
+    } else if (destination === 'academic') {
+      navigate('/students/academic-info', {
+        state: {
+          preselected: {
+            gradeLevel,
+            gradeNumber,
+            section,
+            studentId: id,
+            scrollToStudent: true,
+            highlightStudent: true
+          }
+        }
+      });
+    } else if (destination === 'finance') {
+      navigate('/finance?tab=students', {
+        state: {
+          preselectedStudentId: id,
+          openFinancePopup: true,
+          studentData: selectedStudentData
+        }
+      });
+    }
+
+    // Close search and reset
+    setIsExpanded(false);
+    setQuery('');
+    setResults([]);
+    if (onNavigate) onNavigate();
+  };
+
   return (
-    <div ref={searchRef} className={`relative w-full ${className}`}>
+    <>
+      <div ref={searchRef} className={`relative w-full ${className}`}>
       {/* Search Bar - Single Expanding Container */}
       <div className={`relative transition-all duration-300 ease-in-out ${
         isExpanded 
@@ -777,5 +891,15 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
         />
       )}
     </div>
+
+      {/* Student Navigation Popup */}
+      <StudentNavigationPopup
+        open={showStudentPopup}
+        onClose={() => setShowStudentPopup(false)}
+        studentName={selectedStudentData?.name || ''}
+        userRole={authState.user?.role || ''}
+        onNavigate={handleStudentNavigation}
+      />
+    </>
   );
 };

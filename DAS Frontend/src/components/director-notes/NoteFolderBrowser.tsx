@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   Folder, FileText, Plus, MoreVertical, Home, ChevronRight,
   ArrowLeft, Trash2, Edit2, Search, Palette 
@@ -44,6 +44,7 @@ interface BreadcrumbItem {
 const NoteFolderBrowser: React.FC = () => {
   const { category } = useParams<{ category: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   const [items, setItems] = useState<FolderItem[]>([]);
@@ -57,6 +58,7 @@ const NoteFolderBrowser: React.FC = () => {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [renameItemId, setRenameItemId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const navigatedWithFolderId = useRef(false);
 
   const academicYearId = parseInt(localStorage.getItem('selected_academic_year_id') || '0');
 
@@ -66,6 +68,35 @@ const NoteFolderBrowser: React.FC = () => {
     'blogs': 'مدونات',
     'educational_admin': 'الأمور التعليمية والإدارية'
   };
+
+  // Handle navigation state for opening a specific folder
+  useEffect(() => {
+    const state = location.state as { folderId?: number; openFolderId?: number; folderData?: any } | null;
+    const targetFolderId = state?.folderId || state?.openFolderId;
+    const folderData = state?.folderData;
+    
+    if (targetFolderId && targetFolderId !== currentFolderId) {
+      navigatedWithFolderId.current = true;
+      setCurrentFolderId(targetFolderId);
+      
+      // Build breadcrumb trail if we have folder data
+      if (folderData?.title) {
+        setBreadcrumbs([{ id: targetFolderId, name: folderData.title }]);
+      }
+    }
+  }, [location.key]);
+
+  // Reset to root when category changes (unless navigating with specific state)
+  useEffect(() => {
+    // Don't reset if we just navigated with a folderId
+    if (navigatedWithFolderId.current) {
+      navigatedWithFolderId.current = false;
+      return;
+    }
+    
+    setCurrentFolderId(null);
+    setBreadcrumbs([]);
+  }, [category]);
 
   useEffect(() => {
     if (category && academicYearId) {

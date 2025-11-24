@@ -814,20 +814,23 @@ def get_whatsapp_config(
 @router.get("/summary/{attendance_date}", response_model=DailyPageSummary)
 def get_daily_summary(
     attendance_date: date,
-    session_type: str,
     academic_year_id: int,
+    session_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """الحصول على ملخص الصفحة اليومية"""
     # إحصائيات الطلاب
-    students = db.query(Student).filter(
+    student_query = db.query(Student).filter(
         and_(
             Student.academic_year_id == academic_year_id,
-            Student.session_type == session_type,
             Student.is_active == True
         )
-    ).all()
+    )
+    if session_type:
+        student_query = student_query.filter(Student.session_type == session_type)
+    
+    students = student_query.all()
     
     total_students = len(students)
     student_ids = [s.id for s in students]
@@ -843,13 +846,16 @@ def get_daily_summary(
     absent_students = sum(1 for a in attendances if not a.is_present)
     
     # إحصائيات المعلمين
-    teachers = db.query(Teacher).filter(
+    teacher_query = db.query(Teacher).filter(
         and_(
             Teacher.academic_year_id == academic_year_id,
-            Teacher.session_type == session_type,
             Teacher.is_active == True
         )
-    ).all()
+    )
+    if session_type:
+        teacher_query = teacher_query.filter(Teacher.session_type == session_type)
+    
+    teachers = teacher_query.all()
     
     total_teachers = len(teachers)
     

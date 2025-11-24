@@ -35,17 +35,37 @@ interface TeacherScheduleTabProps {
 // Helper function to get Arabic grade level name
 const getGradeLevelLabel = (gradeLevel: string): string => {
     const labels: Record<string, string> = {
-        'primary': 'الابتدائي',
+        'primary': 'الإبتدائي',
         'intermediate': 'المتوسط',
         'secondary': 'الثانوي'
     };
     return labels[gradeLevel] || gradeLevel;
 };
 
+// Helper function to convert number to Arabic ordinal
+const getArabicOrdinal = (num: number): string => {
+    const ordinals: Record<number, string> = {
+        1: 'الأول',
+        2: 'الثاني',
+        3: 'الثالث',
+        4: 'الرابع',
+        5: 'الخامس',
+        6: 'السادس',
+        7: 'السابع',
+        8: 'الثامن',
+        9: 'التاسع',
+        10: 'العاشر',
+        11: 'الحادي عشر',
+        12: 'الثاني عشر'
+    };
+    return ordinals[num] || num.toString();
+};
+
 // Helper function to get Arabic grade name
 const getGradeLabel = (gradeLevel: string, gradeNumber: number): string => {
     const levelLabel = getGradeLevelLabel(gradeLevel);
-    return `${levelLabel} - الصف ${gradeNumber}`;
+    const ordinal = getArabicOrdinal(gradeNumber);
+    return `الصف ${ordinal} ${levelLabel}`;
 };
 
 export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher, onUpdate }) => {
@@ -412,35 +432,70 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 <CardContent>
                     {assignments.length > 0 ? (
                         <div className="space-y-3">
-                            {assignments.map((assignment) => (
-                                <div
-                                    key={assignment.id}
-                                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                            <BookOpen className="h-5 w-5 text-primary" />
+                            {assignments.map((assignment) => {
+                                // Find the corresponding class to get grade info
+                                const classInfo = classes.find(c => c.id === assignment.class_id);
+                                // Find the corresponding subject to get weekly hours
+                                const subjectInfo = subjects.find(s => s.id === assignment.subject_id);
+                                
+                                // Get proper Arabic grade name
+                                const gradeLabel = classInfo 
+                                    ? getGradeLabel(classInfo.grade_level, classInfo.grade_number)
+                                    : assignment.class_name;
+                                
+                                // Calculate total weekly hours based on sections
+                                let totalWeeklyHours = subjectInfo?.weekly_hours || 0;
+                                let sectionLabel = '';
+                                
+                                if (!assignment.section || assignment.section === '') {
+                                    // Assigned to all sections
+                                    const sectionCount = classInfo?.section_count || 1;
+                                    totalWeeklyHours = totalWeeklyHours * sectionCount;
+                                    sectionLabel = 'جميع الشعب';
+                                } else {
+                                    // Specific section
+                                    sectionLabel = `الشعبة ${assignment.section}`;
+                                }
+                                
+                                return (
+                                    <div
+                                        key={assignment.id}
+                                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                                <BookOpen className="h-5 w-5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">
+                                                    {assignment.subject_name}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {gradeLabel}
+                                                </p>
+                                                {subjectInfo?.weekly_hours && (
+                                                    <p className="text-xs text-primary mt-1">
+                                                        {totalWeeklyHours} حصة أسبوعياً
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">
-                                                {assignment.subject_name}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {assignment.class_name}
-                                                {assignment.section && ` - شعبة ${assignment.section}`}
-                                            </p>
+                                        <div className="flex items-center gap-3">
+                                            <div className="px-3 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium">
+                                                {sectionLabel}
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteAssignment(assignment.id)}
+                                                disabled={loading}
+                                            >
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
                                         </div>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleDeleteAssignment(assignment.id)}
-                                        disabled={loading}
-                                    >
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground text-center py-8">

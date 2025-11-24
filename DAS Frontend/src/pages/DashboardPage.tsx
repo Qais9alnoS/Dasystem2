@@ -75,10 +75,18 @@ export const DashboardPage: React.FC = () => {
       const yearId = storedYearId ? parseInt(storedYearId) : 1;
       setAcademicYearId(yearId);
       
-      const queryParams = new URLSearchParams({
+      // Build query parameters
+      const params: Record<string, string> = {
         academic_year_id: yearId.toString(),
         period_type: periodFilter
-      }).toString();
+      };
+      
+      // Only add session_type if a specific session is selected (not 'both')
+      if (sessionFilter !== 'both') {
+        params.session_type = sessionFilter;
+      }
+      
+      const queryParams = new URLSearchParams(params).toString();
 
       // Fetch all analytics data in parallel
       const [
@@ -169,7 +177,7 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [periodFilter]);
+  }, [periodFilter, sessionFilter]);
 
   // Initial fetch
   useEffect(() => {

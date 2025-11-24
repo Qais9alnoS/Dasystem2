@@ -117,6 +117,9 @@ export type TransportationType =
     | 'half_bus_to_school' // نص باص بحيث بيروح عالمدرسة عالباص ويرجع مشي
     | 'half_bus_from_school'; // نص باص بحيث يروح عالمدرسة مشي ويرجع بالباص
 
+// Student Create Type - for creating new students
+export type StudentCreate = Omit<Student, 'id' | 'created_at' | 'updated_at'>;
+
 // المعلومات المالية - Enhanced Financial Information
 export interface StudentFinance {
     id?: number;
@@ -207,6 +210,7 @@ export interface StudentFinanceSummary {
     father_phone?: string;
     mother_phone?: string;
     grade_level: GradeLevel;
+    grade_level_display?: string;
     grade_number: number;
     section?: string;
     session_type: SessionType;

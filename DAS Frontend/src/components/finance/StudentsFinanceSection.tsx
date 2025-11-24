@@ -14,9 +14,17 @@ import { useToast } from '@/hooks/use-toast';
 
 interface StudentsFinanceSectionProps {
   academicYearId: number;
+  preselectedStudentId?: number;
+  openFinancePopup?: boolean;
+  studentData?: any;
 }
 
-export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ academicYearId }) => {
+export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
+  academicYearId, 
+  preselectedStudentId,
+  openFinancePopup,
+  studentData 
+}) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<StudentFinanceSummary[]>([]);
@@ -41,6 +49,22 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
       loadStudents(); // تحميل الطلاب تلقائياً عند تحميل الصفحة
     }
   }, [academicYearId]);
+
+  // Handle preselected student from search navigation
+  useEffect(() => {
+    if (preselectedStudentId && openFinancePopup) {
+      console.log('=== Opening Finance Popup for Preselected Student ===');
+      console.log('Student ID:', preselectedStudentId);
+      console.log('Student Data:', studentData);
+      
+      // Open the detail modal for the preselected student
+      setSelectedStudent(preselectedStudentId);
+      setShowDetailModal(true);
+      
+      // Clear the navigation state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [preselectedStudentId, openFinancePopup, studentData]);
 
   // Update filter options when grade level changes
   useEffect(() => {

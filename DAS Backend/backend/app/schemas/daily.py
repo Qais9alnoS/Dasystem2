@@ -173,7 +173,7 @@ class WhatsAppGroupConfigResponse(WhatsAppGroupConfigBase):
 class DailyPageSummary(BaseModel):
     """ملخص الصفحة اليومية"""
     date: date
-    session_type: str  # morning or evening
+    session_type: Optional[str] = None  # morning or evening
     
     # إحصائيات الحضور
     total_students: int

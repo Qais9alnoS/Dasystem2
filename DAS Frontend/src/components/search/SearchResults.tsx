@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   GraduationCap, Users, BookOpen, Clipboard, 
   Sparkles, DollarSign, Calendar, FileText, 
@@ -52,12 +52,56 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   onResultClick,
   query
 }) => {
+  // Track how many items to display per category (for infinite scroll)
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const INITIAL_DISPLAY = 10;
+  const LOAD_MORE_INCREMENT = 10;
+
   // Sort categories to show pages first, then others
   const sortedCategories = Object.keys(groupedResults).sort((a, b) => {
     if (a === 'Pages') return -1;
     if (b === 'Pages') return 1;
     return a.localeCompare(b, 'ar');
   });
+
+  // Initialize visible counts when grouped results change
+  useEffect(() => {
+    const initialCounts: Record<string, number> = {};
+    sortedCategories.forEach(category => {
+      initialCounts[category] = INITIAL_DISPLAY;
+    });
+    setVisibleCounts(initialCounts);
+  }, [JSON.stringify(sortedCategories)]);
+
+  // Infinite scroll: Load more when scrolling near bottom
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          // Load more items for all categories
+          setVisibleCounts(prev => {
+            const updated = { ...prev };
+            sortedCategories.forEach(category => {
+              const currentCount = prev[category] || INITIAL_DISPLAY;
+              const totalItems = groupedResults[category]?.length || 0;
+              if (currentCount < totalItems) {
+                updated[category] = Math.min(currentCount + LOAD_MORE_INCREMENT, totalItems);
+              }
+            });
+            return updated;
+          });
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [sortedCategories, groupedResults]);
 
   if (sortedCategories.length === 0) {
     return null;
@@ -83,7 +127,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
 
             {/* Category Results */}
             <div className="divide-y divide-[hsl(var(--border))]">
-              {categoryResults.slice(0, 10).map((result) => (
+              {categoryResults.slice(0, visibleCounts[category] || INITIAL_DISPLAY).map((result) => (
                 <div
                   key={`${result.type}-${result.id}`}
                   onClick={() => onResultClick(result)}
@@ -145,19 +189,13 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   </div>
                 </div>
               ))}
-
-              {/* Show More Link */}
-              {categoryResults.length > 10 && (
-                <div className="px-4 py-2 text-center">
-                  <button className="text-xs text-[hsl(var(--primary))] hover:underline font-medium transition-colors">
-                    عرض المزيد ({categoryResults.length - 10} نتيجة إضافية)
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         );
       })}
+      
+      {/* Invisible element to trigger infinite scroll */}
+      <div ref={loadMoreRef} className="h-1" />
     </div>
   );
 };

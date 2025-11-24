@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Plus, Edit, Trash2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { IOSSwitch } from '@/components/ui/ios-switch';
 import { api } from '@/services/api';
-import type { Student, StudentCreate, Class, AcademicYear } from '@/types/school';
+import type { Student, Class, AcademicYear } from '@/types/school';
 import { toast } from '@/hooks/use-toast';
 
 const StudentPersonalInfoPage = () => {
+  const location = useLocation();
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
@@ -23,9 +25,10 @@ const StudentPersonalInfoPage = () => {
   const [loading, setLoading] = useState(false);
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState<string | null>(null);
+  const [pendingStudentId, setPendingStudentId] = useState<number | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState<Partial<StudentCreate>>({
+  const [formData, setFormData] = useState<Partial<Student>>({
     full_name: '',
     has_special_needs: false,
     special_needs_details: '',
@@ -63,7 +66,10 @@ const StudentPersonalInfoPage = () => {
       console.log('Academic Year ID:', academicYearId);
       console.log('Academic Year ID Type:', typeof academicYearId);
       
-      const response = await api.academic.getClasses(academicYearId);
+      const response = await api.academic.getClasses({ 
+        academic_year_id: academicYearId,
+        session_type: 'morning'
+      });
       console.log('Raw API Response:', response);
       console.log('Response Type:', typeof response);
       console.log('Is Array:', Array.isArray(response));
@@ -147,6 +153,56 @@ const StudentPersonalInfoPage = () => {
     }
   }, [selectedClass, selectedSection]);
 
+  // Handle preselected state from navigation (e.g., from search)
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.preselected && classes.length > 0) {
+      const { gradeLevel, gradeNumber, section, studentId, openPopup } = state.preselected;
+      
+      console.log('=== Processing Preselected Student ===');
+      console.log('Grade Level:', gradeLevel);
+      console.log('Grade Number:', gradeNumber);
+      console.log('Section:', section);
+      console.log('Student ID:', studentId);
+      console.log('Open Popup:', openPopup);
+      console.log('Available Classes:', classes);
+      
+      // Find the class that matches both grade_level AND grade_number
+      const matchingClass = classes.find(c => 
+        c.grade_level === gradeLevel && c.grade_number === gradeNumber
+      );
+      
+      if (matchingClass) {
+        console.log('Found matching class:', matchingClass);
+        setSelectedClass(matchingClass.id);
+        setSelectedSection(section);
+        
+        // Store the student ID to open popup after students load
+        if (openPopup && studentId) {
+          setPendingStudentId(studentId);
+        }
+      } else {
+        console.warn('No matching class found for grade level:', gradeLevel, 'grade number:', gradeNumber);
+        console.warn('Available classes:', classes.map(c => ({ id: c.id, level: c.grade_level, number: c.grade_number })));
+      }
+      
+      // Clear the state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, classes]);
+
+  // Open popup for pending student after students are loaded
+  useEffect(() => {
+    if (pendingStudentId && students.length > 0 && !loading) {
+      const student = students.find(s => s.id === pendingStudentId);
+      if (student) {
+        console.log('Opening popup for preselected student:', student);
+        handleEdit(student);
+        setPendingStudentId(null); // Clear the pending ID
+      }
+    }
+  }, [pendingStudentId, students, loading]);
+
   const loadStudents = async () => {
     if (!selectedAcademicYear || !selectedClass || !selectedSection) return;
     
@@ -193,12 +249,13 @@ const StudentPersonalInfoPage = () => {
       setLoading(true);
       const selectedClassData = classes.find(c => c.id === selectedClass);
       
-      const studentData: StudentCreate = {
-        ...formData as StudentCreate,
+      const studentData: Omit<Student, 'id' | 'created_at' | 'updated_at'> = {
+        ...formData as Omit<Student, 'id' | 'created_at' | 'updated_at'>,
         academic_year_id: selectedAcademicYear,
         grade_level: selectedClassData?.grade_level || 'primary',
         grade_number: selectedClassData?.grade_number || 1,
         section: selectedSection,
+        is_active: true,
       };
 
       if (editingStudent) {
@@ -640,7 +697,7 @@ const StudentPersonalInfoPage = () => {
                             <Label htmlFor="transportation_type">نوع النقل*</Label>
                             <Select
                               value={formData.transportation_type}
-                              onValueChange={(value) => setFormData({ ...formData, transportation_type: value })}
+                              onValueChange={(value: 'walking' | 'full_bus' | 'half_bus_to_school' | 'half_bus_from_school') => setFormData({ ...formData, transportation_type: value })}
                             >
                               <SelectTrigger>
                                 <SelectValue />
