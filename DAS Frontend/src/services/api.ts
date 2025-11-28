@@ -1235,6 +1235,7 @@ export const schedulesApi = {
       session_type: string;
       class_id: number;
       section: string | number;
+      restored_teachers?: number[];
     }>(`/schedules/class-schedule?${queryParams.toString()}`);
   }
 };
