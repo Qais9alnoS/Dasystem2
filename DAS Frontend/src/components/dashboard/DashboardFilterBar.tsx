@@ -16,9 +16,9 @@ interface DashboardFilterBarProps {
 
 export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   sessionFilter,
-  periodFilter,
+  periodFilter: _periodFilter,
   onSessionChange,
-  onPeriodChange,
+  onPeriodChange: _onPeriodChange,
   onRefresh,
   lastUpdated
 }) => {
@@ -26,13 +26,6 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
     { value: 'morning', label: 'صباحي', icon: <Sun className="h-4 w-4" /> },
     { value: 'evening', label: 'مسائي', icon: <Moon className="h-4 w-4" /> },
     { value: 'both', label: 'كلاهما', icon: <BarChart3 className="h-4 w-4" /> }
-  ];
-
-  const periodOptions: { value: PeriodFilter; label: string }[] = [
-    { value: 'daily', label: 'يومي' },
-    { value: 'weekly', label: 'أسبوعي' },
-    { value: 'monthly', label: 'شهري' },
-    { value: 'yearly', label: 'سنوي' }
   ];
 
   return (
@@ -50,23 +43,6 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
               className="gap-1.5"
             >
               {option.icon}
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Period Filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-muted-foreground">الفترة الزمنية:</span>
-        <div className="flex gap-1 bg-muted p-1 rounded-lg">
-          {periodOptions.map((option) => (
-            <Button
-              key={option.value}
-              variant={periodFilter === option.value ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => onPeriodChange(option.value)}
-            >
               {option.label}
             </Button>
           ))}

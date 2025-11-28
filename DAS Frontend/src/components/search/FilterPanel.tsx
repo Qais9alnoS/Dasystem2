@@ -1,17 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Calendar, Filter as FilterIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { SearchFilters, SearchScope } from '@/types/search';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue 
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface FilterPanelProps {
   filters: SearchFilters;
@@ -19,8 +14,18 @@ interface FilterPanelProps {
   onClose: () => void;
 }
 
-// Available search scopes
-const SEARCH_SCOPES: { value: SearchScope; label: string }[] = [
+// Role-based scope permissions
+const ROLE_SCOPES: Record<string, SearchScope[]> = {
+  director: ['students', 'teachers', 'classes', 'subjects', 'activities', 'finance', 'schedules', 'director_notes', 'pages'],
+  morning_school: ['students', 'teachers', 'classes', 'subjects', 'activities', 'schedules', 'pages'],
+  evening_school: ['students', 'teachers', 'classes', 'subjects', 'activities', 'schedules', 'pages'],
+  finance: ['students', 'finance', 'pages'],
+  morning_supervisor: ['students', 'activities', 'pages'],
+  evening_supervisor: ['students', 'activities', 'pages'],
+};
+
+// All available search scopes with labels
+const ALL_SEARCH_SCOPES: { value: SearchScope; label: string }[] = [
   { value: 'students', label: 'الطلاب' },
   { value: 'teachers', label: 'المعلمون' },
   { value: 'classes', label: 'الصفوف' },
@@ -37,7 +42,27 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   onFilterChange,
   onClose
 }) => {
+  const { state: authState } = useAuth();
+  const userRole = authState.user?.role || 'director';
   const [localFilters, setLocalFilters] = useState<SearchFilters>(filters);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Get allowed scopes for current user role
+  const allowedScopes = useMemo(() => {
+    const roleScopes = ROLE_SCOPES[userRole] || ROLE_SCOPES.director;
+    return ALL_SEARCH_SCOPES.filter(scope => roleScopes.includes(scope.value));
+  }, [userRole]);
+
+  // Check if user can change session type (director and admin can see both)
+  const canChangeSessionType = userRole === 'director' || userRole === 'admin';
+
+  // Smooth close handler
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 200); // Match animation duration
+  }, [onClose]);
 
   useEffect(() => {
     setLocalFilters(filters);
@@ -52,19 +77,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     onFilterChange(newFilters);
   };
 
-  const handleDateFromChange = (value: string) => {
+  const handleDateChange = (key: 'date_from' | 'date_to', date: Date | undefined) => {
     const newFilters = {
       ...localFilters,
-      date_from: value || undefined
-    };
-    setLocalFilters(newFilters);
-    onFilterChange(newFilters);
-  };
-
-  const handleDateToChange = (value: string) => {
-    const newFilters = {
-      ...localFilters,
-      date_to: value || undefined
+      [key]: date ? format(date, 'yyyy-MM-dd') : undefined
     };
     setLocalFilters(newFilters);
     onFilterChange(newFilters);
@@ -109,12 +125,19 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/30 dark:bg-black/50 z-[60] animate-in fade-in duration-200"
-        onClick={onClose}
+        className={`fixed inset-0 bg-black/30 dark:bg-black/50 z-[60] transition-opacity duration-200 ${
+          isClosing ? 'opacity-0' : 'opacity-100'
+        }`}
+        onClick={handleClose}
       />
 
       {/* Filter Panel */}
-      <div className="fixed left-0 top-0 bottom-0 w-80 bg-[hsl(var(--background))] border-r border-[hsl(var(--border))] shadow-[var(--shadow-elevation-3)] z-[70] animate-in slide-in-from-left duration-300">
+      <div 
+        className={`fixed left-0 top-0 bottom-0 w-80 bg-[hsl(var(--background))] border-r border-[hsl(var(--border))] shadow-[var(--shadow-elevation-3)] z-[70] transition-transform duration-200 ease-out ${
+          isClosing ? '-translate-x-full' : 'translate-x-0'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-[hsl(var(--border))]">
@@ -130,7 +153,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               )}
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
               aria-label="إغلاق"
             >
@@ -140,25 +163,23 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
 
           {/* Filters Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* Session Type Filter */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-[hsl(var(--foreground))]">
-                نوع الفترة
-              </Label>
-              <Select 
-                value={localFilters.session_type || 'all'} 
-                onValueChange={handleSessionTypeChange}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="اختر الفترة" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="morning">صباحي</SelectItem>
-                  <SelectItem value="evening">مسائي</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Session Type Filter - Only for Director */}
+            {canChangeSessionType && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-[hsl(var(--foreground))]">
+                  نوع الفترة
+                </Label>
+                <select
+                  value={localFilters.session_type || 'all'}
+                  onChange={(e) => handleSessionTypeChange(e.target.value)}
+                  className="modern-select"
+                >
+                  <option value="all">الكل</option>
+                  <option value="morning">صباحي</option>
+                  <option value="evening">مسائي</option>
+                </select>
+              </div>
+            )}
 
             {/* Date Range Filter */}
             <div className="space-y-3">
@@ -167,30 +188,26 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 نطاق التاريخ
               </Label>
               
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div>
-                  <Label htmlFor="date-from" className="text-xs text-[hsl(var(--muted-foreground))]">
+                  <Label htmlFor="date-from" className="text-xs text-[hsl(var(--muted-foreground))] mb-1 block">
                     من
                   </Label>
-                  <Input
-                    id="date-from"
-                    type="date"
-                    value={localFilters.date_from || ''}
-                    onChange={(e) => handleDateFromChange(e.target.value)}
-                    className="w-full mt-1"
+                  <DatePicker
+                    value={localFilters.date_from ? new Date(localFilters.date_from) : undefined}
+                    onChange={(date) => handleDateChange('date_from', date)}
+                    placeholder="dd/mm/yyyy"
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="date-to" className="text-xs text-[hsl(var(--muted-foreground))]">
+                  <Label htmlFor="date-to" className="text-xs text-[hsl(var(--muted-foreground))] mb-1 block">
                     إلى
                   </Label>
-                  <Input
-                    id="date-to"
-                    type="date"
-                    value={localFilters.date_to || ''}
-                    onChange={(e) => handleDateToChange(e.target.value)}
-                    className="w-full mt-1"
+                  <DatePicker
+                    value={localFilters.date_to ? new Date(localFilters.date_to) : undefined}
+                    onChange={(date) => handleDateChange('date_to', date)}
+                    placeholder="dd/mm/yyyy"
                   />
                 </div>
               </div>
@@ -211,13 +228,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               </Label>
             </div>
 
-            {/* Search Scopes */}
+            {/* Search Scopes - Role-specific */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-[hsl(var(--foreground))]">
                 البحث في
               </Label>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {localFilters.scopes?.length ? `محدد: ${localFilters.scopes.length}` : 'الكل (بدون تحديد)'}
+              </p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {SEARCH_SCOPES.map((scope) => (
+                {allowedScopes.map((scope) => (
                   <div key={scope.value} className="flex items-center space-x-2 rtl:space-x-reverse">
                     <Checkbox
                       id={`scope-${scope.value}`}

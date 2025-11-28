@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Search, UserCheck, UserX, Save, CheckCircle2, XCircle, BookOpen } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import api from '@/services/api';
@@ -213,42 +213,52 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
   const absentClasses = totalClasses - presentClasses;
 
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
-        <div className="flex items-center gap-3">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            حضور الأساتذة
-          </CardTitle>
-          <Badge className="bg-accent text-accent-foreground">
-            {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
-          </Badge>
-        </div>
+    <Card className="ios-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5" />
+          حضور الأساتذة
+        </CardTitle>
+        <CardDescription className="mt-1">
+          سجل حضور الأساتذة وحصصهم للفترة {sessionType === 'morning' ? 'الصباحية' : 'المسائية'}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-6">
+      <CardContent className="space-y-6 pt-6">
         {/* إحصائيات */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-primary/10 p-4 rounded-xl border border-primary">
-            <div className="flex items-center justify-between mb-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
-              <Badge className="bg-primary text-primary-foreground">{presentClasses}</Badge>
-            </div>
-            <div className="text-sm font-medium text-primary">حصص حضور</div>
-          </div>
-          <div className="bg-destructive/10 p-4 rounded-xl border border-destructive">
-            <div className="flex items-center justify-between mb-2">
-              <XCircle className="h-5 w-5 text-destructive" />
-              <Badge className="bg-destructive text-destructive-foreground">{absentClasses}</Badge>
-            </div>
-            <div className="text-sm font-medium text-destructive">حصص غياب</div>
-          </div>
-          <div className="bg-accent/10 p-4 rounded-xl border border-accent">
-            <div className="flex items-center justify-between mb-2">
-              <BookOpen className="h-5 w-5 text-accent" />
-              <Badge className="bg-accent text-accent-foreground">{totalClasses}</Badge>
-            </div>
-            <div className="text-sm font-medium text-accent">مجموع الحصص</div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="ios-card border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">حصص حضور</span>
+                </div>
+                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{presentClasses}</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="ios-card border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  <span className="text-sm font-medium text-red-700 dark:text-red-300">حصص غياب</span>
+                </div>
+                <span className="text-2xl font-bold text-red-600 dark:text-red-400">{absentClasses}</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="ios-card border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">مجموع الحصص</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-600 dark:text-gray-400">{totalClasses}</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* شريط البحث */}
@@ -264,7 +274,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
         </div>
 
         {/* قائمة الأساتذة */}
-        <div className="max-h-[600px] overflow-y-auto space-y-4 pr-2">
+        <div className="max-h-[600px] overflow-y-auto space-y-4">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-2"></div>
@@ -277,17 +287,19 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
             </div>
           ) : (
             filteredTeachers.map(teacher => (
-              <Card key={teacher.teacher_id} className="border-2 border-border">
-                <CardHeader className="pb-3 bg-muted/50">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="h-5 w-5 text-primary" />
-                    {teacher.teacher_name}
-                    <Badge variant="outline" className="mr-auto">
+              <Card key={teacher.teacher_id} className="ios-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      {teacher.teacher_name}
+                    </CardTitle>
+                    <Badge variant="secondary">
                       {teacher.classes.length} حصة
                     </Badge>
-                  </CardTitle>
+                  </div>
                 </CardHeader>
-                <CardContent className="pt-4 space-y-2">
+                <CardContent className="space-y-2">
                   {teacher.classes.map((cls, idx) => (
                     <div
                       key={cls.schedule_id ?? `${teacher.teacher_id}-${cls.period_number}-${idx}`}

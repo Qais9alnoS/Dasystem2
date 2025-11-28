@@ -192,7 +192,8 @@
     /* iOS-inspired styling with modern premium fonts */
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: "Tajawal", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: "Tajawal", "Plus Jakarta Sans", -apple-system,
+      BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -588,5 +589,71 @@
   .number-input-spinner svg {
     width: 0.75rem;
     height: 0.75rem;
+  }
+}
+
+/* Modern Native Select Styling */
+@layer components {
+  .modern-select {
+    @apply w-full h-12 px-4 pr-10 rounded-2xl border border-input bg-background text-foreground text-sm appearance-none cursor-pointer transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:border-primary;
+    @apply hover:border-primary/50;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 0.75rem center;
+    background-size: 1rem;
+  }
+
+  .modern-select option {
+    @apply bg-background text-foreground py-2;
+  }
+
+  .dark .modern-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+}
+
+/* Modern Date Input Styling */
+@layer components {
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"] {
+    @apply relative;
+    color-scheme: light;
+  }
+
+  .dark input[type="date"],
+  .dark input[type="datetime-local"],
+  .dark input[type="time"] {
+    color-scheme: dark;
+  }
+
+  /* Hide default calendar icon and style custom */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer opacity-60 hover:opacity-100 transition-opacity;
+    filter: var(--calendar-icon-filter, none);
+  }
+
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
+  /* Date input wrapper for custom styling */
+  .date-input-wrapper {
+    @apply relative;
+  }
+
+  .date-input-wrapper input {
+    @apply w-full h-12 px-4 rounded-2xl border border-input bg-background text-foreground text-sm transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:border-primary;
+    @apply hover:border-primary/50;
+  }
+
+  .date-input-wrapper .calendar-icon {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none;
   }
 }

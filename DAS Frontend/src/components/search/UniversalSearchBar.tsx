@@ -137,20 +137,45 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
         console.log('🔍 Searching for:', query);
         const academicYearId = parseInt(localStorage.getItem('selected_academic_year_id') || '0');
         const userRole = authState.user?.role || '';
-        const userSessionType = authState.user?.session_type; // Get user's session type
+        // Derive session type from user role
+        let userSessionType: 'morning' | 'evening' | undefined;
+        if (userRole === 'morning_school') {
+          userSessionType = 'morning';
+        } else if (userRole === 'evening_school') {
+          userSessionType = 'evening';
+        } else if (authState.user?.session_type) {
+          // Fallback to session_type field if available
+          userSessionType = authState.user.session_type;
+        }
         
-        // Determine session filter: director sees all, others see only their session
-        const sessionFilter = userRole === 'director' ? undefined : userSessionType;
+        // Determine session filter: 
+        // - If filter panel has session_type set, use that
+        // - Otherwise, director/admin sees all, others see only their session
+        const sessionFilter = filters.session_type || (['director', 'admin'].includes(userRole) ? undefined : userSessionType);
         
-        console.log('🔒 Session filter:', sessionFilter, '(Role:', userRole, ')');
+        console.log('🔒 Session filter:', sessionFilter, '(Role:', userRole, ', Derived session:', userSessionType, ')');
+        
+        // Helper to check if a scope should be searched
+        // If no scopes selected, search all. If scopes selected, only search those.
+        const shouldSearchScope = (scope: string): boolean => {
+          if (!filters.scopes || filters.scopes.length === 0) {
+            return true; // No filter = search all
+          }
+          return filters.scopes.includes(scope as any);
+        };
+        
+        console.log('🎯 Active scopes filter:', filters.scopes || 'ALL');
         
         // Parallel search across all entity types
         const searchPromises: Promise<any>[] = [];
         
         // 1. Students & Teachers (API search)
         let response;
+        const searchStudents = shouldSearchScope('students');
+        const searchTeachers = shouldSearchScope('teachers');
+        
         try {
-          console.log('Trying universal search...');
+          console.log('Trying universal search... (students:', searchStudents, ', teachers:', searchTeachers, ')');
           response = await searchApi.universalSearch(query, {
             scope: 'all',
             mode: 'partial',
@@ -172,6 +197,16 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
 
         if (response.success && response.data) {
           let searchResults = response.data.results || [];
+          
+          // Filter API results based on scope settings
+          if (filters.scopes && filters.scopes.length > 0) {
+            searchResults = searchResults.filter((r: any) => {
+              if (r.type === 'student') return searchStudents;
+              if (r.type === 'teacher') return searchTeachers;
+              return true; // Keep other types (will be filtered by their own sections)
+            });
+            console.log(`🎯 Filtered API results by scope: ${searchResults.length} remaining`);
+          }
           
           // Handle quick search format (has nested current/former structure)
           if (!searchResults.length && (response.data.students || response.data.teachers)) {
@@ -200,7 +235,8 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
             console.log(`Found ${students.length} students and ${teachers.length} teachers`);
             
             searchResults = [
-              ...students.map((s: any) => ({
+              // Only include students if scope allows
+              ...(searchStudents ? students.map((s: any) => ({
                 id: s.id,
                 type: 'student' as const,
                 title: s.name || s.full_name,
@@ -209,8 +245,9 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
                 url: `/students/personal-info`,
                 relevance_score: 1.0,
                 data: s
-              })),
-              ...teachers.map((t: any) => ({
+              })) : []),
+              // Only include teachers if scope allows
+              ...(searchTeachers ? teachers.map((t: any) => ({
                 id: t.id,
                 type: 'teacher' as const,
                 title: t.name || t.full_name,
@@ -219,7 +256,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
                 url: `/teachers`,
                 relevance_score: 1.0,
                 data: t
-              }))
+              })) : [])
             ];
             
             console.log('Transformed API results:', searchResults);
@@ -253,7 +290,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           }
 
           // 3. Search Classes (restricted to school management roles)
-          if (['director', 'morning_school', 'evening_school'].includes(userRole)) {
+          if (['director', 'morning_school', 'evening_school'].includes(userRole) && shouldSearchScope('classes')) {
             try {
             const classesResponse = await classesApi.getAll({ 
               academic_year_id: academicYearId,
@@ -326,24 +363,46 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           }
 
           // 4. Search Schedules (restricted to school management roles)
-          if (['director', 'morning_school', 'evening_school'].includes(userRole)) {
+          if (['director', 'morning_school', 'evening_school'].includes(userRole) && shouldSearchScope('schedules')) {
             try {
             const schedulesResponse = await schedulesApi.getAll({
               academic_year_id: academicYearId,
               session_type: sessionFilter
             });
             if (schedulesResponse.success && schedulesResponse.data) {
-              const matchingSchedules = schedulesResponse.data
-                .filter((schedule: any) => 
-                  (schedule.name?.toLowerCase().includes(query.toLowerCase()) ||
-                   schedule.class_name?.toLowerCase().includes(query.toLowerCase())) &&
-                  schedule.status === 'published'
-                )
+              const queryLower = query.toLowerCase();
+              
+              // Group schedules by class to avoid duplicates
+              const schedulesByClass = new Map<string, any>();
+              
+              schedulesResponse.data.forEach((schedule: any) => {
+                const key = `${schedule.class_id}-${schedule.section}`;
+                if (!schedulesByClass.has(key)) {
+                  schedulesByClass.set(key, schedule);
+                }
+              });
+              
+              const matchingSchedules = Array.from(schedulesByClass.values())
+                .filter((schedule: any) => {
+                  // Match on multiple fields
+                  const searchableText = [
+                    schedule.name,
+                    schedule.class_name,
+                    schedule.section,
+                    schedule.grade_level,
+                    `الصف ${schedule.grade_number}`,
+                    `شعبة ${schedule.section}`,
+                    schedule.session_type === 'morning' ? 'صباحي' : 'مسائي',
+                    'جدول'
+                  ].filter(Boolean).join(' ').toLowerCase();
+                  
+                  return searchableText.includes(queryLower);
+                })
                 .map((schedule: any) => ({
                   id: schedule.id,
                   type: 'schedule' as const,
-                  title: schedule.name || `جدول ${schedule.class_name}`,
-                  subtitle: `${schedule.class_name || ''} - ${schedule.session_type === 'morning' ? 'صباحي' : 'مسائي'}`,
+                  title: schedule.name || `جدول ${schedule.class_name || 'الصف'}`,
+                  subtitle: `${schedule.class_name || ''} - شعبة ${schedule.section || ''} - ${schedule.session_type === 'morning' ? 'صباحي' : 'مسائي'}`,
                   category: 'Schedules',
                   url: '/schedules',
                   relevance_score: 0.85,
@@ -358,7 +417,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           }
 
           // 5. Search Activities (restricted to management and supervisors)
-          if (['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'].includes(userRole)) {
+          if (['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'].includes(userRole) && shouldSearchScope('activities')) {
             try {
             const activitiesResponse = await activitiesApi.getAll({
               academic_year_id: academicYearId,
@@ -388,8 +447,8 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
             }
           }
 
-          // 6. Search Director Notes (restricted to director only)
-          if (userRole === 'director') {
+          // 6. Search Director Notes (only for director)
+          if (userRole === 'director' && shouldSearchScope('director_notes')) {
             try {
               const notesResponse = await directorApi.searchNotes(query, academicYearId);
               if (notesResponse.success && notesResponse.data?.results) {
@@ -424,7 +483,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           }
 
           // 7. Search Finance Categories (if user is director or finance)
-          if (userRole === 'director' || userRole === 'finance') {
+          if ((userRole === 'director' || userRole === 'finance') && shouldSearchScope('finance')) {
             try {
               const categoriesResponse = await financeApi.getCategories(true);
               if (categoriesResponse.success && categoriesResponse.data) {
@@ -452,7 +511,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           }
 
           // 8. Search Finance Cards (if user is director or finance)
-          if (userRole === 'director' || userRole === 'finance') {
+          if ((userRole === 'director' || userRole === 'finance') && shouldSearchScope('finance')) {
             try {
               const cardsResponse = await financeManagerApi.getFinanceCards({
                 academic_year_id: academicYearId
@@ -481,14 +540,16 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
             }
           }
 
-          // 9. Add filtered pages to results
-          const filteredPages = getFilteredPages();
-          const pageResults = filteredPages.filter(page => 
-            page.title.toLowerCase().includes(query.toLowerCase())
-          );
-          
-          console.log(`📄 Found ${pageResults.length} matching pages`);
-          searchResults = [...searchResults, ...pageResults];
+          // 9. Add filtered pages to results (if scope allows)
+          if (shouldSearchScope('pages')) {
+            const filteredPages = getFilteredPages();
+            const pageResults = filteredPages.filter(page => 
+              page.title.toLowerCase().includes(query.toLowerCase())
+            );
+            
+            console.log(`📄 Found ${pageResults.length} matching pages`);
+            searchResults = [...searchResults, ...pageResults];
+          }
 
           // Filter out teachers for finance role
           if (userRole === 'finance') {
@@ -598,6 +659,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
               gradeLevel: fullStudent.grade_level,
               gradeNumber: fullStudent.grade_number,
               section: fullStudent.section,
+              sessionType: fullStudent.session_type,
             });
             setShowStudentPopup(true);
           }).catch((error: any) => {
@@ -617,6 +679,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
           gradeLevel: studentData.grade_level,
           gradeNumber: studentData.grade_number,
           section: studentData.section,
+          sessionType: studentData.session_type,
         });
         setShowStudentPopup(true);
       }
@@ -752,7 +815,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
   const handleStudentNavigation = (destination: 'personal' | 'academic' | 'finance') => {
     if (!selectedStudentData) return;
 
-    const { id, gradeLevel, gradeNumber, section } = selectedStudentData;
+    const { id, gradeLevel, gradeNumber, section, sessionType } = selectedStudentData;
 
     if (destination === 'personal') {
       navigate('/students/personal-info', {
@@ -761,6 +824,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
             gradeLevel,
             gradeNumber,
             section,
+            sessionType,
             studentId: id,
             openPopup: true
           }
@@ -773,6 +837,7 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
             gradeLevel,
             gradeNumber,
             section,
+            sessionType,
             studentId: id,
             scrollToStudent: true,
             highlightStudent: true

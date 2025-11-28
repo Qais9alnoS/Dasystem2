@@ -13,6 +13,7 @@ interface PieChartProps {
   height?: string;
   donut?: boolean;
   loading?: boolean;
+  colors?: string[];
 }
 
 const PieChart: React.FC<PieChartProps> = ({
@@ -20,7 +21,8 @@ const PieChart: React.FC<PieChartProps> = ({
   title,
   height = '400px',
   donut = false,
-  loading = false
+  loading = false,
+  colors
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
@@ -64,18 +66,22 @@ const PieChart: React.FC<PieChartProps> = ({
         }
       },
       legend: hasData ? {
-        orient: 'vertical',
-        right: '5%',
-        top: 'middle',
+        orient: 'horizontal',
+        bottom: '5%',
+        left: 'center',
         textStyle: {
-          color: isDark ? '#9ca3af' : '#374151'
-        }
+          color: isDark ? '#9ca3af' : '#374151',
+          fontSize: 12
+        },
+        itemGap: 15,
+        itemWidth: 14,
+        itemHeight: 14
       } : undefined,
       series: [{
         name: title || 'البيانات',
         type: 'pie',
-        radius: donut ? ['40%', '70%'] : '70%',
-        center: hasData ? ['40%', '50%'] : ['50%', '50%'],
+        radius: donut ? ['35%', '55%'] : '55%',
+        center: ['50%', '40%'],
         data: chartData,
         emphasis: {
           itemStyle: {
@@ -85,8 +91,10 @@ const PieChart: React.FC<PieChartProps> = ({
           }
         },
         label: {
-          formatter: '{b}: {d}%',
-          color: isDark ? '#9ca3af' : '#374151'
+          show: false // Hide labels, use legend instead
+        },
+        labelLine: {
+          show: false
         },
         itemStyle: {
           borderRadius: 4,
@@ -94,7 +102,7 @@ const PieChart: React.FC<PieChartProps> = ({
           borderWidth: 2
         }
       }],
-      color: theme.color
+      color: colors || theme.color
     };
 
     try {
@@ -120,7 +128,7 @@ const PieChart: React.FC<PieChartProps> = ({
     window.addEventListener('resize', handleResize);
 
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, title, donut, loading]);
+  }, [data, title, donut, loading, colors]);
 
   useEffect(() => {
     return () => {

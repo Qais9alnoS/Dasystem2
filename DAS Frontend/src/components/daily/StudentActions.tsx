@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { FileText, Search, Send } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
@@ -107,7 +108,20 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
   const getAvailableGradeLevels = (): string[] => {
     const levels = new Set(classes.map((c: any) => c.grade_level));
-    return Array.from(levels).sort();
+    const order: Record<string, number> = {
+      primary: 1,
+      intermediate: 2,
+      secondary: 3
+    };
+
+    return Array.from(levels).sort((a, b) => {
+      const orderA = order[a] ?? 99;
+      const orderB = order[b] ?? 99;
+      if (orderA === orderB) {
+        return a.localeCompare(b);
+      }
+      return orderA - orderB;
+    });
   };
 
   const getFilteredClasses = (): any[] => {
@@ -375,27 +389,29 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
   };
 
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
-        <CardTitle className="flex items-center gap-2 justify-between">
-          <div className="flex items-center gap-3">
-            <FileText className="h-5 w-5" />
-            <span>الإجراءات السريعة على الطلاب</span>
-            <Badge className="bg-accent text-accent-foreground">
-              {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
-            </Badge>
+    <Card className="ios-card">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              الإجراءات على الطلاب
+            </CardTitle>
+            <CardDescription className="mt-1">
+              إضافة إجراءات وملاحظات على الطلاب للفترة {sessionType === 'morning' ? 'الصباحية' : 'المسائية'}
+            </CardDescription>
           </div>
-          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm" className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground/20">
-            <Send className="h-4 w-4 ml-2" />
+          <Button onClick={handleGenerateWhatsAppMessage} variant="outline" size="sm">
+            <Send className="w-4 h-4 ml-2" />
             إرسال للأهل
           </Button>
-        </CardTitle>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4 p-6">
+      <CardContent className="space-y-6 pt-6">
         {/* اختيار المرحلة والصف والشعبة */}
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">المرحلة</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>المرحلة</Label>
             <Select value={selectedGradeLevel} onValueChange={(val) => {
               setSelectedGradeLevel(val);
               setSelectedClassId(null);
@@ -414,8 +430,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             </Select>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">الصف</label>
+          <div className="space-y-2">
+            <Label>الصف</Label>
             <Select value={selectedClassId?.toString()} onValueChange={(val) => {
               setSelectedClassId(parseInt(val));
               setSelectedSection('');
@@ -433,8 +449,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             </Select>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">الشعبة</label>
+          <div className="space-y-2">
+            <Label>الشعبة</Label>
             <Select value={selectedSection} onValueChange={setSelectedSection} disabled={!selectedClassId}>
               <SelectTrigger>
                 <SelectValue placeholder="اختر الشعبة" />
@@ -469,7 +485,7 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             </div>
 
             {/* قائمة الطلاب */}
-            <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
+            <div className="max-h-96 overflow-y-auto space-y-2">
               {filteredStudents.map(student => (
                 <div
                   key={student.id}
@@ -489,12 +505,15 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             {/* إجراءات اليوم */}
             {todayActions.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-lg font-bold mb-4 text-foreground">
-                  📋 إجراءات اليوم ({todayActions.length})
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-foreground">
+                    إجراءات اليوم
+                  </h3>
+                  <Badge variant="secondary">{todayActions.length} إجراء</Badge>
+                </div>
                 <div className="space-y-3">
                   {todayActions.map(action => (
-                    <Card key={action.id} className="border-primary">
+                    <Card key={action.id} className="ios-card">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -564,8 +583,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             </DialogHeader>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-foreground">نوع الإجراء</label>
+              <div className="space-y-2">
+                <Label>نوع الإجراء</Label>
                 <Select value={actionType} onValueChange={setActionType}>
                   <SelectTrigger>
                     <SelectValue placeholder="اختر نوع الإجراء" />
@@ -588,8 +607,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
               </div>
 
               {requiresSubject() && (
-                <div>
-                  <label className="block text-sm font-semibold mb-2 text-foreground">المادة</label>
+                <div className="space-y-2">
+                  <Label>المادة</Label>
                   <Select value={selectedSubjectId?.toString()} onValueChange={(val) => setSelectedSubjectId(parseInt(val))}>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر المادة" />
@@ -605,8 +624,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-foreground">التفاصيل / السبب</label>
+              <div className="space-y-2">
+                <Label>التفاصيل / السبب</Label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -617,8 +636,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
 
               {isAcademicAction() && (
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-foreground">العلامة</label>
+                  <div className="space-y-2">
+                    <Label>العلامة</Label>
                     <Input
                       type="number"
                       value={grade}
@@ -626,8 +645,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                       placeholder="0"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-foreground">العلامة الكاملة</label>
+                  <div className="space-y-2">
+                    <Label>العلامة الكاملة</Label>
                     <Input
                       type="number"
                       value={maxGrade}
@@ -638,8 +657,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-foreground">ملاحظات إضافية</label>
+              <div className="space-y-2">
+                <Label>ملاحظات إضافية</Label>
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -671,8 +690,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
             </DialogHeader>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-foreground">رابط مجموعة الواتساب</label>
+              <div className="space-y-2">
+                <Label>رابط مجموعة الواتساب</Label>
                 <div className="flex gap-2">
                   <Input
                     value={whatsappLink}
@@ -706,8 +725,8 @@ export function StudentActions({ academicYearId, sessionType, selectedDate }: St
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-foreground">محتوى الرسالة</label>
+              <div className="space-y-2">
+                <Label>محتوى الرسالة</Label>
                 <Textarea
                   value={whatsappMessage}
                   onChange={(e) => setWhatsappMessage(e.target.value)}

@@ -15,6 +15,7 @@ import {
 } from '@/components/dashboard';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import '../utils/attendanceDebugger'; // Load debugger utility
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Calendar } from 'lucide-react';
@@ -88,29 +89,112 @@ export const DashboardPage: React.FC = () => {
       
       const queryParams = new URLSearchParams(params).toString();
 
-      // Fetch all analytics data in parallel
+      // When viewing both sessions, we need to fetch attendance data separately for morning and evening
+      const promises = [
+        api.get(`/analytics/overview?${queryParams}`),
+        api.get(`/analytics/students/distribution?${queryParams}`),
+        api.get(`/analytics/finance/overview?${queryParams}`),
+        api.get(`/analytics/finance/income-trends?${queryParams}`),
+        api.get(`/analytics/finance/expense-trends?${queryParams}`),
+        api.get(`/analytics/academic/performance?${queryParams}`)
+      ];
+
+      // Add attendance API calls
+      if (sessionFilter === 'both') {
+        // Fetch morning and evening attendance separately
+        const morningParams = new URLSearchParams({ ...params, session_type: 'morning' }).toString();
+        const eveningParams = new URLSearchParams({ ...params, session_type: 'evening' }).toString();
+        promises.push(
+          api.get(`/analytics/attendance?${morningParams}`),
+          api.get(`/analytics/attendance?${eveningParams}`)
+        );
+      } else {
+        // Fetch for specific session
+        promises.push(api.get(`/analytics/attendance?${queryParams}`));
+      }
+
+      const results = await Promise.all(promises);
+      
       const [
         overviewRes, 
         distributionRes, 
         financialRes, 
-        attendanceRes,
         incomeRes,
         expenseRes,
         academicRes
-      ] = await Promise.all([
-        api.get(`/analytics/overview?${queryParams}`),
-        api.get(`/analytics/students/distribution?${queryParams}`),
-        api.get(`/analytics/finance/overview?${queryParams}`),
-        api.get(`/analytics/attendance?${queryParams}`),
-        api.get(`/analytics/finance/income-trends?${queryParams}`),
-        api.get(`/analytics/finance/expense-trends?${queryParams}`),
-        api.get(`/analytics/academic/performance?${queryParams}`)
-      ]);
+      ] = results.slice(0, 6);
+
+      // Handle attendance data based on session filter (not used, keeping for compatibility)
+      let attendanceRes = results[6];
 
       // Process and set data
       const overview = overviewRes.data as any || {};
       const financial = financialRes.data as any || {};
-      const attendance = attendanceRes.data as any || {};
+      let attendance: any;
+
+      if (sessionFilter === 'both') {
+        const morningAttendanceRes = results[6];
+        const eveningAttendanceRes = results[7];
+        const morningData = morningAttendanceRes.data as any || {};
+        const eveningData = eveningAttendanceRes.data as any || {};
+
+        // Merge morning and evening attendance data
+        const morningAttendance = morningData.student_attendance || [];
+        const eveningAttendance = eveningData.student_attendance || [];
+
+        // Create a map of dates with both morning and evening rates
+        const dateMap = new Map();
+        
+        morningAttendance.forEach((record: any) => {
+          dateMap.set(record.date, { 
+            date: record.date, 
+            morning_rate: record.attendance_rate,
+            morning_total: record.total,
+            morning_present: record.present,
+            morning_absent: record.absent
+          });
+        });
+
+        eveningAttendance.forEach((record: any) => {
+          const existing = dateMap.get(record.date);
+          if (existing) {
+            existing.evening_rate = record.attendance_rate;
+            existing.evening_total = record.total;
+            existing.evening_present = record.present;
+            existing.evening_absent = record.absent;
+          } else {
+            dateMap.set(record.date, {
+              date: record.date,
+              evening_rate: record.attendance_rate,
+              evening_total: record.total,
+              evening_present: record.present,
+              evening_absent: record.absent
+            });
+          }
+        });
+
+        attendance = {
+          student_attendance: Array.from(dateMap.values()).sort((a, b) => 
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+          ),
+          teacher_attendance: morningData.teacher_attendance || eveningData.teacher_attendance || [],
+          top_absent_students: morningData.top_absent_students || []
+        };
+      } else {
+        attendance = attendanceRes.data as any || {};
+        // Add session-specific rate field
+        if (attendance.student_attendance) {
+          attendance.student_attendance = attendance.student_attendance.map((record: any) => ({
+            ...record,
+            [`${sessionFilter}_rate`]: record.attendance_rate
+          }));
+        }
+      }
+
+      // Debug attendance data (development only)
+      if (process.env.NODE_ENV === 'development' && attendance.student_attendance?.length > 0) {
+        console.log('Attendance Data Sample:', attendance.student_attendance[0]);
+      }
 
       setDashboardData({
         quickStats: {
@@ -179,18 +263,9 @@ export const DashboardPage: React.FC = () => {
     }
   }, [periodFilter, sessionFilter]);
 
-  // Initial fetch
+  // Fetch on mount and when filters change - no auto-refresh to avoid annoying reloads
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Auto-refresh intervals
-  useEffect(() => {
-    const quickStatsInterval = setInterval(() => {
-      fetchDashboardData();
-    }, 60000); // 1 minute
-
-    return () => clearInterval(quickStatsInterval);
   }, [fetchDashboardData]);
 
   const handleRefresh = () => {
@@ -202,7 +277,7 @@ export const DashboardPage: React.FC = () => {
   const arabicDate = format(today, 'EEEE، dd MMMM yyyy', { locale: ar });
 
   return (
-    <div className="h-full overflow-auto p-3 space-y-3">
+    <div className="space-y-3">
       {/* Page Header with Date */}
       <div className="flex items-center justify-between">
         <div>
@@ -246,39 +321,37 @@ export const DashboardPage: React.FC = () => {
         loading={loading}
       />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-        {/* Left Column (2/3 width) */}
-        <div className="xl:col-span-2 space-y-3">
-          {/* Session Comparison */}
-          <SessionComparisonCard
-            morning={dashboardData.sessionData.morning}
-            evening={dashboardData.sessionData.evening}
-            sessionFilter={sessionFilter}
-            loading={loading}
-          />
-
-          {/* History Card - Resized */}
-          <div className="h-[350px] overflow-hidden">
-            <HistoryCard />
-          </div>
-
-          {/* Financial Summary */}
-          <FinancialSummaryCard
-            totalIncome={dashboardData.financial.totalIncome}
-            totalExpenses={dashboardData.financial.totalExpenses}
-            netProfit={dashboardData.financial.netProfit}
-            collectionRate={dashboardData.financial.collectionRate}
-            loading={loading}
-          />
-        </div>
-
-        {/* Right Column (1/3 width) */}
-        <div className="space-y-3">
-          {/* Quick Actions Panel */}
-          <QuickActionsPanel loading={loading} academicYearId={academicYearId} />
+      {/* Top Row: Quick Actions and History */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        {/* Quick Actions Panel */}
+        <QuickActionsPanel loading={loading} academicYearId={academicYearId} />
+        
+        {/* History Card - Fixed height for internal scrolling */}
+        <div className="h-[500px]">
+          <HistoryCard />
         </div>
       </div>
+
+      {/* Main Analytics Card - Full Width */}
+      <SessionComparisonCard
+        morning={dashboardData.sessionData.morning}
+        evening={dashboardData.sessionData.evening}
+        sessionFilter={sessionFilter}
+        distributionData={dashboardData.distribution.by_section}
+        genderData={dashboardData.distribution.by_gender}
+        transportData={dashboardData.distribution.by_transportation}
+        attendanceData={dashboardData.attendance.students}
+        loading={loading}
+      />
+
+      {/* Financial Summary - Full Width */}
+      <FinancialSummaryCard
+        totalIncome={dashboardData.financial.totalIncome}
+        totalExpenses={dashboardData.financial.totalExpenses}
+        netProfit={dashboardData.financial.netProfit}
+        collectionRate={dashboardData.financial.collectionRate}
+        loading={loading}
+      />
 
       {/* Attendance Trends - Full Width (Only if data) */}
       {(dashboardData.attendance.students.length > 0 || dashboardData.attendance.teachers.length > 0) && (

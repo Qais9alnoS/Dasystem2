@@ -4,10 +4,12 @@ from sqlalchemy import and_, or_, func
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from app.database import get_db
+from app.models.students import Student
+from app.models.academic import Class
 from app.models import (
     Holiday, StudentDailyAttendance, TeacherPeriodAttendance, 
-    StudentAction, WhatsAppGroupConfig, Student, Teacher, 
-    Class, Schedule, AcademicYear, Subject, User, StudentAcademic,
+    StudentAction, WhatsAppGroupConfig, Teacher, 
+    Schedule, AcademicYear, Subject, User, StudentAcademic,
     AcademicSettings
 )
 from app.schemas.daily import (
@@ -430,14 +432,40 @@ def create_student_attendance_bulk(
     current_user: User = Depends(get_current_user)
 ):
     """إدخال جماعي لحضور الطلاب - يتم تحديد الغائبين فقط"""
-    # احصل على جميع طلاب الصف والشعبة
-    students = db.query(Student).filter(
-        and_(
-            Student.class_id == attendance_bulk.class_id,
-            Student.section == attendance_bulk.section,
-            Student.is_active == True
-        )
-    ).all()
+    print(f"\n=== SAVE ATTENDANCE REQUEST ===")
+    print(f"Params: class_id={attendance_bulk.class_id}, section={attendance_bulk.section}, date={attendance_bulk.attendance_date}, session_type={attendance_bulk.session_type}")
+    print(f"Absent student IDs: {attendance_bulk.absent_student_ids}")
+    
+    # احصل على معلومات الصف لتحديد المرحلة والصف ونوع الدوام
+    cls = db.query(Class).filter(Class.id == attendance_bulk.class_id).first()
+    
+    # إذا لم يتم العثور على الصف، استخدم class_id مباشرة (سلوك قديم)
+    if cls is None:
+        students = db.query(Student).filter(
+            and_(
+                Student.class_id == attendance_bulk.class_id,
+                Student.section == attendance_bulk.section,
+                Student.session_type == attendance_bulk.session_type,
+                Student.is_active == True
+            )
+        ).all()
+    else:
+        # احصل على جميع طلاب هذه السنة والمرحلة والصف والشعبة ونوع الدوام (مثل صفحات الواجهة)
+        students = db.query(Student).filter(
+            and_(
+                Student.academic_year_id == attendance_bulk.academic_year_id,
+                Student.grade_level == cls.grade_level,
+                Student.grade_number == cls.grade_number,
+                Student.section == attendance_bulk.section,
+                Student.session_type == attendance_bulk.session_type,
+                Student.is_active == True
+            )
+        ).all()
+    
+    print(f"Students found: {len(students)}")
+    for s in students:
+        is_absent = s.id in attendance_bulk.absent_student_ids
+        print(f"  - ID: {s.id}, Name: {s.full_name}, Session: {s.session_type}, Will be marked as: {'ABSENT' if is_absent else 'PRESENT'}")
     
     if not students:
         raise HTTPException(status_code=404, detail="No students found")
@@ -470,6 +498,11 @@ def create_student_attendance_bulk(
     for record in attendance_records:
         db.refresh(record)
     
+    print(f"Saved {len(attendance_records)} attendance records:")
+    for r in attendance_records:
+        print(f"  - Student ID: {r.student_id}, Present: {r.is_present}, Date: {r.attendance_date}")
+    print(f"===========================\n")
+    
     return attendance_records
 
 @router.get("/attendance/students", response_model=List[StudentDailyAttendanceResponse])
@@ -477,19 +510,57 @@ def get_student_attendance(
     class_id: int,
     section: str,
     attendance_date: date,
+    academic_year_id: Optional[int] = None,
+    session_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """الحصول على حضور طلاب صف معين في يوم محدد"""
-    students = db.query(Student).filter(
-        and_(
+    print(f"\n=== GET ATTENDANCE REQUEST ===")
+    print(f"Params: class_id={class_id}, section={section}, date={attendance_date}, academic_year_id={academic_year_id}, session_type={session_type}")
+    
+    # استخدم نفس المنطق المستخدم في الحفظ - احصل على معلومات الصف
+    cls = db.query(Class).filter(Class.id == class_id).first()
+    
+    if cls is None:
+        # إذا لم يتم العثور على الصف، استخدم class_id مباشرة (سلوك قديم)
+        query_filters = [
             Student.class_id == class_id,
             Student.section == section,
             Student.is_active == True
-        )
-    ).all()
+        ]
+        
+        if session_type:
+            query_filters.append(Student.session_type == session_type)
+        
+        students = db.query(Student).filter(and_(*query_filters)).all()
+    else:
+        # استخدم grade_level و grade_number (مثل الحفظ)
+        query_filters = [
+            Student.grade_level == cls.grade_level,
+            Student.grade_number == cls.grade_number,
+            Student.section == section,
+            Student.is_active == True
+        ]
+        
+        if academic_year_id:
+            query_filters.append(Student.academic_year_id == academic_year_id)
+        
+        if session_type:
+            query_filters.append(Student.session_type == session_type)
+        
+        students = db.query(Student).filter(and_(*query_filters)).all()
+    
+    print(f"Students found: {len(students)}")
+    for s in students:
+        print(f"  - ID: {s.id}, Name: {s.full_name}, Session: {s.session_type}")
     
     student_ids = [s.id for s in students]
+    
+    if not student_ids:
+        print(f"No students found - returning empty attendance")
+        print(f"===========================\n")
+        return []
     
     attendance_records = db.query(StudentDailyAttendance).filter(
         and_(
@@ -497,6 +568,11 @@ def get_student_attendance(
             StudentDailyAttendance.attendance_date == attendance_date
         )
     ).all()
+    
+    print(f"Attendance records found: {len(attendance_records)}")
+    for a in attendance_records:
+        print(f"  - Student ID: {a.student_id}, Present: {a.is_present}")
+    print(f"===========================\n")
     
     return attendance_records
 

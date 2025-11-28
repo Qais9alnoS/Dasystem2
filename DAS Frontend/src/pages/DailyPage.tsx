@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { format } from 'date-fns';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import { HolidayManagement } from '@/components/daily/HolidayManagement';
 import { StudentAttendance } from '@/components/daily/StudentAttendance';
 import { TeacherAttendance } from '@/components/daily/TeacherAttendance';
@@ -40,6 +44,21 @@ export default function DailyPage() {
 
   const fetchActiveAcademicYear = async () => {
     try {
+      const storedYearId = localStorage.getItem('selected_academic_year_id');
+      const storedYearName = localStorage.getItem('selected_academic_year_name');
+
+      if (storedYearId) {
+        const parsedId = parseInt(storedYearId, 10);
+        if (!isNaN(parsedId)) {
+          setAcademicYear({
+            id: parsedId,
+            year_name: storedYearName || '',
+            is_active: true
+          });
+          return;
+        }
+      }
+
       const response = await api.get('/academic/years?active=true');
       const years = response.data as AcademicYear[];
       if (years.length > 0) {
@@ -104,158 +123,175 @@ export default function DailyPage() {
 
   if (!academicYear) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">جاري التحميل...</p>
+      <div className="min-h-screen bg-background p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto">
+          <Card className="ios-card">
+            <CardContent className="pt-6">
+              <div className="flex justify-center items-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-gray-600 dark:text-gray-400">جاري التحميل...</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
-      {/* Header */}
-      <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground border-0 shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Calendar className="h-8 w-8" />
-              <span>الصفحة اليومية</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-lg backdrop-blur-sm">
-                <Clock className="h-5 w-5" />
-                <span className="font-semibold text-base">
-                  {sessionType === 'morning' ? '🌅 الفترة الصباحية' : '🌆 الفترة المسائية'}
-                </span>
-              </div>
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-white/30 rounded-lg blur opacity-0 group-hover:opacity-100 transition duration-200"></div>
-                <div className="relative flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-lg">
-                  <CalendarDays className="h-5 w-5 text-primary" />
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                      setSelectedDate(e.target.value);
-                      setDateKey(prev => prev + 1);
-                    }}
-                    className="text-gray-800 font-semibold text-base bg-transparent border-0 outline-none cursor-pointer"
-                    style={{ width: '150px' }}
-                  />
+    <div className="min-h-screen bg-background p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header with Date Display */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">الصفحة اليومية</h1>
+            <p className="text-muted-foreground mt-1">
+              إدارة الحضور والغياب والإجراءات اليومية - {academicYear.year_name}
+            </p>
+          </div>
+          
+          {/* Date Display Badge - Top Left */}
+          <Card className="ios-card border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 shrink-0" key={dateKey}>
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <Calendar className="w-4 h-4 shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold whitespace-nowrap">
+                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ar', { 
+                      weekday: 'long', 
+                      day: 'numeric',
+                      month: 'long'
+                    })}
+                  </span>
+                  {sessionType && (
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                      {sessionType === 'morning' ? 'الفترة الصباحية' : 'الفترة المسائية'}
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          </CardTitle>
-        </CardHeader>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Date Indicator */}
-      <Card className="border-2 border-primary/30 bg-primary/5 shadow-md animate-in fade-in slide-in-from-top-2 duration-300" key={dateKey}>
-        <CardContent className="py-3">
-          <div className="flex items-center justify-center gap-3 text-primary">
-            <CalendarDays className="h-5 w-5" />
-            <span className="font-bold text-lg">
-              البيانات المعروضة لتاريخ: {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ar', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Date and Session Selector */}
+        <Card className="ios-card">
+          <CardHeader>
+            <CardTitle>اختيار التاريخ والفترة</CardTitle>
+            <CardDescription>حدد التاريخ والفترة الدراسية للعرض</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date-picker" className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4" />
+                  التاريخ
+                </Label>
+                <DatePicker
+                  value={new Date(selectedDate)}
+                  onChange={(date) => {
+                    if (date) {
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      setSelectedDate(dateStr);
+                      setDateKey(prev => prev + 1);
+                    }
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-      {/* Session Type Selector - يظهر فقط للمدير */}
-      {allowedSessions.length > 1 && (
-        <Card className="border-0 shadow-lg">
-          <CardContent className="pt-6">
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => setSessionType('morning')}
-                className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
-                  sessionType === 'morning'
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                🌅 الفترة الصباحية
-              </button>
-              <button
-                onClick={() => setSessionType('evening')}
-                className={`px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 ${
-                  sessionType === 'evening'
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                🌆 الفترة المسائية
-              </button>
+              {allowedSessions.length > 1 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    الفترة الدراسية
+                  </Label>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setSessionType('morning')}
+                      variant={sessionType === 'morning' ? 'default' : 'outline'}
+                      className={`flex-1 ${sessionType === 'morning' ? 'bg-yellow-400 hover:bg-yellow-500 text-black' : ''}`}
+                    >
+                      الفترة الصباحية
+                    </Button>
+                    <Button
+                      onClick={() => setSessionType('evening')}
+                      variant={sessionType === 'evening' ? 'default' : 'outline'}
+                      className="flex-1"
+                    >
+                      الفترة المسائية
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Main Content */}
-      <Tabs defaultValue="holidays" className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-full">
-          <TabsTrigger value="holidays">إدارة أيام العطلة</TabsTrigger>
-          <TabsTrigger value="attendance">الحضور والغياب</TabsTrigger>
-          <TabsTrigger value="actions">الإجراءات السريعة</TabsTrigger>
-        </TabsList>
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="holidays" className="space-y-6">
+          <Card className="ios-card">
+            <CardContent className="pt-6">
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="holidays">إدارة أيام العطلة</TabsTrigger>
+                <TabsTrigger value="attendance">الحضور والغياب</TabsTrigger>
+                <TabsTrigger value="actions">الإجراءات السريعة</TabsTrigger>
+              </TabsList>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="holidays">
-          <HolidayManagement 
-            academicYearId={academicYear.id} 
-            sessionType={sessionType}
-            selectedDate={selectedDate}
-          />
-        </TabsContent>
+          <TabsContent value="holidays" className="space-y-6">
+            <HolidayManagement 
+              academicYearId={academicYear.id} 
+              sessionType={sessionType}
+              selectedDate={selectedDate}
+            />
+          </TabsContent>
 
-        <TabsContent value="attendance" className="space-y-6">
-          {isHoliday ? (
-            <Card className="border-2 border-accent bg-accent/10">
-              <CardContent className="py-12">
-                <div className="text-center space-y-4">
-                  <div className="text-6xl">🏖️</div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-accent-foreground mb-2">
-                      يوم عطلة
-                    </h3>
-                    <p className="text-muted-foreground text-lg">
-                      {holidayInfo?.holiday_name || holidayInfo?.name || 'لا يوجد حضور في أيام العطل'}
-                    </p>
+          <TabsContent value="attendance" className="space-y-6">
+            {isHoliday ? (
+              <Card className="ios-card border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950">
+                <CardContent className="py-12">
+                  <div className="text-center space-y-4">
+                    <div>
+                      <h3 className="text-2xl font-bold text-orange-700 dark:text-orange-300 mb-2">
+                        يوم عطلة
+                      </h3>
+                      <p className="text-gray-600 dark:text-gray-400 text-lg">
+                        {holidayInfo?.holiday_name || holidayInfo?.name || 'لا يوجد حضور في أيام العطل'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <StudentAttendance
-                academicYearId={academicYear.id}
-                sessionType={sessionType}
-                selectedDate={selectedDate}
-              />
-              
-              <TeacherAttendance
-                academicYearId={academicYear.id}
-                sessionType={sessionType}
-                selectedDate={selectedDate}
-              />
-            </>
-          )}
-        </TabsContent>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <StudentAttendance
+                  academicYearId={academicYear.id}
+                  sessionType={sessionType}
+                  selectedDate={selectedDate}
+                />
+                
+                <TeacherAttendance
+                  academicYearId={academicYear.id}
+                  sessionType={sessionType}
+                  selectedDate={selectedDate}
+                />
+              </>
+            )}
+          </TabsContent>
 
-        <TabsContent value="actions">
-          <StudentActions
-            academicYearId={academicYear.id}
-            sessionType={sessionType}
-            selectedDate={selectedDate}
-          />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="actions" className="space-y-6">
+            <StudentActions
+              academicYearId={academicYear.id}
+              sessionType={sessionType}
+              selectedDate={selectedDate}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

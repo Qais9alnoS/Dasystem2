@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X, AlertCircle, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
@@ -237,34 +237,31 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
   const today = new Date();
   
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
+    <Card className="ios-card">
+      <CardHeader>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+              <Calendar className="w-5 h-5" />
               إدارة أيام العطلة
             </CardTitle>
-            <Badge className="bg-accent text-accent-foreground">
-              {sessionType === 'morning' ? '🌅 الفترة الصباحية' : '🌆 الفترة المسائية'}
-            </Badge>
+            <CardDescription className="mt-1">
+              قم بإضافة أو إزالة أيام العطل للفترة {sessionType === 'morning' ? 'الصباحية' : 'المسائية'}
+            </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              size="sm"
-              variant="outline" 
-              onClick={goToToday}
-              className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground/20 flex items-center gap-1.5"
-            >
-              <CalendarDays className="h-4 w-4" />
-              العودة لليوم
-            </Button>
-          </div>
+          <Button 
+            onClick={goToToday}
+            variant="outline"
+            size="sm"
+          >
+            <CalendarDays className="w-4 h-4 ml-2" />
+            العودة لليوم
+          </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent className="pt-6">
         {/* شريط التنقل بين الأشهر */}
-        <div className="flex items-center justify-between mb-6 bg-muted p-3 rounded-lg">
+        <div className="flex items-center justify-between mb-6 p-4 bg-muted/50 rounded-lg border border-border">
           <Button
             variant="outline"
             size="sm"
@@ -375,22 +372,25 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
         )}
 
         {/* معلومات توضيحية */}
-        <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-card border-2 border-border"></div>
-            <span>يوم عادي</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-accent/10 border-2 border-accent"></div>
-            <span>عطلة (رسمية أو أسبوعية)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded ring-2 ring-primary bg-primary/10"></div>
-            <span>اليوم المحدد من الصفحة الرئيسية</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded ring-2 ring-accent"></div>
-            <span>اليوم الفعلي (الحاضر)</span>
+        <div className="mt-6 p-4 bg-muted/30 rounded-lg border border-border">
+          <p className="text-sm font-semibold text-foreground mb-3">دليل الألوان:</p>
+          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-card border-2 border-border"></div>
+              <span>يوم عادي</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-accent/10 border-2 border-accent"></div>
+              <span>عطلة رسمية</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded ring-2 ring-primary bg-primary/10"></div>
+              <span>اليوم المحدد</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded ring-2 ring-accent"></div>
+              <span>اليوم الحالي</span>
+            </div>
           </div>
         </div>
 

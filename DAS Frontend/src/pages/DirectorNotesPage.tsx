@@ -16,8 +16,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { directorApi } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -32,16 +38,13 @@ const DirectorNotesPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFilters, setSearchFilters] = useState<{
-    notes: boolean;
-    rewards: boolean;
-    assistance: boolean;
-  }>({
-    notes: true,
-    rewards: true,
-    assistance: true,
-  });
   const [filterOpen, setFilterOpen] = useState(false);
+  
+  // Filters - matching search results page
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
   // Static categories - no backend API calls, just display
   const categories = [
@@ -82,23 +85,22 @@ const DirectorNotesPage: React.FC = () => {
     if (searchQuery.trim().length >= 3) {
       const params = new URLSearchParams({ q: searchQuery });
       
-      // Add type filter based on selected filters
-      if (!searchFilters.notes && !searchFilters.rewards && !searchFilters.assistance) {
-        toast({
-          title: 'تنبيه',
-          description: 'يجب اختيار نوع واحد على الأقل للبحث',
-          variant: 'default',
-        });
-        return;
+      // Add type filter
+      if (selectedType !== 'all') {
+        params.append('type', selectedType);
       }
       
-      // Determine search type
-      if (searchFilters.notes && !searchFilters.rewards && !searchFilters.assistance) {
-        params.append('type', 'note');
-      } else if (!searchFilters.notes && searchFilters.rewards && !searchFilters.assistance) {
-        params.append('type', 'reward');
-      } else if (!searchFilters.notes && !searchFilters.rewards && searchFilters.assistance) {
-        params.append('type', 'assistance');
+      // Add category filter
+      if (selectedCategory !== 'all') {
+        params.append('category', selectedCategory);
+      }
+      
+      // Add date filters
+      if (dateFrom) {
+        params.append('dateFrom', dateFrom);
+      }
+      if (dateTo) {
+        params.append('dateTo', dateTo);
       }
       
       navigate(`/director/notes/search?${params.toString()}`);
@@ -111,8 +113,19 @@ const DirectorNotesPage: React.FC = () => {
     }
   };
 
-  const activeFiltersCount = Object.values(searchFilters).filter(Boolean).length;
-  const allFiltersActive = activeFiltersCount === 3;
+  const clearFilters = () => {
+    setSelectedType('all');
+    setSelectedCategory('all');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const activeFiltersCount = [
+    selectedType !== 'all',
+    selectedCategory !== 'all',
+    dateFrom,
+    dateTo
+  ].filter(Boolean).length;
 
   return (
     <div className="container mx-auto p-6 max-w-7xl" dir="rtl">
@@ -133,12 +146,16 @@ const DirectorNotesPage: React.FC = () => {
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               className="flex-1"
             />
+            <Button onClick={handleSearch}>
+              <Search className="h-4 w-4 ml-2" />
+              بحث
+            </Button>
             <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" className="relative">
                   <SlidersHorizontal className="h-4 w-4 ml-2" />
                   تصفية
-                  {!allFiltersActive && activeFiltersCount > 0 && (
+                  {activeFiltersCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center">
                       {activeFiltersCount}
                     </Badge>
@@ -147,66 +164,64 @@ const DirectorNotesPage: React.FC = () => {
               </SheetTrigger>
               <SheetContent side="left" dir="rtl">
                 <SheetHeader>
-                  <SheetTitle>تصفية البحث</SheetTitle>
+                  <SheetTitle>تصفية النتائج</SheetTitle>
                   <SheetDescription>
-                    اختر أنواع المحتوى للبحث فيها
+                    اختر الفلاتر لتضييق نطاق البحث
                   </SheetDescription>
                 </SheetHeader>
                 <div className="space-y-6 mt-6">
-                  {/* Filter Checkboxes */}
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">البحث في</Label>
-                    
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Checkbox
-                        id="filter-notes"
-                        checked={searchFilters.notes}
-                        onCheckedChange={(checked) => 
-                          setSearchFilters(prev => ({ ...prev, notes: !!checked }))
-                        }
-                      />
-                      <label
-                        htmlFor="filter-notes"
-                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        <FileText className="h-4 w-4 text-primary" />
-                        الملاحظات
-                      </label>
-                    </div>
+                  {/* Type Filter */}
+                  <div className="space-y-2">
+                    <Label>نوع السجل</Label>
+                    <Select value={selectedType} onValueChange={setSelectedType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر النوع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="note">ملاحظات</SelectItem>
+                        <SelectItem value="reward">مكافآت</SelectItem>
+                        <SelectItem value="assistance">مساعدات</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Checkbox
-                        id="filter-rewards"
-                        checked={searchFilters.rewards}
-                        onCheckedChange={(checked) => 
-                          setSearchFilters(prev => ({ ...prev, rewards: !!checked }))
-                        }
-                      />
-                      <label
-                        htmlFor="filter-rewards"
-                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        <Award className="h-4 w-4 text-accent" />
-                        المكافآت
-                      </label>
+                  {/* Category Filter (only for notes) */}
+                  {(selectedType === 'all' || selectedType === 'note') && (
+                    <div className="space-y-2">
+                      <Label>الفئة</Label>
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الفئة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="goals">الأهداف</SelectItem>
+                          <SelectItem value="projects">المشاريع</SelectItem>
+                          <SelectItem value="blogs">مدونات</SelectItem>
+                          <SelectItem value="educational_admin">الأمور التعليمية والإدارية</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
+                  )}
 
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Checkbox
-                        id="filter-assistance"
-                        checked={searchFilters.assistance}
-                        onCheckedChange={(checked) => 
-                          setSearchFilters(prev => ({ ...prev, assistance: !!checked }))
-                        }
-                      />
-                      <label
-                        htmlFor="filter-assistance"
-                        className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        <Heart className="h-4 w-4 text-red-500" />
-                        المساعدات
-                      </label>
-                    </div>
+                  {/* Date Range Filter */}
+                  <div className="space-y-2">
+                    <Label>من تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>إلى تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
                   </div>
 
                   {/* Action Buttons */}
@@ -214,24 +229,14 @@ const DirectorNotesPage: React.FC = () => {
                     <Button onClick={() => setFilterOpen(false)} className="flex-1">
                       تطبيق
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setSearchFilters({ notes: true, rewards: true, assistance: true });
-                      }} 
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={clearFilters} className="flex-1">
                       <X className="h-4 w-4 ml-2" />
-                      إعادة تعيين
+                      مسح
                     </Button>
                   </div>
                 </div>
               </SheetContent>
             </Sheet>
-            <Button onClick={handleSearch}>
-              <Search className="h-4 w-4 ml-2" />
-              بحث
-            </Button>
           </div>
         </CardContent>
       </Card>

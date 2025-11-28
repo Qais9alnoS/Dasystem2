@@ -30,13 +30,14 @@ type AbsenceData = {
 };
 
 const StudentAcademicInfoPage = () => {
-  const { refreshToken } = useAuth();
+  const { refreshToken, state: authState } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
+  const [selectedSessionType, setSelectedSessionType] = useState<'morning' | 'evening' | null>(null);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
@@ -169,15 +170,19 @@ const StudentAcademicInfoPage = () => {
     }
   };
 
-  const loadClasses = async (academicYearId: number) => {
+  const loadClasses = async (academicYearId: number, sessionType: 'morning' | 'evening') => {
     try {
       setClassesLoading(true);
       setClassesError(null);
       console.log('=== Loading Classes Debug ===');
       console.log('Academic Year ID:', academicYearId);
       console.log('Academic Year ID Type:', typeof academicYearId);
+      console.log('Session Type:', sessionType);
       
-      const response = await retryWithTokenRefresh(() => api.academic.getClasses({ academic_year_id: academicYearId }));
+      const response = await retryWithTokenRefresh(() => api.academic.getClasses({ 
+        academic_year_id: academicYearId,
+        session_type: sessionType
+      }));
       console.log('Raw API Response:', response);
       console.log('Response Type:', typeof response);
       console.log('Is Array:', Array.isArray(response));
@@ -234,6 +239,7 @@ const StudentAcademicInfoPage = () => {
     const yearName = localStorage.getItem('selected_academic_year_name');
     console.log('Stored Year ID:', yearId);
     console.log('Stored Year Name:', yearName);
+    console.log('User Role:', authState.user?.role);
     console.log('All localStorage keys:', Object.keys(localStorage));
     
     if (yearId) {
@@ -243,7 +249,16 @@ const StudentAcademicInfoPage = () => {
       
       if (!isNaN(parsedId)) {
         setSelectedAcademicYear(parsedId);
-        loadClasses(parsedId);
+        
+        // For non-director users, auto-select session type based on their role
+        if (authState.user?.role === 'morning_school') {
+          setSelectedSessionType('morning');
+          loadClasses(parsedId, 'morning');
+        } else if (authState.user?.role === 'evening_school') {
+          setSelectedSessionType('evening');
+          loadClasses(parsedId, 'evening');
+        }
+        // For directors, they need to select session type manually
       } else {
         setClassesError('معرّف السنة الدراسية غير صالح. يرجى اختيار سنة دراسية صحيحة.');
         console.error('Invalid academic year ID:', yearId);
@@ -252,7 +267,7 @@ const StudentAcademicInfoPage = () => {
       setClassesError('لم يتم اختيار سنة دراسية. يرجى اختيار سنة من صفحة السنوات الدراسية.');
       console.warn('No academic year selected in localStorage');
     }
-  }, []);
+  }, [authState.user?.role]);
 
   useEffect(() => {
     if (selectedClass && selectedSection) {
@@ -264,16 +279,39 @@ const StudentAcademicInfoPage = () => {
   // Handle preselected student from navigation (e.g., from search)
   useEffect(() => {
     const state = location.state as any;
-    if (state?.preselected && classes.length > 0) {
-      const { gradeLevel, gradeNumber, section, studentId, scrollToStudent, highlightStudent } = state.preselected;
+    if (state?.preselected) {
+      const { gradeLevel, gradeNumber, section, sessionType, studentId, scrollToStudent, highlightStudent } = state.preselected;
       
       console.log('=== Processing Preselected Student for Academic Info ===');
       console.log('Grade Level:', gradeLevel);
       console.log('Grade Number:', gradeNumber);
       console.log('Section:', section);
+      console.log('Session Type:', sessionType);
       console.log('Student ID:', studentId);
       console.log('Scroll:', scrollToStudent);
       console.log('Highlight:', highlightStudent);
+      
+      // For directors, set the session type and load classes
+      if (authState.user?.role === 'director' && sessionType) {
+        setSelectedSessionType(sessionType);
+        if (selectedAcademicYear) {
+          loadClasses(selectedAcademicYear, sessionType).then(() => {
+            // After classes are loaded, find and select the matching class
+            // This will be handled in the next effect when classes update
+          });
+        }
+      }
+      
+      // Clear the state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, authState.user?.role, selectedAcademicYear]);
+
+  // Handle class selection after classes are loaded from preselected state
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.preselected && classes.length > 0) {
+      const { gradeLevel, gradeNumber, section, studentId, scrollToStudent, highlightStudent } = state.preselected;
       
       // Find the class that matches both grade_level AND grade_number
       const matchingClass = classes.find(c => 
@@ -310,11 +348,8 @@ const StudentAcademicInfoPage = () => {
       } else {
         console.warn('No matching class found for grade level:', gradeLevel, 'grade number:', gradeNumber);
       }
-      
-      // Clear the state to prevent re-triggering
-      window.history.replaceState({}, document.title);
     }
-  }, [location.state, classes]);
+  }, [classes]);
 
   // تحميل الإعدادات من الباك إند
   useEffect(() => {
@@ -1669,15 +1704,42 @@ const StudentAcademicInfoPage = () => {
               <div className="text-center py-8">
                 <p className="text-destructive mb-4">{classesError}</p>
                 <Button onClick={() => {
-                  if (selectedAcademicYear) {
-                    loadClasses(selectedAcademicYear);
+                  if (selectedAcademicYear && selectedSessionType) {
+                    loadClasses(selectedAcademicYear, selectedSessionType);
                   }
                 }}>
-                  إعادة المحاولة
+                  محاولة مرة أخرى
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Session Type Selection (for directors only) */}
+                {authState.user?.role === 'director' && (
+                  <div className="space-y-2">
+                    <Label>نوع الدوام</Label>
+                    <Select
+                      value={selectedSessionType || ''}
+                      onValueChange={(value: 'morning' | 'evening') => {
+                        setSelectedSessionType(value);
+                        setSelectedClass(null);
+                        setSelectedSection('');
+                        setSelectedSubject(null);
+                        setIsTotalView(false);
+                        if (selectedAcademicYear) {
+                          loadClasses(selectedAcademicYear, value);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع الدوام" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="morning">صباحي</SelectItem>
+                        <SelectItem value="evening">مسائي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>الصف</Label>
@@ -1689,9 +1751,16 @@ const StudentAcademicInfoPage = () => {
                         setSelectedSubject(null);
                         setIsTotalView(false);
                       }}
+                      disabled={authState.user?.role === 'director' && !selectedSessionType}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={classes.length === 0 ? "لا توجد صفوف متاحة" : "اختر الصف"} />
+                        <SelectValue placeholder={
+                          authState.user?.role === 'director' && !selectedSessionType
+                            ? "اختر نوع الدوام أولاً"
+                            : classes.length === 0
+                            ? "لا توجد صفوف متاحة"
+                            : "اختر الصف"
+                        } />
                       </SelectTrigger>
                       <SelectContent>
                         {classes.length === 0 ? (
@@ -1718,7 +1787,7 @@ const StudentAcademicInfoPage = () => {
                         setSelectedSubject(null);
                         setIsTotalView(false);
                       }}
-                      disabled={!selectedClass}
+                      disabled={!selectedClass || (authState.user?.role === 'director' && !selectedSessionType)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="اختر الشعبة" />

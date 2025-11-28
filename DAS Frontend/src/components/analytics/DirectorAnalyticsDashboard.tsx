@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, GraduationCap, School, Trophy, DollarSign, TrendingUp } from 'lucide-react';
+import { Users, GraduationCap, School, Trophy, DollarSign, TrendingUp, Sun, Moon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from './MetricCard';
 import LineChart from './LineChart';
@@ -7,6 +7,32 @@ import BarChart from './BarChart';
 import PieChart from './PieChart';
 import TimePeriodToggle, { PeriodType } from './TimePeriodToggle';
 import api from '../../services/api';
+
+// Session colors: Yellow for morning, Blue for evening
+const MORNING_COLOR = '#F59E0B'; // Amber/Yellow
+const EVENING_COLOR = '#3B82F6'; // Blue
+
+// Gender colors: Blue for male, Pink for female
+const MALE_COLOR = '#3B82F6'; // Blue
+const FEMALE_COLOR = '#EC4899'; // Pink
+
+// Transportation colors (matching design system)
+const BUS_COLOR = '#3B82F6'; // Blue (iOS Primary)
+const PRIVATE_COLOR = '#F59E0B'; // Amber/Yellow (iOS Accent)
+const NO_TRANSPORT_COLOR = '#FF9500'; // Orange (iOS Orange)
+
+// Helper function to format class label in Arabic
+const formatClassLabel = (section: any): string => {
+  if (section.grade_level && section.grade_number && section.section) {
+    return `الصف ${section.grade_number}/${section.section}`;
+  }
+  const label = section.label || '';
+  const match = label.match(/(\d+)\s*[-/]\s*(\d+)/);
+  if (match) {
+    return `الصف ${match[1]}/${match[2]}`;
+  }
+  return label;
+};
 
 const DirectorAnalyticsDashboard: React.FC = () => {
   const [period, setPeriod] = useState<PeriodType>('monthly');
@@ -59,7 +85,7 @@ const DirectorAnalyticsDashboard: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -116,35 +142,169 @@ const DirectorAnalyticsDashboard: React.FC = () => {
         />
       </div>
 
-      {/* Session Comparison */}
+      {/* Session Comparison - Combined */}
       <Card>
         <CardHeader>
-          <CardTitle>مقارنة بين الصباحي والمسائي</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Sun className="h-5 w-5 text-amber-500" />
+            <Moon className="h-5 w-5 text-blue-500" />
+            مقارنة بين الصباحي والمسائي
+          </CardTitle>
         </CardHeader>
         <CardContent className="min-h-[350px]">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <BarChart
+            data={[]}
+            categories={['الطلاب', 'المعلمين']}
+            series={[
+              {
+                name: 'صباحي ⚡',
+                data: [overviewStats?.morning_students || 0, overviewStats?.morning_teachers || 0],
+                color: MORNING_COLOR
+              },
+              {
+                name: 'مسائي 🌙',
+                data: [overviewStats?.evening_students || 0, overviewStats?.evening_teachers || 0],
+                color: EVENING_COLOR
+              }
+            ]}
+            height="300px"
+            horizontal={false}
+            loading={loading}
+            showLegend={true}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Student Distribution by Class - Morning vs Evening */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sun className="h-5 w-5 text-amber-500" />
+            <Moon className="h-5 w-5 text-blue-500" />
+            توزيع الطلاب
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Row 1: Gender Charts - Morning vs Evening */}
             <div>
-              <h3 className="text-sm font-semibold text-foreground mb-4">توزيع الطلاب حسب الفترة</h3>
-            <PieChart
-              data={[
-                { name: 'الصباحي', value: 5 }, // Temporary test data
-                { name: 'المسائي', value: 7 }
-              ]}
-              height="300px"
-              loading={loading}
-            />
+              <h4 className="text-sm font-semibold text-foreground mb-2 text-center flex items-center justify-center gap-2">
+                <Sun className="h-4 w-4 text-amber-500" />
+                مشاركة الصباحي
+              </h4>
+              <PieChart
+                data={[
+                  { name: 'ذكور', value: distribution?.by_gender?.reduce((sum: number, g: any) => g.gender === 'male' && g.session_type === 'morning' ? sum + g.count : sum, 0) || 0 },
+                  { name: 'إناث', value: distribution?.by_gender?.reduce((sum: number, g: any) => g.gender === 'female' && g.session_type === 'morning' ? sum + g.count : sum, 0) || 0 }
+                ]}
+                colors={[MALE_COLOR, FEMALE_COLOR]}
+                height="180px"
+                donut
+                loading={loading}
+              />
             </div>
+            
             <div>
-              <h3 className="text-sm font-semibold text-foreground mb-4">توزيع المعلمين حسب الفترة</h3>
-            <PieChart
-              data={[
-                { name: 'الصباحي', value: 3 }, // Temporary test data
-                { name: 'المسائي', value: 4 }
-              ]}
-              donut
-              height="300px"
-              loading={loading}
-            />
+              <h4 className="text-sm font-semibold text-foreground mb-2 text-center flex items-center justify-center gap-2">
+                <Moon className="h-4 w-4 text-blue-500" />
+                مشاركة المسائي
+              </h4>
+              <PieChart
+                data={[
+                  { name: 'ذكور', value: distribution?.by_gender?.reduce((sum: number, g: any) => g.gender === 'male' && g.session_type === 'evening' ? sum + g.count : sum, 0) || 0 },
+                  { name: 'إناث', value: distribution?.by_gender?.reduce((sum: number, g: any) => g.gender === 'female' && g.session_type === 'evening' ? sum + g.count : sum, 0) || 0 }
+                ]}
+                colors={[MALE_COLOR, FEMALE_COLOR]}
+                height="180px"
+                donut
+                loading={loading}
+              />
+            </div>
+            
+            {/* Row 2: Transportation Charts - Morning vs Evening */}
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2 text-center flex items-center justify-center gap-2">
+                <Sun className="h-4 w-4 text-amber-500" />
+                نقل الصباحي
+              </h4>
+              <PieChart
+                data={[
+                  { name: 'باص', value: distribution?.by_transportation?.find((t: any) => (t.type === 'bus') && t.session_type === 'morning')?.count || 0 },
+                  { name: 'خاص', value: distribution?.by_transportation?.find((t: any) => (t.type === 'private') && t.session_type === 'morning')?.count || 0 },
+                  { name: 'بدون', value: distribution?.by_transportation?.find((t: any) => (t.type === 'none' || t.type === 'no_transport') && t.session_type === 'morning')?.count || 0 }
+                ]}
+                colors={[BUS_COLOR, PRIVATE_COLOR, NO_TRANSPORT_COLOR]}
+                height="180px"
+                loading={loading}
+              />
+            </div>
+            
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2 text-center flex items-center justify-center gap-2">
+                <Moon className="h-4 w-4 text-blue-500" />
+                نقل المسائي
+              </h4>
+              <PieChart
+                data={[
+                  { name: 'باص', value: distribution?.by_transportation?.find((t: any) => (t.type === 'bus') && t.session_type === 'evening')?.count || 0 },
+                  { name: 'خاص', value: distribution?.by_transportation?.find((t: any) => (t.type === 'private') && t.session_type === 'evening')?.count || 0 },
+                  { name: 'بدون', value: distribution?.by_transportation?.find((t: any) => (t.type === 'none' || t.type === 'no_transport') && t.session_type === 'evening')?.count || 0 }
+                ]}
+                colors={[BUS_COLOR, PRIVATE_COLOR, NO_TRANSPORT_COLOR]}
+                height="180px"
+                loading={loading}
+              />
+            </div>
+            
+            {/* Row 3: Bar Chart (full width) */}
+            <div className="col-span-2">
+              <h4 className="text-sm font-semibold text-foreground mb-2 text-center">حسب الصفوف</h4>
+              {(() => {
+                const bySection = distribution?.by_section || [];
+                const morningSections = bySection.filter((s: any) => s.session_type === 'morning');
+                const eveningSections = bySection.filter((s: any) => s.session_type === 'evening');
+                
+                const allCategories = [
+                  ...morningSections.map((s: any) => formatClassLabel(s)),
+                  ...eveningSections.map((s: any) => formatClassLabel(s))
+                ];
+                
+                const morningData = morningSections.map((s: any) => s.count);
+                const eveningData = eveningSections.map((s: any) => s.count);
+                
+                const series = [
+                  {
+                    name: 'صباحي',
+                    data: [...morningData, ...Array(eveningSections.length).fill(0)],
+                    color: MORNING_COLOR
+                  },
+                  {
+                    name: 'مسائي',
+                    data: [...Array(morningSections.length).fill(0), ...eveningData],
+                    color: EVENING_COLOR
+                  }
+                ];
+                
+                if (allCategories.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p className="text-sm">لا توجد بيانات</p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <BarChart
+                    data={[]}
+                    categories={allCategories}
+                    series={series}
+                    height="280px"
+                    horizontal={false}
+                    loading={loading}
+                    showLegend={true}
+                  />
+                );
+              })()}
             </div>
           </div>
         </CardContent>

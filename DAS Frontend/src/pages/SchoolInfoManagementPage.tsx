@@ -7,10 +7,12 @@ import { api } from '@/services/api';
 import type { Class, Student, Teacher, SessionType, GradeLevel } from '@/types/school';
 import { toast } from '@/hooks/use-toast';
 import { defaultGradeTemplates, getGradeLabel } from '@/lib/defaultSchoolData';
+import { useAuth } from '@/contexts/AuthContext';
 
 const SchoolInfoManagementPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { state: authState } = useAuth();
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -18,6 +20,14 @@ const SchoolInfoManagementPage = () => {
   const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasDefaultClasses, setHasDefaultClasses] = useState(false);
+  
+  // Determine session type based on user role
+  const getUserSessionType = (): SessionType | undefined => {
+    if (authState.user?.role === 'morning_school') return 'morning';
+    if (authState.user?.role === 'evening_school') return 'evening';
+    // Director can see both - return undefined to not filter
+    return undefined;
+  };
 
   useEffect(() => {
     // Check if academic year is passed from search navigation
@@ -64,17 +74,27 @@ const SchoolInfoManagementPage = () => {
     try {
       setLoading(true);
       
-      // Load classes filtered by academic year
-      const classesResponse = await api.academic.getClasses({ academic_year_id: selectedAcademicYear });
+      // Load classes filtered by academic year and session type (for non-directors)
+      const sessionTypeFilter = getUserSessionType();
+      const classesParams: any = { academic_year_id: selectedAcademicYear };
+      if (sessionTypeFilter) {
+        classesParams.session_type = sessionTypeFilter;
+      }
+      const classesResponse = await api.academic.getClasses(classesParams);
       const allClasses = Array.isArray(classesResponse) ? classesResponse : (classesResponse?.data || []);
       setClasses(allClasses);
       
       // Check if default classes exist
       setHasDefaultClasses(allClasses.length > 0);
       
-      // Load students
+      // Load students (filter by session type for non-directors)
       const studentsResponse = await api.students.getAll({ academic_year_id: selectedAcademicYear });
-      const allStudents = Array.isArray(studentsResponse) ? studentsResponse : (studentsResponse?.data || []);
+      let allStudents = Array.isArray(studentsResponse) ? studentsResponse : (studentsResponse?.data || []);
+      
+      // Filter students by session type if not a director
+      if (sessionTypeFilter) {
+        allStudents = allStudents.filter((s: Student) => s.session_type === sessionTypeFilter);
+      }
       setStudents(allStudents);
       
       // Load teachers
@@ -124,10 +144,13 @@ const SchoolInfoManagementPage = () => {
     try {
       setLoading(true);
       
+      // Get the session type to create classes for
+      const sessionType = getUserSessionType() || 'morning'; // Default to morning if director hasn't specified
+      
       for (const template of defaultGradeTemplates) {
         const classData = {
           academic_year_id: selectedAcademicYear,
-          session_type: 'morning' as SessionType,
+          session_type: sessionType as SessionType,
           grade_level: template.grade_level as GradeLevel,
           grade_number: template.grade_number,
           section_count: template.default_section_count,
@@ -137,10 +160,17 @@ const SchoolInfoManagementPage = () => {
         const createdClassResponse = await api.classes.create(classData);
         console.log('Created class response:', createdClassResponse);
         
-        // Extract class from response
-        const createdClass = createdClassResponse.data || createdClassResponse;
+        // Extract class from response - handle both direct Class and ApiResponse<Class>
+        let createdClass: Class;
+        if ('data' in createdClassResponse && createdClassResponse.data) {
+          createdClass = createdClassResponse.data;
+        } else {
+          // Assume response is directly a Class object
+          createdClass = createdClassResponse as unknown as Class;
+        }
+        
         if (!createdClass || !createdClass.id) {
-          throw new Error('Failed to create class: Invalid response');
+          throw new Error('Failed to create class: Invalid response - missing class ID');
         }
         
         const classId = createdClass.id;

@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus, Edit, Trash2, Search, X } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { IOSSwitch } from '@/components/ui/ios-switch';
 import { api } from '@/services/api';
 import type { Student, Class, AcademicYear } from '@/types/school';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 const StudentPersonalInfoPage = () => {
   const location = useLocation();
+  const { state: authState } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
+  const [selectedSessionType, setSelectedSessionType] = useState<'morning' | 'evening' | null>(null);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -26,6 +31,8 @@ const StudentPersonalInfoPage = () => {
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState<string | null>(null);
   const [pendingStudentId, setPendingStudentId] = useState<number | null>(null);
+  const processedPreselectionRef = React.useRef(false);
+  const classSelectionProcessedRef = React.useRef(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Student>>({
@@ -58,17 +65,18 @@ const StudentPersonalInfoPage = () => {
     notes: '',
   });
 
-  const loadClasses = async (academicYearId: number) => {
+  const loadClasses = async (academicYearId: number, sessionType: 'morning' | 'evening') => {
     try {
       setClassesLoading(true);
       setClassesError(null);
       console.log('=== Loading Classes Debug ===');
       console.log('Academic Year ID:', academicYearId);
       console.log('Academic Year ID Type:', typeof academicYearId);
+      console.log('Session Type:', sessionType);
       
       const response = await api.academic.getClasses({ 
         academic_year_id: academicYearId,
-        session_type: 'morning'
+        session_type: sessionType
       });
       console.log('Raw API Response:', response);
       console.log('Response Type:', typeof response);
@@ -126,6 +134,7 @@ const StudentPersonalInfoPage = () => {
     const yearName = localStorage.getItem('selected_academic_year_name');
     console.log('Stored Year ID:', yearId);
     console.log('Stored Year Name:', yearName);
+    console.log('User Role:', authState.user?.role);
     console.log('All localStorage keys:', Object.keys(localStorage));
     
     if (yearId) {
@@ -135,7 +144,16 @@ const StudentPersonalInfoPage = () => {
       
       if (!isNaN(parsedId)) {
         setSelectedAcademicYear(parsedId);
-        loadClasses(parsedId);
+        
+        // For non-director users, auto-select session type based on their role
+        if (authState.user?.role === 'morning_school') {
+          setSelectedSessionType('morning');
+          loadClasses(parsedId, 'morning');
+        } else if (authState.user?.role === 'evening_school') {
+          setSelectedSessionType('evening');
+          loadClasses(parsedId, 'evening');
+        }
+        // For directors, they need to select session type manually
       } else {
         setClassesError('معرّف السنة الدراسية غير صالح. يرجى اختيار سنة دراسية من صفحة السنوات الدراسية.');
         console.error('Invalid academic year ID:', yearId);
@@ -144,7 +162,7 @@ const StudentPersonalInfoPage = () => {
       setClassesError('لم يتم اختيار سنة دراسية. يرجى اختيار سنة من صفحة السنوات الدراسية.');
       console.warn('No academic year selected in localStorage');
     }
-  }, []);
+  }, [authState.user?.role]);
 
   // Load students when class and section change
   useEffect(() => {
@@ -156,15 +174,44 @@ const StudentPersonalInfoPage = () => {
   // Handle preselected state from navigation (e.g., from search)
   useEffect(() => {
     const state = location.state as any;
-    if (state?.preselected && classes.length > 0) {
-      const { gradeLevel, gradeNumber, section, studentId, openPopup } = state.preselected;
+    if (state?.preselected && !processedPreselectionRef.current) {
+      // Wait for dependencies to be ready before processing
+      if (!selectedAcademicYear || !authState.user) {
+        return;
+      }
+
+      const { gradeLevel, gradeNumber, section, sessionType, studentId, openPopup } = state.preselected;
       
       console.log('=== Processing Preselected Student ===');
       console.log('Grade Level:', gradeLevel);
       console.log('Grade Number:', gradeNumber);
       console.log('Section:', section);
+      console.log('Session Type:', sessionType);
       console.log('Student ID:', studentId);
       console.log('Open Popup:', openPopup);
+      
+      processedPreselectionRef.current = true;
+
+      // For directors, set the session type and load classes
+      if (authState.user.role === 'director' && sessionType) {
+        setSelectedSessionType(sessionType);
+        loadClasses(selectedAcademicYear, sessionType).then(() => {
+          // After classes are loaded, find and select the matching class
+          // This will be handled in the next effect when classes update
+        });
+      }
+      
+      // Clear the state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, authState.user, selectedAcademicYear]);
+
+  // Handle class selection after classes are loaded from preselected state
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.preselected && classes.length > 0 && !classSelectionProcessedRef.current) {
+      const { gradeLevel, gradeNumber, section, studentId, openPopup } = state.preselected;
+      
       console.log('Available Classes:', classes);
       
       // Find the class that matches both grade_level AND grade_number
@@ -176,6 +223,7 @@ const StudentPersonalInfoPage = () => {
         console.log('Found matching class:', matchingClass);
         setSelectedClass(matchingClass.id);
         setSelectedSection(section);
+        classSelectionProcessedRef.current = true;
         
         // Store the student ID to open popup after students load
         if (openPopup && studentId) {
@@ -183,13 +231,9 @@ const StudentPersonalInfoPage = () => {
         }
       } else {
         console.warn('No matching class found for grade level:', gradeLevel, 'grade number:', gradeNumber);
-        console.warn('Available classes:', classes.map(c => ({ id: c.id, level: c.grade_level, number: c.grade_number })));
       }
-      
-      // Clear the state to prevent re-triggering
-      window.history.replaceState({}, document.title);
     }
-  }, [location.state, classes]);
+  }, [classes]);
 
   // Open popup for pending student after students are loaded
   useEffect(() => {
@@ -219,8 +263,11 @@ const StudentPersonalInfoPage = () => {
       // Handle both direct array and wrapped response
       const allStudents = Array.isArray(response) ? response : (response?.data || []);
       
-      // Filter by section
-      const filteredStudents = allStudents.filter(s => s.section === selectedSection);
+      // Filter by section and session type
+      const filteredStudents = allStudents.filter(s => 
+        s.section === selectedSection && 
+        (!selectedSessionType || s.session_type === selectedSessionType)
+      );
       
       // Sort alphabetically by name
       const sortedStudents = filteredStudents.sort((a, b) => 
@@ -255,6 +302,7 @@ const StudentPersonalInfoPage = () => {
         grade_level: selectedClassData?.grade_level || 'primary',
         grade_number: selectedClassData?.grade_number || 1,
         section: selectedSection,
+        session_type: selectedSessionType || 'morning',
         is_active: true,
       };
 
@@ -366,7 +414,7 @@ const StudentPersonalInfoPage = () => {
       grade_level: 'primary',
       grade_number: 1,
       section: '',
-      session_type: 'morning',
+      session_type: selectedSessionType || 'morning',
       ninth_grade_total: undefined,
       notes: '',
     });
@@ -415,15 +463,42 @@ const StudentPersonalInfoPage = () => {
               <div className="text-center py-8">
                 <p className="text-destructive mb-4">{classesError}</p>
                 <Button onClick={() => {
-                  if (selectedAcademicYear) {
-                    loadClasses(selectedAcademicYear);
+                  if (selectedAcademicYear && selectedSessionType) {
+                    loadClasses(selectedAcademicYear, selectedSessionType);
                   }
                 }}>
                   إعادة المحاولة
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                {/* Session Type Selection (for directors only) */}
+                {authState.user?.role === 'director' && (
+                  <div className="space-y-2">
+                    <Label>نوع الدوام</Label>
+                    <Select
+                      value={selectedSessionType || ''}
+                      onValueChange={(value: 'morning' | 'evening') => {
+                        setSelectedSessionType(value);
+                        setSelectedClass(null);
+                        setSelectedSection('');
+                        if (selectedAcademicYear) {
+                          loadClasses(selectedAcademicYear, value);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع الدوام" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="morning">صباحي</SelectItem>
+                        <SelectItem value="evening">مسائي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>الصف</Label>
                   <Select
@@ -432,9 +507,16 @@ const StudentPersonalInfoPage = () => {
                       setSelectedClass(parseInt(value));
                       setSelectedSection('');
                     }}
+                    disabled={authState.user?.role === 'director' && !selectedSessionType}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={classes.length === 0 ? "لا توجد صفوف متاحة" : "اختر الصف"} />
+                      <SelectValue placeholder={
+                        authState.user?.role === 'director' && !selectedSessionType
+                          ? "اختر نوع الدوام أولاً"
+                          : classes.length === 0
+                          ? "لا توجد صفوف متاحة"
+                          : "اختر الصف"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       {classes.length === 0 ? (
@@ -457,7 +539,7 @@ const StudentPersonalInfoPage = () => {
                   <Select
                     value={selectedSection}
                     onValueChange={setSelectedSection}
-                    disabled={!selectedClass}
+                    disabled={!selectedClass || (authState.user?.role === 'director' && !selectedSessionType)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الشعبة" />
@@ -471,6 +553,7 @@ const StudentPersonalInfoPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
               </div>
             )}
           </CardContent>
@@ -542,12 +625,14 @@ const StudentPersonalInfoPage = () => {
 
                           <div className="space-y-2">
                             <Label htmlFor="birth_date">تاريخ الميلاد*</Label>
-                            <Input
-                              id="birth_date"
-                              type="date"
-                              value={formData.birth_date}
-                              onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                              required
+                            <DatePicker
+                              value={formData.birth_date ? new Date(formData.birth_date) : undefined}
+                              onChange={(date) => {
+                                if (date) {
+                                  setFormData({ ...formData, birth_date: format(date, 'yyyy-MM-dd') });
+                                }
+                              }}
+                              className="w-full"
                             />
                           </div>
 
@@ -761,22 +846,6 @@ const StudentPersonalInfoPage = () => {
                               value={formData.previous_school}
                               onChange={(e) => setFormData({ ...formData, previous_school: e.target.value })}
                             />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="session_type">نوع الجلسة*</Label>
-                            <Select
-                              value={formData.session_type}
-                              onValueChange={(value: 'morning' | 'evening') => setFormData({ ...formData, session_type: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="morning">صباحي</SelectItem>
-                                <SelectItem value="evening">مسائي</SelectItem>
-                              </SelectContent>
-                            </Select>
                           </div>
 
                           {formData.grade_level === 'secondary' && (

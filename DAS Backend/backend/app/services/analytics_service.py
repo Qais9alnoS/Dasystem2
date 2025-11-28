@@ -235,9 +235,10 @@ class AnalyticsService:
                 Student.grade_level, Student.grade_number
             ).all()
             
-            # By gender
+            # By gender (with session_type for filtering)
             gender_distribution = db.query(
                 Student.gender,
+                Student.session_type,
                 func.count(Student.id).label("count")
             ).filter(
                 Student.academic_year_id == academic_year_id,
@@ -245,11 +246,12 @@ class AnalyticsService:
             )
             if session_type:
                 gender_distribution = gender_distribution.filter(Student.session_type == session_type)
-            gender_distribution = gender_distribution.group_by(Student.gender).all()
+            gender_distribution = gender_distribution.group_by(Student.gender, Student.session_type).all()
             
-            # By transportation
+            # By transportation (with session_type for filtering)
             transport_distribution = db.query(
                 Student.transportation_type,
+                Student.session_type,
                 func.count(Student.id).label("count")
             ).filter(
                 Student.academic_year_id == academic_year_id,
@@ -257,13 +259,14 @@ class AnalyticsService:
             )
             if session_type:
                 transport_distribution = transport_distribution.filter(Student.session_type == session_type)
-            transport_distribution = transport_distribution.group_by(Student.transportation_type).all()
+            transport_distribution = transport_distribution.group_by(Student.transportation_type, Student.session_type).all()
             
             # By section (class distribution)
             section_distribution = db.query(
                 Student.grade_level,
                 Student.grade_number,
                 Student.section,
+                Student.session_type,
                 func.count(Student.id).label("count")
             ).filter(
                 Student.academic_year_id == academic_year_id,
@@ -272,7 +275,7 @@ class AnalyticsService:
             if session_type:
                 section_distribution = section_distribution.filter(Student.session_type == session_type)
             section_distribution = section_distribution.group_by(
-                Student.grade_level, Student.grade_number, Student.section
+                Student.grade_level, Student.grade_number, Student.section, Student.session_type
             ).all()
             
             return {
@@ -286,22 +289,23 @@ class AnalyticsService:
                     for level, number, count in grade_distribution
                 ],
                 "by_gender": [
-                    {"gender": gender, "count": count}
-                    for gender, count in gender_distribution
+                    {"gender": gender, "session_type": session, "count": count}
+                    for gender, session, count in gender_distribution
                 ],
                 "by_transportation": [
-                    {"type": transport, "count": count}
-                    for transport, count in transport_distribution
+                    {"type": transport, "session_type": session, "count": count}
+                    for transport, session, count in transport_distribution
                 ],
                 "by_section": [
                     {
                         "grade_level": level,
                         "grade_number": number,
                         "section": section,
+                        "session_type": session,
                         "count": count,
                         "label": f"{level} {number} - {section}"
                     }
-                    for level, number, section, count in section_distribution
+                    for level, number, section, session, count in section_distribution
                 ]
             }
             

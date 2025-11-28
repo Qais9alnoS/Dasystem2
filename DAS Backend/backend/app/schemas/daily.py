@@ -55,6 +55,7 @@ class StudentDailyAttendanceBulk(BaseModel):
     attendance_date: date
     class_id: int
     section: str
+    session_type: str  # morning or evening - لتمييز الفترة
     absent_student_ids: List[int] = []  # فقط الطلاب الغائبين
     notes: Optional[str] = None
 

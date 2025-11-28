@@ -98,6 +98,27 @@ export const ScheduleManagementPage: React.FC = () => {
         isNavigatingFromDashboard.current = false;
       }, 100);
     }
+    
+    // Handle preselected schedule from search
+    if (location.state?.viewSchedule && location.state?.scheduleData) {
+      console.log('=== Navigating to View Schedule from Search ===');
+      console.log('Schedule Data:', location.state.scheduleData);
+      
+      // Switch to view tab
+      setActiveTab('view');
+      
+      // Set schedule data for the viewer
+      if (location.state.scheduleData.academic_year_id) {
+        setScheduleData({
+          academicYearId: location.state.scheduleData.academic_year_id,
+          sessionType: location.state.scheduleData.session_type,
+          gradeLevel: location.state.scheduleData.grade_level || '',
+          gradeNumber: location.state.scheduleData.grade_number || 1,
+          classId: location.state.scheduleData.class_id,
+          section: location.state.scheduleData.section || ''
+        });
+      }
+    }
   }, [location.key]);
 
   // Load autosaved data on mount
@@ -640,6 +661,7 @@ export const ScheduleManagementPage: React.FC = () => {
             <SavedSchedulesViewer
               academicYearId={scheduleData.academicYearId}
               sessionType={scheduleData.sessionType as 'morning' | 'evening'}
+              preselectedScheduleId={(location.state as any)?.scheduleData?.id}
             />
           ) : (
             <Card>

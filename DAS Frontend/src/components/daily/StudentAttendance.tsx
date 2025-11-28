@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Users, Search, UserCheck, UserX, Save, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import api from '@/services/api';
@@ -12,6 +13,7 @@ interface Student {
   full_name: string;
   grade_number: number;
   section: string;
+  session_type?: string;
   is_present?: boolean;
 }
 
@@ -47,12 +49,25 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
     if (selectedClassId && selectedSection) {
       fetchStudents();
     }
-  }, [selectedClassId, selectedSection, selectedDate]);
+  }, [selectedClassId, selectedSection, selectedDate, sessionType]);
 
   // الحصول على قائمة المراحل المتاحة
   const getAvailableGradeLevels = (): string[] => {
     const levels = new Set(classes.map(c => c.grade_level));
-    return Array.from(levels).sort();
+    const order: Record<string, number> = {
+      primary: 1,
+      intermediate: 2,
+      secondary: 3
+    };
+
+    return Array.from(levels).sort((a, b) => {
+      const orderA = order[a] ?? 99;
+      const orderB = order[b] ?? 99;
+      if (orderA === orderB) {
+        return a.localeCompare(b);
+      }
+      return orderA - orderB;
+    });
   };
 
   // تصفية الصفوف حسب المرحلة المختارة
@@ -78,29 +93,39 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
     
     setLoading(true);
     try {
-      console.log('Fetching students with params:', { 
-        classId: selectedClassId, 
+      const selectedClass = classes.find(c => c.id === selectedClassId);
+      console.log('Fetching students with params (by grade/year):', { 
+        academicYearId,
+        grade_level: selectedClass?.grade_level,
+        grade_number: selectedClass?.grade_number,
         section: selectedSection,
-        academicYearId: academicYearId,
-        sessionType: sessionType,
-        date: selectedDate
+        sessionType
       });
-      
-      // احصل على الطلاب
-      const studentsResponse = await api.get(`/students/?class_id=${selectedClassId}&section=${selectedSection}&academic_year_id=${academicYearId}&session_type=${sessionType}`);
-      const studentsData = studentsResponse.data as Student[];
+
+      // جلب جميع طلاب هذه السنة والصف
+      const studentsResponse = await api.get(`/students/?academic_year_id=${academicYearId}&grade_level=${selectedClass?.grade_level}&grade_number=${selectedClass?.grade_number}`);
+      const allStudents = (studentsResponse.data as Student[]) || [];
+
+      // تصفية حسب الشعبة ونوع الدوام محليًا (مثل صفحة المعلومات الشخصية)
+      const studentsData = allStudents.filter(s => 
+        s.section === selectedSection &&
+        (!sessionType || s.session_type === sessionType)
+      );
       console.log('Students response:', {
         total: studentsData?.length || 0,
         data: studentsData
       });
       console.log('Request URL:', `/students/?class_id=${selectedClassId}&section=${selectedSection}&academic_year_id=${academicYearId}&session_type=${sessionType}`);
       
-      // احصل على حضور اليوم
+      // احصل على حضور اليوم (مع تصفية حسب نوع الدوام)
+      console.log(`[FRONTEND] Fetching attendance for session: ${sessionType}`);
       const attendanceResponse = await api.get(
-        `/daily/attendance/students?class_id=${selectedClassId}&section=${selectedSection}&attendance_date=${selectedDate}`
+        `/daily/attendance/students?class_id=${selectedClassId}&section=${selectedSection}&attendance_date=${selectedDate}&academic_year_id=${academicYearId}&session_type=${sessionType}`
       );
       
       const attendanceData = attendanceResponse.data as Array<{student_id: number, is_present: boolean}>;
+      console.log('[FRONTEND] Attendance data received:', attendanceData);
+      
       const attendanceMap = new Map(
         attendanceData.map((a) => [a.student_id, a.is_present])
       );
@@ -109,6 +134,12 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
         ...student,
         is_present: attendanceMap.get(student.id) ?? true
       }));
+      
+      console.log('[FRONTEND] Students with attendance:', studentsWithAttendance.map(s => ({
+        id: s.id,
+        name: s.full_name,
+        is_present: s.is_present
+      })));
       
       setStudents(studentsWithAttendance);
       console.log('Total students loaded:', studentsWithAttendance.length);
@@ -154,6 +185,7 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
         attendance_date: selectedDate,
         class_id: selectedClassId,
         section: selectedSection,
+        session_type: sessionType,
         absent_student_ids: Array.from(absentStudentIds)
       });
       
@@ -174,23 +206,21 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
   const absentCount = absentStudentIds.size;
 
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
-        <div className="flex items-center gap-3">
-          <CardTitle className="flex items-center gap-2">
-            <UserCheck className="h-5 w-5" />
-            حضور الطلاب
-          </CardTitle>
-          <Badge className="bg-accent text-accent-foreground">
-            {sessionType === 'morning' ? '🌅 صباحي' : '🌆 مسائي'}
-          </Badge>
-        </div>
+    <Card className="ios-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserCheck className="w-5 h-5" />
+          حضور الطلاب
+        </CardTitle>
+        <CardDescription className="mt-1">
+          سجل حضور وغياب الطلاب للفترة {sessionType === 'morning' ? 'الصباحية' : 'المسائية'}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-6">
+      <CardContent className="space-y-6 pt-6">
         {/* اختيار المرحلة والصف والشعبة */}
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">المرحلة</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>المرحلة</Label>
             <Select value={selectedGradeLevel} onValueChange={(val) => {
               setSelectedGradeLevel(val);
               setSelectedClassId(null);
@@ -209,8 +239,8 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
             </Select>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">الصف</label>
+          <div className="space-y-2">
+            <Label>الصف</Label>
             <Select value={selectedClassId?.toString()} onValueChange={(val) => {
               setSelectedClassId(parseInt(val));
               setSelectedSection('');
@@ -228,8 +258,8 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
             </Select>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-2 text-foreground">الشعبة</label>
+          <div className="space-y-2">
+            <Label>الشعبة</Label>
             <Select value={selectedSection} onValueChange={setSelectedSection} disabled={!selectedClassId}>
               <SelectTrigger>
                 <SelectValue placeholder="اختر الشعبة" />
@@ -252,28 +282,40 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
         {selectedClassId && selectedSection && (
           <>
             {/* إحصائيات */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-primary/10 p-4 rounded-xl border border-primary">
-                <div className="flex items-center justify-between mb-2">
-                  <CheckCircle2 className="h-5 w-5 text-primary" />
-                  <Badge className="bg-primary text-primary-foreground">{presentCount}</Badge>
-                </div>
-                <div className="text-sm font-medium text-primary">حاضر</div>
-              </div>
-              <div className="bg-destructive/10 p-4 rounded-xl border border-destructive">
-                <div className="flex items-center justify-between mb-2">
-                  <XCircle className="h-5 w-5 text-destructive" />
-                  <Badge className="bg-destructive text-destructive-foreground">{absentCount}</Badge>
-                </div>
-                <div className="text-sm font-medium text-destructive">غائب</div>
-              </div>
-              <div className="bg-accent/10 p-4 rounded-xl border border-accent">
-                <div className="flex items-center justify-between mb-2">
-                  <Users className="h-5 w-5 text-accent" />
-                  <Badge className="bg-accent text-accent-foreground">{students.length}</Badge>
-                </div>
-                <div className="text-sm font-medium text-accent">المجموع</div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="ios-card border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm font-medium text-blue-700 dark:text-blue-300">حاضر</span>
+                    </div>
+                    <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{presentCount}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="ios-card border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium text-red-700 dark:text-red-300">غائب</span>
+                    </div>
+                    <span className="text-2xl font-bold text-red-600 dark:text-red-400">{absentCount}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="ios-card border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">المجموع</span>
+                    </div>
+                    <span className="text-2xl font-bold text-gray-600 dark:text-gray-400">{students.length}</span>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* شريط البحث */}
@@ -289,7 +331,7 @@ export function StudentAttendance({ academicYearId, sessionType, selectedDate }:
             </div>
 
             {/* قائمة الطلاب */}
-            <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
+            <div className="max-h-[400px] overflow-y-auto space-y-2">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-2"></div>

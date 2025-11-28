@@ -47,17 +47,22 @@ const LineChart: React.FC<LineChartProps> = ({
       chartInstance.current = echarts.init(chartRef.current);
     }
 
-    // Detect dark mode
-    const isDark = document.documentElement.classList.contains('dark');
-    const theme = getChartTheme();
+    const updateChart = () => {
+      // Detect dark mode
+      const isDark = document.documentElement.classList.contains('dark');
+      const theme = getChartTheme();
 
     // Handle empty or all-zero data
     const hasData = data && data.length > 0;
     const chartData = hasData ? data : [{ name: 'لا توجد بيانات', value: 0 }];
 
-    // Prepare options
+    // Prepare options - explicitly disable dataZoom and timeline
     const option: echarts.EChartsOption = {
       ...theme,
+      dataZoom: undefined,
+      timeline: undefined,
+      toolbox: undefined,
+      visualMap: undefined,
       title: title ? {
         text: title,
         subtext: subtitle,
@@ -92,6 +97,10 @@ const LineChart: React.FC<LineChartProps> = ({
       legend: series && series.length > 1 ? {
         data: series.map(s => s.name),
         bottom: 0,
+        textStyle: {
+          color: isDark ? '#e5e7eb' : '#374151',
+          fontSize: 12
+        },
         ...theme.legend
       } : undefined,
       grid: {
@@ -150,7 +159,8 @@ const LineChart: React.FC<LineChartProps> = ({
           color: s.color || theme.color[index % theme.color.length]
         },
         lineStyle: {
-          width: 2
+          width: 2,
+          color: s.color || theme.color[index % theme.color.length]
         },
         symbol: 'circle',
         symbolSize: 6,
@@ -185,21 +195,24 @@ const LineChart: React.FC<LineChartProps> = ({
       }]) as any
     };
 
-    if (chartInstance.current && !chartInstance.current.isDisposed()) {
-      chartInstance.current.setOption(option);
+      if (chartInstance.current && !chartInstance.current.isDisposed()) {
+        chartInstance.current.setOption(option);
 
-      // Handle loading state
-      if (loading) {
-        chartInstance.current.showLoading({
-          text: 'جاري التحميل...',
-          color: theme.color[0],
-          textColor: isDark ? '#9ca3af' : '#6b7280',
-          maskColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.8)'
-        });
-      } else {
-        chartInstance.current.hideLoading();
+        // Handle loading state
+        if (loading) {
+          chartInstance.current.showLoading({
+            text: 'جاري التحميل...',
+            color: theme.color[0],
+            textColor: isDark ? '#9ca3af' : '#6b7280',
+            maskColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.8)'
+          });
+        } else {
+          chartInstance.current.hideLoading();
+        }
       }
-    }
+    };
+
+    updateChart();
 
     // Handle window resize
     const handleResize = () => {
@@ -207,10 +220,26 @@ const LineChart: React.FC<LineChartProps> = ({
         chartInstance.current.resize();
       }
     };
+
+    // Observer for dark mode changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateChart();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      observer.disconnect();
     };
   }, [data, title, subtitle, showArea, smooth, xAxisType, yAxisLabel, series, loading]);
 

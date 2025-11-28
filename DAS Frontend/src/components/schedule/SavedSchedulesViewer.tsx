@@ -53,11 +53,13 @@ interface SavedSchedule {
 interface SavedSchedulesViewerProps {
   academicYearId: number;
   sessionType: 'morning' | 'evening';
+  preselectedScheduleId?: number;
 }
 
 export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
   academicYearId,
-  sessionType
+  sessionType,
+  preselectedScheduleId
 }) => {
   const [schedules, setSchedules] = useState<SavedSchedule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,25 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
   useEffect(() => {
     fetchSchedules();
   }, [academicYearId, sessionType]);
+
+  // Auto-open preselected schedule
+  useEffect(() => {
+    if (preselectedScheduleId && schedules.length > 0) {
+      console.log('=== Opening Preselected Schedule ===');
+      console.log('Schedule ID:', preselectedScheduleId);
+      
+      const schedule = schedules.find(s => s.id === preselectedScheduleId);
+      if (schedule) {
+        console.log('Found schedule:', schedule);
+        handleViewSchedule(schedule);
+        
+        // Clear navigation state to prevent re-triggering
+        window.history.replaceState({}, document.title);
+      } else {
+        console.warn('Schedule not found with ID:', preselectedScheduleId);
+      }
+    }
+  }, [preselectedScheduleId, schedules]);
 
   const fetchSchedules = async () => {
     setLoading(true);
