@@ -10,6 +10,7 @@ import { academicYearsApi } from '@/services/api';
 import { AcademicYear } from '@/types/school';
 import { AcademicYearForm } from '@/components/academic/AcademicYearForm';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,11 +31,15 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { state: authState } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingYear, setEditingYear] = useState<AcademicYear | null>(null);
   const [deleteYearId, setDeleteYearId] = useState<number | null>(null);
   const [deleteYearName, setDeleteYearName] = useState<string>('');
   const [currentYearId, setCurrentYearId] = useState<number | null>(null);
+
+  // Check if user is director (has full permissions)
+  const isDirector = authState.user?.role === 'director';
 
   // Get current academic year from localStorage
   useEffect(() => {
@@ -62,10 +67,9 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   // Mutation for creating academic years
   const createMutation = useMutation({
     mutationFn: async (data: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>) => {
-      console.log('=== Create Mutation Called ===');
-      console.log('Data:', data);
+
       const response = await academicYearsApi.create(data);
-      console.log('API Response:', response);
+
       // Handle both response formats
       if (response.success) {
         return response.data;
@@ -75,17 +79,14 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
       }
     },
     onSuccess: async (newYear, variables, context) => {
-      console.log('=== Create Year Success ===');
-      console.log('New Year:', newYear);
-      console.log('Variables:', variables);
-      
+
       // Invalidate and wait for refetch to complete
       await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
       await queryClient.refetchQueries({ queryKey: ['academicYears'] });
-      
+
       setShowForm(false);
       setEditingYear(null);
-      
+
       toast({
         title: "نجاح",
         description: "تم إنشاء السنة الدراسية بنجاح!",
@@ -114,16 +115,11 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
       }
     },
     onSuccess: async (updatedYear, variables) => {
-      console.log('=== Update Success ===');
-      console.log('Updated Year:', updatedYear);
-      console.log('Variables:', variables);
-      
+
       // Invalidate and refetch to ensure UI updates immediately
       await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
       await queryClient.refetchQueries({ queryKey: ['academicYears'] });
-      
-      console.log('Queries invalidated and refetched');
-      
+
       // Only show toast when changing year properties (not when just selecting)
       if (editingYear) {
         toast({
@@ -131,32 +127,30 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
           description: "تم تحديث السنة الدراسية بنجاح!",
           variant: "default",
         });
-        
+
         // Close form after update
         setShowForm(false);
         setEditingYear(null);
       } else {
         // This is a default toggle operation
-        console.log('Default toggle operation - is_active:', updatedYear?.is_active);
-        
+
         // Update localStorage to reflect the default year setting
         if (updatedYear?.is_active) {
           localStorage.setItem('auto_open_academic_year', 'true');
           localStorage.setItem('selected_academic_year_id', updatedYear.id?.toString() || '');
           localStorage.setItem('selected_academic_year_name', updatedYear.year_name || '');
+          // Dispatch custom event to notify other components
+          window.dispatchEvent(new Event('academicYearChanged'));
         } else {
           localStorage.setItem('auto_open_academic_year', 'false');
         }
       }
-      
+
       // Don't automatically select the year when just setting it as default
       // The user can click on the year to enter it
     },
     onError: (error: Error) => {
-      console.error('=== Update Error ===');
-      console.error('Error:', error);
-      console.error('Error message:', error.message);
-      
+
       toast({
         title: "خطأ",
         description: error.message || 'فشل في تحديث السنة الدراسية',
@@ -169,22 +163,21 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   const deleteMutation = useMutation({
     mutationFn: (id: number) => academicYearsApi.delete(id),
     onSuccess: async () => {
-      console.log('=== Delete Year Success ===');
-      
+
       // Check if the deleted year was the currently selected year
       const selectedYearId = localStorage.getItem('selected_academic_year_id');
       const wasCurrentYear = selectedYearId === deleteYearId?.toString();
-      
+
       // Invalidate and refetch to get updated list
       await queryClient.invalidateQueries({ queryKey: ['academicYears'] });
       const updatedYears = queryClient.getQueryData(['academicYears']) as AcademicYear[] | undefined;
-      
+
       if (wasCurrentYear) {
         // Clear the selected year from localStorage
         localStorage.removeItem('selected_academic_year_id');
         localStorage.removeItem('selected_academic_year_name');
         localStorage.removeItem('auto_open_academic_year');
-        
+
         // If there are other years available, switch to the first one
         if (updatedYears && updatedYears.length > 0) {
           const firstYear = updatedYears[0];
@@ -193,7 +186,9 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
           if (firstYear.is_active) {
             localStorage.setItem('auto_open_academic_year', 'true');
           }
-          
+          // Dispatch custom event to notify other components
+          window.dispatchEvent(new Event('academicYearChanged'));
+
           toast({
             title: "تم الحذف والتبديل",
             description: `تم حذف السنة الدراسية وتم التبديل إلى: ${firstYear.year_name}`,
@@ -213,21 +208,18 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
           variant: "default",
         });
       }
-      
+
       setDeleteYearId(null);
     },
     onError: (error: Error) => {
-      console.error('=== Delete Year Error ===');
-      console.error('Error:', error);
-      console.error('Error message:', error.message);
-      
+
       // Close delete dialog
       setDeleteYearId(null);
-      
+
       const errorMessage = error.message || '';
       const apiError = error as any;
       const errorDetail = apiError?.details?.detail || apiError?.details?.message || errorMessage;
-      
+
       toast({
         title: "خطأ",
         description: errorDetail || errorMessage || 'فشل في حذف السنة الدراسية',
@@ -240,12 +232,10 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   const handleCreateSubmit = async (data: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>) => {
     // Prevent double submission
     if (createMutation.isPending) {
-      console.log('Create mutation already in progress, ignoring duplicate submission');
+
       return;
     }
-    
-    console.log('=== Creating Academic Year ===');
-    console.log('Data:', data);
+
     createMutation.mutate(data);
   };
 
@@ -261,45 +251,43 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
     // Store selected year in localStorage
     localStorage.setItem('selected_academic_year_id', year.id?.toString() || '');
     localStorage.setItem('selected_academic_year_name', year.year_name);
-    
+
     // If this year is set as active, update the setting
     if (year.is_active) {
       localStorage.setItem('auto_open_academic_year', 'true');
     } else {
       localStorage.setItem('auto_open_academic_year', 'false');
     }
-    
+
+    // Dispatch custom event to notify other components (like DesktopLayout) of the change
+    window.dispatchEvent(new Event('academicYearChanged'));
+
     // Show success toast
     toast({
       title: "تم اختيار السنة الدراسية",
       description: `تم اختيار السنة الدراسية: ${year.year_name}`,
       variant: "default",
     });
-    
+
     // Notify parent component that a year has been selected
     if (onYearSelected) {
       onYearSelected();
     }
-    
+
     // Navigate to main dashboard
     navigate('/dashboard');
   };
 
   // Handle setting as default (active) - toggle functionality
   const handleSetAsDefault = (year: AcademicYear) => {
-    console.log('=== Setting year as default ===');
-    console.log('Year ID:', year.id);
-    console.log('Year Name:', year.year_name);
-    console.log('Current is_active:', year.is_active);
-    console.log('New is_active:', !year.is_active);
-    
+
     // If the year is already active, deactivate it
     // Otherwise, activate it (which will deactivate others)
-    updateMutation.mutate({ 
-      id: year.id!, 
-      year: { 
+    updateMutation.mutate({
+      id: year.id!,
+      year: {
         is_active: !year.is_active
-      } 
+      }
     });
   };
 
@@ -360,14 +348,20 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
   const years = academicYears || [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <IOSNavbar 
-        title="إدارة السنوات الدراسية" 
-        onBack={() => navigate(-1)} 
-        largeTitle={true}
-      />
-      
-      <div className="p-4 pb-24">
+    <div className="min-h-screen bg-background p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <Calendar className="h-8 w-8 text-primary" />
+              إدارة السنوات الدراسية
+            </h1>
+            <p className="text-muted-foreground mt-1">إنشاء وإدارة السنوات الدراسية</p>
+          </div>
+        </div>
+
+        <div className="pb-24">
         {showForm ? (
           <AcademicYearForm
             onSubmit={editingYear ? handleUpdateSubmit : handleCreateSubmit}
@@ -390,19 +384,19 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
                 <p className="text-muted-foreground mb-6">
                   ابدأ بإنشاء أول سنة دراسية لك
                 </p>
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   className="w-full max-w-xs"
                   onClick={() => setShowForm(true)}
                 >
                   <Plus className="w-5 h-5 mr-2" />
                   إضافة سنة دراسية
                 </Button>
-                
+
                 {/* Hidden button for testing - remove in production */}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="mt-8 text-xs"
                   onClick={handleResetFirstRun}
                 >
@@ -418,7 +412,7 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
                     اختر سنة دراسية للعمل معها
                   </p>
                 </div>
-                
+
                 <IOSList>
                   {years.map((year) => (
                     <IOSListItem
@@ -437,62 +431,74 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
                           )}
                         </div>
                         <div className="flex items-center space-x-3">
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditYear(year);
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <div 
-                              className="flex items-center justify-center mx-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                            >
-                              <span className="text-xs text-muted-foreground mr-2">افتراضية</span>
-                              <IOSSwitch 
-                                checked={year.is_active}
-                                onCheckedChange={() => handleSetAsDefault(year)}
-                                disabled={updateMutation.isPending}
-                              />
+                          {isDirector ? (
+                            // Director has full control
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditYear(year);
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <div
+                                className="flex items-center justify-center mx-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <span className="text-xs text-muted-foreground mr-2">افتراضية</span>
+                                <IOSSwitch
+                                  checked={year.is_active}
+                                  onCheckedChange={() => handleSetAsDefault(year)}
+                                  disabled={updateMutation.isPending}
+                                />
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteYear(year);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteYear(year);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          ) : (
+                            // Other roles can only view default status
+                            <div className="flex items-center gap-2">
+                              {year.is_active && (
+                                <span className="text-xs text-muted-foreground">افتراضية</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </IOSListItem>
                   ))}
                 </IOSList>
-                
-                <div className="mt-6">
-                  <Button 
-                    className="w-full"
-                    onClick={() => setShowForm(true)}
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    إضافة سنة دراسية جديدة
-                  </Button>
-                </div>
+
+                {isDirector && (
+                  <div className="mt-6">
+                    <Button
+                      className="w-full"
+                      onClick={() => setShowForm(true)}
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      إضافة سنة دراسية جديدة
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </>
         )}
       </div>
-      
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteYearId} onOpenChange={() => setDeleteYearId(null)}>
         <AlertDialogContent>
@@ -519,6 +525,7 @@ export const AcademicYearManagementPage: React.FC<AcademicYearManagementPageProp
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 };

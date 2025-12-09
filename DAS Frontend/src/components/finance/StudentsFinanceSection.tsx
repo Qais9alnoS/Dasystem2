@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StudentFinanceCard } from './StudentFinanceCard';
@@ -19,11 +20,11 @@ interface StudentsFinanceSectionProps {
   studentData?: any;
 }
 
-export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({ 
-  academicYearId, 
+export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
+  academicYearId,
   preselectedStudentId,
   openFinancePopup,
-  studentData 
+  studentData
 }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -31,14 +32,14 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
   const [selectedStudent, setSelectedStudent] = useState<number | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showDebtsDialog, setShowDebtsDialog] = useState(false);
-  
+
   // Filters
   const [gradeLevel, setGradeLevel] = useState<string>('all');
   const [gradeNumber, setGradeNumber] = useState<string>('all');
   const [section, setSection] = useState<string>('all');
   const [sessionType, setSessionType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  
+
   // Filter options from database
   const [availableGradeNumbers, setAvailableGradeNumbers] = useState<number[]>([]);
   const [availableSections, setAvailableSections] = useState<string[]>([]);
@@ -53,14 +54,11 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
   // Handle preselected student from search navigation
   useEffect(() => {
     if (preselectedStudentId && openFinancePopup) {
-      console.log('=== Opening Finance Popup for Preselected Student ===');
-      console.log('Student ID:', preselectedStudentId);
-      console.log('Student Data:', studentData);
-      
+
       // Open the detail modal for the preselected student
       setSelectedStudent(preselectedStudentId);
       setShowDetailModal(true);
-      
+
       // Clear the navigation state to prevent re-triggering
       window.history.replaceState({}, document.title);
     }
@@ -87,7 +85,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
       setAvailableGradeNumbers(response.data.grade_numbers);
       setAvailableSections(response.data.sections);
     } catch (error) {
-      console.error('Failed to load filter options:', error);
+
     }
   };
 
@@ -95,7 +93,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
     try {
       setLoading(true);
       const params: any = { academic_year_id: academicYearId };
-      
+
       // Only add filters if they are not "all" and not empty
       if (gradeLevel && gradeLevel !== 'all' && gradeLevel !== '') {
         params.grade_level = gradeLevel;
@@ -113,12 +111,11 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
         params.session_type = sessionType;
       }
 
-      console.log('Loading students with params:', params);
       const response = await financeManagerApi.getStudentsFinance(params);
-      console.log('Students loaded:', response.data.length);
+
       setStudents(response.data);
     } catch (error) {
-      console.error('Error loading students:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل تحميل بيانات الطلاب',
@@ -157,7 +154,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
     const balance = Number(s.balance) || 0;
     return sum + (balance > 0 ? balance : 0); // نجمع فقط الأرصدة الموجبة
   }, 0);
-  
+
   // Filter students by search query
   const filteredStudents = students.filter(student => {
     if (!searchQuery.trim()) return true;
@@ -172,21 +169,16 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
-      <Card className="ios-card">
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث عن طالب بالاسم، اسم الأب، أو رقم الهاتف..."
-              className="w-full pr-10 pl-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <Users className="h-8 w-8 text-primary" />
+            معلومات المالية (طلاب)
+          </h1>
+          <p className="text-muted-foreground mt-1">إدارة المعلومات المالية للطلاب</p>
+        </div>
+      </div>
 
       {/* Filters Panel */}
       <Card className="ios-card">
@@ -209,8 +201,8 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
 
             <div>
               <Label>الصف</Label>
-              <Select 
-                value={gradeNumber} 
+              <Select
+                value={gradeNumber}
                 onValueChange={setGradeNumber}
                 disabled={gradeLevel === 'all'}
               >
@@ -228,8 +220,8 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
 
             <div>
               <Label>الشعبة</Label>
-              <Select 
-                value={section} 
+              <Select
+                value={section}
                 onValueChange={setSection}
                 disabled={gradeLevel === 'all'}
               >
@@ -273,6 +265,22 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
         </CardContent>
       </Card>
 
+      {/* Search Bar */}
+      <Card className="ios-card">
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[hsl(var(--muted-foreground))]" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن طالب بالاسم، اسم الأب، أو رقم الهاتف..."
+              className="pr-12"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary Stats */}
       {students.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -290,7 +298,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
               <div className="text-2xl font-bold text-red-600 dark:text-red-400">{studentsWithBalance.length}</div>
             </CardContent>
           </Card>
-          <Card 
+          <Card
             className="ios-card cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => setShowDebtsDialog(true)}
           >
@@ -361,7 +369,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
               تفاصيل الديون المستحقة
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 mt-4">
             {/* Summary */}
             <Card className="bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
@@ -396,7 +404,7 @@ export const StudentsFinanceSection: React.FC<StudentsFinanceSectionProps> = ({
                   {studentsWithBalance
                     .sort((a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0)) // ترتيب من الأكبر للأصغر
                     .map((student, index) => (
-                      <Card 
+                      <Card
                         key={student.student_id}
                         className="ios-card hover:shadow-md transition-shadow cursor-pointer"
                         onClick={() => {

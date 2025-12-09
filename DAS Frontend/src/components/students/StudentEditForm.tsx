@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,7 +49,7 @@ export const StudentEditForm = ({ student, onCancel, onSuccess }: StudentEditFor
         try {
             // Call the API to update student
             const response = await studentsApi.update(student.id, data);
-            
+
             if (response.success) {
                 toast({
                     title: "نجاح",
@@ -526,7 +526,7 @@ export const StudentEditForm = ({ student, onCancel, onSuccess }: StudentEditFor
                         >
                             إلغاء
                         </Button>
-                        
+
                         {currentStep < steps.length - 1 ? (
                             <Button
                                 type="button"

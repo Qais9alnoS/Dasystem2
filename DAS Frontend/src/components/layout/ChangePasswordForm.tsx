@@ -18,27 +18,27 @@ export const ChangePasswordForm: React.FC = () => {
 
   const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
-    
+
     if (password.length < 8) {
       errors.push('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
     }
-    
+
     if (!/[A-Z]/.test(password)) {
       errors.push('كلمة المرور يجب أن تحتوي على حرف كبير واحد على الأقل');
     }
-    
+
     if (!/[a-z]/.test(password)) {
       errors.push('كلمة المرور يجب أن تحتوي على حرف صغير واحد على الأقل');
     }
-    
+
     if (!/\d/.test(password)) {
       errors.push('كلمة المرور يجب أن تحتوي على رقم واحد على الأقل');
     }
-    
+
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
       errors.push('كلمة المرور يجب أن تحتوي على رمز خاص واحد على الأقل');
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors
@@ -48,57 +48,57 @@ export const ChangePasswordForm: React.FC = () => {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-    
+
     // Validation
     if (!currentPassword) {
       setMessage({ type: 'error', text: 'يرجى إدخال كلمة المرور الحالية' });
       return;
     }
-    
+
     if (!newPassword) {
       setMessage({ type: 'error', text: 'يرجى إدخال كلمة المرور الجديدة' });
       return;
     }
-    
+
     if (newPassword !== confirmPassword) {
       setMessage({ type: 'error', text: 'كلمات المرور الجديدة غير متطابقة' });
       return;
     }
-    
+
     const validation = validatePassword(newPassword);
     if (!validation.isValid) {
-      setMessage({ 
-        type: 'error', 
-        text: `أخطاء في كلمة المرور الجديدة: ${validation.errors.join(', ')}` 
+      setMessage({
+        type: 'error',
+        text: `أخطاء في كلمة المرور الجديدة: ${validation.errors.join(', ')}`
       });
       return;
     }
-    
+
     setIsLoading(true);
-    
+
     try {
       // Call the auth API to change password
       const response = await authApi.changePassword({
         current_password: currentPassword,
         new_password: newPassword
       });
-      
+
       if (response.success) {
         // Reset form
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setMessage({ type: 'success', text: 'تم تغيير كلمة المرور بنجاح' });
-        
+
         // Refresh token after password change
         await refreshToken();
       } else {
         throw new Error(response.message || 'فشل في تغيير كلمة المرور');
       }
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'فشل في تغيير كلمة المرور' 
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'فشل في تغيير كلمة المرور'
       });
     } finally {
       setIsLoading(false);
@@ -128,7 +128,7 @@ export const ChangePasswordForm: React.FC = () => {
             </div>
           </Alert>
         )}
-        
+
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
             <Label htmlFor="currentPassword">كلمة المرور الحالية</Label>
@@ -141,7 +141,7 @@ export const ChangePasswordForm: React.FC = () => {
               required
             />
           </div>
-          
+
           <div>
             <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
             <Input
@@ -156,7 +156,7 @@ export const ChangePasswordForm: React.FC = () => {
               يجب أن تحتوي على 8 أحرف على الأقل، حرف كبير، حرف صغير، رقم، ورمز خاص
             </p>
           </div>
-          
+
           <div>
             <Label htmlFor="confirmPassword">تأكيد كلمة المرور الجديدة</Label>
             <Input
@@ -168,10 +168,10 @@ export const ChangePasswordForm: React.FC = () => {
               required
             />
           </div>
-          
+
           <div className="pt-4">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading}
               className="w-full"
             >

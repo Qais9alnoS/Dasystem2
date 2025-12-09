@@ -38,7 +38,7 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
     try {
       setLoading(true);
       const response = await financeManagerApi.getStudentBalanceHistory(studentId);
-      setHistory(response.data);
+      setHistory(response.data.balance_history);
     } catch (error) {
       toast({
         title: 'خطأ',
@@ -50,7 +50,7 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
     }
   };
 
-  const totalBalance = history.reduce((sum, h) => sum + h.outstanding_amount, 0);
+  const totalBalance = history.reduce((sum, h) => sum + h.balance_amount, 0);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -89,14 +89,14 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
             ) : (
               <div className="space-y-3">
                 {history
-                  .sort((a, b) => b.year_name.localeCompare(a.year_name))
+                  .sort((a, b) => (b.academic_year_id || 0) - (a.academic_year_id || 0))
                   .map((item, idx) => (
                     <Card
                       key={idx}
                       className={`ios-card border-r-4 ${
-                        item.outstanding_amount > 0
+                        item.balance_type === 'receivable'
                           ? 'border-r-red-500'
-                          : item.outstanding_amount < 0
+                          : item.balance_type === 'payable'
                           ? 'border-r-blue-500'
                           : 'border-r-green-500'
                       }`}
@@ -106,10 +106,10 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="font-semibold text-gray-900 dark:text-gray-100">
-                                {item.year_name}
+                                سنة {item.academic_year_id}
                               </span>
                               <Badge
-                                variant={item.outstanding_amount > 0 ? 'destructive' : 'default'}
+                                variant={item.balance_type === 'receivable' ? 'destructive' : 'default'}
                                 className="text-xs"
                               >
                                 {item.balance_type === 'receivable'
@@ -122,15 +122,9 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
 
                             <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
                               <div className="flex justify-between">
-                                <span>المبلغ المطلوب:</span>
+                                <span>نوع الرصيد:</span>
                                 <span className="font-medium">
-                                  {item.total_owed.toLocaleString('ar-SY')} ل.س
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>المبلغ المدفوع:</span>
-                                <span className="font-medium">
-                                  {item.total_paid.toLocaleString('ar-SY')} ل.س
+                                  {item.balance_type === 'receivable' ? 'دين للمدرسة' : 'دين على المدرسة'}
                                 </span>
                               </div>
                             </div>
@@ -145,14 +139,12 @@ export const BalanceHistoryModal: React.FC<BalanceHistoryModalProps> = ({
                           <div className="text-left ml-4">
                             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">الرصيد</div>
                             <div className={`text-xl font-bold ${
-                              item.outstanding_amount > 0
+                              item.balance_type === 'receivable'
                                 ? 'text-red-600 dark:text-red-400'
-                                : item.outstanding_amount < 0
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-green-600 dark:text-green-400'
+                                : 'text-blue-600 dark:text-blue-400'
                             }`}>
-                              {item.outstanding_amount > 0 && '+'}
-                              {item.outstanding_amount.toLocaleString('ar-SY')}
+                              {item.balance_type === 'receivable' && '+'}
+                              {item.balance_amount.toLocaleString('ar-SY')}
                             </div>
                           </div>
                         </div>

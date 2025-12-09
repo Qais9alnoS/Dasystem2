@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X, AlertCircle, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
@@ -54,14 +54,14 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
     try {
       setError(null);
       const response = await api.get(`/daily/holidays?academic_year_id=${academicYearId}&session_type=${sessionType}`);
-      
+
       if (response.data && Array.isArray(response.data)) {
         setHolidays(response.data as Holiday[]);
       } else {
         setHolidays([]);
       }
     } catch (error: any) {
-      console.error('Error fetching holidays:', error);
+
       setError('حدث خطأ أثناء تحميل العطل. سيتم إنشاء جدول العطل عند إضافة أول عطلة.');
       setHolidays([]);
     }
@@ -72,7 +72,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
       // التحقق من وجود بيانات حضور في هذا التاريخ
       const response = await api.get(`/daily/summary/${dateStr}?academic_year_id=${academicYearId}`);
       const data = response.data as DailySummary;
-      
+
       // إذا كان هناك حضور أو إجراءات
       if (data && (data.total_present > 0 || data.total_absent > 0 || data.total_actions > 0)) {
         return true;
@@ -89,7 +89,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
     const selectedDateObj = new Date(dateStr);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (existing) {
       // حذف العطلة
       if (confirm('هل تريد إلغاء هذه العطلة؟')) {
@@ -97,7 +97,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
           await api.delete(`/daily/holidays/${existing.id}`);
           fetchHolidays();
         } catch (error) {
-          console.error('Error deleting holiday:', error);
+
           alert('حدث خطأ أثناء حذف العطلة');
         }
       }
@@ -111,7 +111,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
           }
         }
       }
-      
+
       // إضافة عطلة جديدة
       setSelectedDate(dateStr);
       setShowDialog(true);
@@ -128,12 +128,12 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
         holiday_name: holidayName || null,
         notes: notes || null
       });
-      
+
       setShowDialog(false);
       resetForm();
       await fetchHolidays(); // تحديث العطل بعد الحفظ
     } catch (error) {
-      console.error('Error saving holiday:', error);
+
       alert('حدث خطأ أثناء حفظ العطلة');
     } finally {
       setLoading(false);
@@ -149,37 +149,37 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
   const generateCalendarDates = () => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    
+
     // أول يوم في الشهر
     const firstDay = new Date(year, month, 1);
     // آخر يوم في الشهر
     const lastDay = new Date(year, month + 1, 0);
-    
+
     // يوم الأسبوع لأول يوم (0 = الأحد)
     const startDayOfWeek = firstDay.getDay();
-    
+
     // إضافة أيام فارغة في البداية
     const dates: (Date | null)[] = [];
     for (let i = 0; i < startDayOfWeek; i++) {
       dates.push(null);
     }
-    
+
     // إضافة أيام الشهر
     for (let day = 1; day <= lastDay.getDate(); day++) {
       dates.push(new Date(year, month, day));
     }
-    
+
     return dates;
   };
-  
+
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   };
-  
+
   const goToNextMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
-  
+
   const goToToday = () => {
     setCurrentMonth(new Date());
   };
@@ -188,23 +188,23 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
     // استخدام الكائن Date إذا تم تمريره، وإلا إنشاء واحد جديد
     const date = dateObj || new Date(dateStr + 'T00:00:00');
     const dayOfWeek = date.getDay();
-    
+
     // التحقق من العطل المسجلة في قاعدة البيانات أولاً
     const holiday = holidays.find(h => h.holiday_date === dateStr);
-    
+
     // إذا كانت هناك عطلة مسجلة، نعيدها
     if (holiday) {
       return { isHoliday: true, isDefault: false, holiday };
     }
-    
+
     // الجمعة (5) والسبت (6) كعطلة افتراضية - في JS: 0=الأحد، 5=الجمعة، 6=السبت
     if (dayOfWeek === 5 || dayOfWeek === 6) {
       return { isHoliday: true, isDefault: true, holiday: null };
     }
-    
+
     return { isHoliday: false, isDefault: false, holiday: null };
   };
-  
+
   const isToday = (date: Date | null): boolean => {
     if (!date) return false;
     const today = new Date();
@@ -220,7 +220,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
            date.getMonth() === selected.getMonth() &&
            date.getFullYear() === selected.getFullYear();
   };
-  
+
   const formatMonthYear = (date: Date): string => {
     const months = [
       'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -228,14 +228,14 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
     ];
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
-  
+
   const getArabicDayName = (date: Date): string => {
     const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     return days[date.getDay()];
   };
 
   const today = new Date();
-  
+
   return (
     <Card className="ios-card">
       <CardHeader>
@@ -249,7 +249,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
               قم بإضافة أو إزالة أيام العطل للفترة {sessionType === 'morning' ? 'الصباحية' : 'المسائية'}
             </CardDescription>
           </div>
-          <Button 
+          <Button
             onClick={goToToday}
             variant="outline"
             size="sm"
@@ -270,19 +270,19 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          
+
           <div className="text-center">
             <h3 className="text-lg font-bold text-foreground">
               {formatMonthYear(currentMonth)}
             </h3>
-            {currentMonth.getMonth() === today.getMonth() && 
+            {currentMonth.getMonth() === today.getMonth() &&
              currentMonth.getFullYear() === today.getFullYear() && (
               <p className="text-xs text-primary">
                 {getArabicDayName(today)} - {today.getDate()} {formatMonthYear(today).split(' ')[0]}
               </p>
             )}
           </div>
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -296,22 +296,22 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
         {/* أسماء الأيام */}
         <div className="grid grid-cols-7 gap-2 mb-2">
           {['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day) => (
-            <div 
-              key={day} 
+            <div
+              key={day}
               className="text-center font-semibold text-xs py-2 rounded text-muted-foreground"
             >
               {day}
             </div>
           ))}
         </div>
-          
+
         {/* أيام التقويم */}
         <div className="grid grid-cols-7 gap-2">
           {generateCalendarDates().map((date, index) => {
             if (!date) {
               return <div key={`empty-${index}`} className="aspect-square" />;
             }
-            
+
             // استخدام التوقيت المحلي بدلاً من UTC
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -320,19 +320,19 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             const { isHoliday: isHol, isDefault, holiday } = isHoliday(dateStr, date);
             const isTodayDate = isToday(date);
             const isSelected = isSelectedDate(date);
-            
+
             return (
               <button
                 key={dateStr}
                 onClick={() => handleDateClick(dateStr)}
                 className={`
                   aspect-square p-1 text-center rounded-lg border-2 transition-all duration-200
-                  ${isTodayDate 
-                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-background' 
+                  ${isTodayDate
+                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-background'
                     : ''
                   }
-                  ${isSelected 
-                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/10' 
+                  ${isSelected
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/10'
                     : isHol
                       ? 'bg-accent/10 border-accent hover:bg-accent/20'
                       : 'bg-card border-border hover:bg-primary/5 hover:border-primary'
@@ -343,8 +343,8 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
                 <div className={`text-sm font-semibold ${
                   isSelected
                     ? 'text-primary'
-                    : isTodayDate 
-                      ? 'text-accent' 
+                    : isTodayDate
+                      ? 'text-accent'
                       : isHol
                         ? 'text-accent'
                         : 'text-foreground'
@@ -360,7 +360,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             );
           })}
         </div>
-        
+
         {/* تنبيه الخطأ */}
         {error && (
           <Alert className="mt-4 border-accent bg-accent/10">
@@ -402,15 +402,15 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             <DialogHeader>
               <DialogTitle className="text-xl">إضافة عطلة</DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                {selectedDate && new Date(selectedDate).toLocaleDateString('ar-EG', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
+                {selectedDate && new Date(selectedDate).toLocaleDateString('ar-EG', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
                 })}
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="holidayName" className="text-foreground">
@@ -438,8 +438,8 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
             </div>
 
             <div className="flex gap-2 justify-end pt-4 border-t border-border">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowDialog(false);
                   resetForm();
@@ -448,7 +448,7 @@ export function HolidayManagement({ academicYearId, sessionType, selectedDate: p
               >
                 إلغاء
               </Button>
-              <Button 
+              <Button
                 onClick={handleSaveHoliday}
                 disabled={loading}
               >

@@ -31,7 +31,7 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
       setLoading(true);
       const response = await academicYearsApi.getAll();
       setAcademicYears(response.data);
-      
+
       // Auto-select active year if no year is selected
       if (!selectedYearId) {
         const activeYear = response.data.find(y => y.is_active);
@@ -108,7 +108,7 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
                     </Badge>
                   )}
                 </div>
-                
+
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">السنة الدراسية:</span>
@@ -116,7 +116,7 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
                       {selectedYear.year_name}
                     </span>
                   </div>
-                  
+
                   {selectedYear.description && (
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">الوصف:</span>
@@ -125,7 +125,7 @@ export const YearSelectionSection: React.FC<YearSelectionSectionProps> = ({
                       </span>
                     </div>
                   )}
-                  
+
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">الحالة:</span>
                     <Badge

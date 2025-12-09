@@ -42,10 +42,10 @@ export const TeacherAddDialog: React.FC<TeacherAddDialogProps> = ({
 }) => {
     const [currentTab, setCurrentTab] = useState('basic');
     const [loading, setLoading] = useState(false);
-    
+
     // Determine if user is director (can choose session type)
     const isDirector = !propSessionType;
-    
+
     const [formData, setFormData] = useState({
         full_name: '',
         father_name: '',
@@ -211,7 +211,7 @@ export const TeacherAddDialog: React.FC<TeacherAddDialogProps> = ({
                 onSuccess();
             }
         } catch (error: any) {
-            console.error('Error creating teacher:', error);
+
             toast({
                 title: "خطأ",
                 description: error.message || "فشل في إضافة الأستاذ",
@@ -337,7 +337,7 @@ export const TeacherAddDialog: React.FC<TeacherAddDialogProps> = ({
                                 </Select>
                             </div>
                         )}
-                        
+
                         {/* Show current session type for non-directors */}
                         {!isDirector && (
                             <div className="p-3 bg-muted rounded-lg">
@@ -445,7 +445,7 @@ export const TeacherAddDialog: React.FC<TeacherAddDialogProps> = ({
                         {/* Add new qualification */}
                         <div className="space-y-3 p-4 border rounded-lg">
                             <Label className="text-base font-semibold">إضافة شهادة جديدة</Label>
-                            
+
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-2">
                                     <Label className="text-sm">الشهادة *</Label>
@@ -541,7 +541,7 @@ export const TeacherAddDialog: React.FC<TeacherAddDialogProps> = ({
                         {/* Add new experience */}
                         <div className="space-y-3 p-4 border rounded-lg">
                             <Label className="text-base font-semibold">إضافة خبرة جديدة</Label>
-                            
+
                             <div className="space-y-2">
                                 <Label className="text-sm">المسمى الوظيفي *</Label>
                                 <Input

@@ -20,7 +20,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ open, onOpen
   const { state: authState, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  
+
   const [activeTab, setActiveTab] = useState('info');
   const [usernameFormData, setUsernameFormData] = useState({ newUsername: '' });
   const [passwordFormData, setPasswordFormData] = useState({
@@ -68,13 +68,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ open, onOpen
     try {
       setIsLoading(true);
       const response = await authApi.updateUsername(usernameFormData.newUsername);
-      
+
       if (response.success) {
         toast({
           title: 'نجح',
           description: 'تم تغيير اسم المستخدم بنجاح. سيتم تسجيل الخروج الآن.'
         });
-        
+
         // Log out user after username change
         setTimeout(async () => {
           await logout();

@@ -390,4 +390,52 @@ class TeacherAvailabilityService:
         
         level = grade_level_ar.get(class_obj.grade_level, class_obj.grade_level)
         return f"الصف {class_obj.grade_number} {level}"
+    
+    def clear_slots_for_class_section(self, class_id: int, section: Optional[str] = None) -> int:
+        """
+        Clear all assigned slots for a specific class/section.
+        This is called BEFORE regenerating a schedule to ensure no stale data remains.
+        
+        Args:
+            class_id: The class ID to clear slots for
+            section: Optional section (if None, clears for all sections)
+            
+        Returns:
+            Number of slots cleared
+        """
+        # Get all teachers
+        teachers = self.db.query(Teacher).filter(Teacher.is_active == True).all()
+        total_cleared = 0
+        
+        for teacher in teachers:
+            try:
+                slots_data = json.loads(teacher.free_time_slots) if teacher.free_time_slots else []
+            except (json.JSONDecodeError, TypeError):
+                continue
+            
+            if not slots_data:
+                continue
+            
+            modified = False
+            for slot in slots_data:
+                assignment = slot.get('assignment')
+                if assignment:
+                    # Check if this assignment is for the target class/section
+                    if assignment.get('class_id') == class_id:
+                        if section is None or assignment.get('section') == section:
+                            # Clear this slot
+                            slot['status'] = 'free'
+                            slot['is_free'] = True
+                            slot['assignment'] = None
+                            modified = True
+                            total_cleared += 1
+            
+            if modified:
+                teacher.free_time_slots = json.dumps(slots_data)
+        
+        if total_cleared > 0:
+            self.db.commit()
+            print(f"  Cleared {total_cleared} old slots for class {class_id} section {section}")
+        
+        return total_cleared
 

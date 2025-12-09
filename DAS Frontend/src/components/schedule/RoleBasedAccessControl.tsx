@@ -18,7 +18,7 @@ interface UserInfo {
 
 /**
  * Role-Based Access Control Component
- * 
+ *
  * Restricts access based on user role and session type:
  * - Directors: Full access to all sessions
  * - Morning Supervisors: Access only to morning sessions
@@ -40,7 +40,7 @@ export const RoleBasedAccessControl: React.FC<RoleBasedAccessControlProps> = ({
 
   const checkAccess = async () => {
     setLoading(true);
-    
+
     try {
       // Get current user info
       const token = localStorage.getItem('das_token');
@@ -73,7 +73,7 @@ export const RoleBasedAccessControl: React.FC<RoleBasedAccessControlProps> = ({
       if (sessionType) {
         const canAccess = checkSessionAccess(userInfo.role, sessionType);
         setHasAccess(canAccess);
-        
+
         if (!canAccess) {
           if (userInfo.role === 'morning_supervisor') {
             setAccessMessage('مشرفو الفترة الصباحية يمكنهم فقط الوصول إلى جداول الفترة الصباحية');
@@ -90,7 +90,7 @@ export const RoleBasedAccessControl: React.FC<RoleBasedAccessControlProps> = ({
       setHasAccess(false);
       setAccessMessage('حدث خطأ أثناء التحقق من الصلاحيات');
     }
-    
+
     setLoading(false);
   };
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +45,7 @@ export const PaymentRecordingForm = ({ studentId, academicYearId, onSuccess, onC
                 ...data,
                 academic_year_id: academicYearId
             });
-            
+
             if (response.success) {
                 toast({
                     title: "نجاح",
@@ -93,7 +93,7 @@ export const PaymentRecordingForm = ({ studentId, academicYearId, onSuccess, onC
                                 type="number"
                                 step="1000"
                                 min="0"
-                                {...register('payment_amount', { 
+                                {...register('payment_amount', {
                                     required: 'المبلغ مطلوب',
                                     min: { value: 1, message: 'المبلغ يجب أن يكون أكبر من صفر' }
                                 })}

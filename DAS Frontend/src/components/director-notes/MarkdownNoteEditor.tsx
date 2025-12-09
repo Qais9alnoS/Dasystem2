@@ -50,7 +50,7 @@ const MarkdownNoteEditor: React.FC = () => {
         setNoteDate(response.data.note_date || new Date().toISOString().split('T')[0]);
       }
     } catch (error) {
-      console.error('Error loading file:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل الملف',
@@ -83,7 +83,7 @@ const MarkdownNoteEditor: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Error saving file:', error);
+
       if (!isAutoSave) {
         toast({
           title: 'خطأ',
@@ -123,31 +123,31 @@ const MarkdownNoteEditor: React.FC = () => {
   const renderPreview = () => {
     // Simple markdown rendering - will be enhanced with react-markdown
     let html = content;
-    
+
     // Headers
     html = html.replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>');
     html = html.replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>');
     html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
-    
+
     // Bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
+
     // Italic
     html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
+
     // Strikethrough
     html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
-    
+
     // Lists
     html = html.replace(/^\* (.*$)/gim, '<li>$1</li>');
     html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
-    
+
     // Links
-    html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-500 underline">$1</a>');
-    
+    html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-primary underline">$1</a>');
+
     // Line breaks
     html = html.replace(/\n/g, '<br/>');
-    
+
     return html;
   };
 
@@ -286,7 +286,7 @@ const MarkdownNoteEditor: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="preview" className="m-0">
-              <div 
+              <div
                 className="prose prose-slate max-w-none p-6 min-h-[600px]"
                 dangerouslySetInnerHTML={{ __html: renderPreview() }}
               />
@@ -301,7 +301,7 @@ const MarkdownNoteEditor: React.FC = () => {
                   placeholder="ابدأ الكتابة هنا..."
                   className="min-h-[600px] resize-none"
                 />
-                <div 
+                <div
                   className="prose prose-slate max-w-none border rounded-md p-4 min-h-[600px] overflow-auto"
                   dangerouslySetInnerHTML={{ __html: renderPreview() }}
                 />
@@ -313,7 +313,7 @@ const MarkdownNoteEditor: React.FC = () => {
 
       {/* Word Count */}
       <div className="mt-4 text-sm text-muted-foreground text-center">
-        عدد الكلمات: {content.split(/\s+/).filter(word => word.length > 0).length} | 
+        عدد الكلمات: {content.split(/\s+/).filter(word => word.length > 0).length} |
         عدد الأحرف: {content.length}
       </div>
     </div>

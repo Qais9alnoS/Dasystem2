@@ -65,7 +65,6 @@ const ERROR_MESSAGES = {
 // API Error Handler
 export class ErrorHandler {
   static handleApiError(error: ApiError): ErrorCategory {
-    console.error('API Error:', error);
 
     // Network errors
     if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
@@ -84,23 +83,23 @@ export class ErrorHandler {
           window.location.href = '/login';
         }
         return ErrorCategory.AUTHENTICATION;
-      
+
       case 403:
         this.showToast(ErrorCategory.AUTHORIZATION);
         return ErrorCategory.AUTHORIZATION;
-      
+
       case 400:
       case 422:
         this.showToast(ErrorCategory.VALIDATION);
         return ErrorCategory.VALIDATION;
-      
+
       case 500:
       case 502:
       case 503:
       case 504:
         this.showToast(ErrorCategory.SERVER);
         return ErrorCategory.SERVER;
-      
+
       default:
         this.showToast(ErrorCategory.UNKNOWN);
         return ErrorCategory.UNKNOWN;
@@ -109,14 +108,13 @@ export class ErrorHandler {
 
   // Frontend Error Handler
   static handleFrontendError(error: Error): ErrorCategory {
-    console.error('Frontend Error:', error);
-    
+
     // Validation errors
     if (error.name === 'ValidationError') {
       this.showToast(ErrorCategory.VALIDATION);
       return ErrorCategory.VALIDATION;
     }
-    
+
     // Generic client errors
     this.showToast(ErrorCategory.CLIENT);
     return ErrorCategory.CLIENT;
@@ -124,8 +122,7 @@ export class ErrorHandler {
 
   // Validation Error Handler
   static handleValidationErrors(errors: ValidationError[]) {
-    console.error('Validation Errors:', errors);
-    
+
     // Show detailed validation errors
     errors.forEach(error => {
       toast({
@@ -135,14 +132,14 @@ export class ErrorHandler {
         duration: 5000
       });
     });
-    
+
     this.showToast(ErrorCategory.VALIDATION);
   }
 
   // Show toast notification
   private static showToast(category: ErrorCategory) {
     const message = ERROR_MESSAGES[category];
-    
+
     toast({
       title: message.title,
       description: message.description,
@@ -156,19 +153,19 @@ export class ErrorHandler {
     if (typeof error === 'string') {
       return error;
     }
-    
+
     if (error?.message) {
       return error.message;
     }
-    
+
     if (error?.detail) {
       return error.detail;
     }
-    
+
     if (error?.errors && Array.isArray(error.errors)) {
       return error.errors.join(', ');
     }
-    
+
     return 'حدث خطأ غير معروف';
   }
 }
@@ -178,7 +175,7 @@ export const setupGlobalErrorHandling = () => {
   // Handle uncaught JavaScript errors
   window.addEventListener('error', (event) => {
     ErrorHandler.handleFrontendError(event.error);
-    
+
     // Send to Telegram
     try {
       const { reportErrorToTelegram } = require('@/services/telegramErrorService');
@@ -192,19 +189,19 @@ export const setupGlobalErrorHandling = () => {
         }
       );
     } catch (telegramError) {
-      console.warn('Failed to send error to Telegram:', telegramError);
+
     }
   });
 
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
     ErrorHandler.handleFrontendError(event.reason);
-    
+
     // Send to Telegram
     try {
       const { reportErrorToTelegram } = require('@/services/telegramErrorService');
-      const error = event.reason instanceof Error 
-        ? event.reason 
+      const error = event.reason instanceof Error
+        ? event.reason
         : new Error(String(event.reason || 'Unhandled promise rejection'));
       reportErrorToTelegram(
         error,
@@ -214,9 +211,9 @@ export const setupGlobalErrorHandling = () => {
         }
       );
     } catch (telegramError) {
-      console.warn('Failed to send error to Telegram:', telegramError);
+
     }
-    
+
     event.preventDefault();
   });
 
@@ -224,11 +221,11 @@ export const setupGlobalErrorHandling = () => {
   const originalConsoleError = console.error;
   console.error = (...args: any[]) => {
     originalConsoleError.apply(console, args);
-    
+
     // Send to Telegram
     try {
       const { reportErrorToTelegram } = require('@/services/telegramErrorService');
-      const errorMessage = args.map(arg => 
+      const errorMessage = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ');
       reportErrorToTelegram(
@@ -247,12 +244,12 @@ export const setupGlobalErrorHandling = () => {
   const originalConsoleWarn = console.warn;
   console.warn = (...args: any[]) => {
     originalConsoleWarn.apply(console, args);
-    
+
     // Send to Telegram (only in production to avoid spam)
     if (process.env.NODE_ENV === 'production') {
       try {
         const { reportWarningToTelegram } = require('@/services/telegramErrorService');
-        const warningMessage = args.map(arg => 
+        const warningMessage = args.map(arg =>
           typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
         ).join(' ');
         reportWarningToTelegram(

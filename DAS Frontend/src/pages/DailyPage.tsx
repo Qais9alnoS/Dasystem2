@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -65,13 +65,13 @@ export default function DailyPage() {
         setAcademicYear(years[0]);
       }
     } catch (error) {
-      console.error('Error fetching academic year:', error);
+
     }
   };
 
   const determineAllowedSessions = () => {
     if (!state.user) return;
-    
+
     // المدير يملك صلاحية لرؤية كلا الفترتين
     if (state.user.role === 'admin' || state.user.role === 'director') {
       setAllowedSessions(['morning', 'evening']);
@@ -91,7 +91,7 @@ export default function DailyPage() {
       // التحقق من الجمعة والسبت
       const date = new Date(selectedDate);
       const dayOfWeek = date.getDay();
-      
+
       if (dayOfWeek === 5 || dayOfWeek === 6) {
         setIsHoliday(true);
         setHolidayInfo({ type: 'weekend', name: 'عطلة نهاية الأسبوع' });
@@ -102,7 +102,7 @@ export default function DailyPage() {
       const response = await api.get(
         `/daily/holidays?academic_year_id=${academicYear.id}&session_type=${sessionType}&date=${selectedDate}`
       );
-      
+
       if (response.data && Array.isArray(response.data)) {
         const holiday = response.data.find((h: any) => h.holiday_date === selectedDate);
         if (holiday) {
@@ -111,11 +111,11 @@ export default function DailyPage() {
           return;
         }
       }
-      
+
       setIsHoliday(false);
       setHolidayInfo(null);
     } catch (error) {
-      console.error('Error checking holiday:', error);
+
       setIsHoliday(false);
       setHolidayInfo(null);
     }
@@ -146,12 +146,15 @@ export default function DailyPage() {
         {/* Header with Date Display */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">الصفحة اليومية</h1>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <CalendarDays className="h-8 w-8 text-primary" />
+              الصفحة اليومية
+            </h1>
             <p className="text-muted-foreground mt-1">
               إدارة الحضور والغياب والإجراءات اليومية - {academicYear.year_name}
             </p>
           </div>
-          
+
           {/* Date Display Badge - Top Left */}
           <Card className="ios-card border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 shrink-0" key={dateKey}>
             <CardContent className="p-3">
@@ -159,8 +162,8 @@ export default function DailyPage() {
                 <Calendar className="w-4 h-4 shrink-0" />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-semibold whitespace-nowrap">
-                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ar', { 
-                      weekday: 'long', 
+                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ar', {
+                      weekday: 'long',
                       day: 'numeric',
                       month: 'long'
                     })}
@@ -243,8 +246,8 @@ export default function DailyPage() {
           </Card>
 
           <TabsContent value="holidays" className="space-y-6">
-            <HolidayManagement 
-              academicYearId={academicYear.id} 
+            <HolidayManagement
+              academicYearId={academicYear.id}
               sessionType={sessionType}
               selectedDate={selectedDate}
             />
@@ -273,7 +276,7 @@ export default function DailyPage() {
                   sessionType={sessionType}
                   selectedDate={selectedDate}
                 />
-                
+
                 <TeacherAttendance
                   academicYearId={academicYear.id}
                   sessionType={sessionType}

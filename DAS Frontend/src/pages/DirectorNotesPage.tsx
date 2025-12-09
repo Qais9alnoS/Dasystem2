@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FileText, FolderOpen, Target, Briefcase, BookOpen, 
-  GraduationCap, Award, Heart, Search, Plus, ChevronRight, SlidersHorizontal, X 
+import {
+  FileText, FolderOpen, Target, Briefcase, BookOpen,
+  GraduationCap, Award, Heart, Search, Plus, ChevronRight, SlidersHorizontal, X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const DirectorNotesPage: React.FC = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
-  
+
   // Filters - matching search results page
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -59,9 +59,9 @@ const DirectorNotesPage: React.FC = () => {
       case 'goals':
         return <Target className="h-6 w-6 text-primary" />;
       case 'projects':
-        return <Briefcase className="h-6 w-6 text-green-500" />;
+        return <Briefcase className="h-6 w-6 text-primary" />;
       case 'blogs':
-        return <BookOpen className="h-6 w-6 text-purple-500" />;
+        return <BookOpen className="h-6 w-6 text-accent" />;
       case 'educational_admin':
         return <GraduationCap className="h-6 w-6 text-secondary" />;
       default:
@@ -84,17 +84,17 @@ const DirectorNotesPage: React.FC = () => {
   const handleSearch = async () => {
     if (searchQuery.trim().length >= 3) {
       const params = new URLSearchParams({ q: searchQuery });
-      
+
       // Add type filter
       if (selectedType !== 'all') {
         params.append('type', selectedType);
       }
-      
+
       // Add category filter
       if (selectedCategory !== 'all') {
         params.append('category', selectedCategory);
       }
-      
+
       // Add date filters
       if (dateFrom) {
         params.append('dateFrom', dateFrom);
@@ -102,7 +102,7 @@ const DirectorNotesPage: React.FC = () => {
       if (dateTo) {
         params.append('dateTo', dateTo);
       }
-      
+
       navigate(`/director/notes/search?${params.toString()}`);
     } else {
       toast({
@@ -131,8 +131,11 @@ const DirectorNotesPage: React.FC = () => {
     <div className="container mx-auto p-6 max-w-7xl" dir="rtl">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">ملاحظات المدير</h1>
-        <p className="text-muted-foreground">إدارة الملاحظات والمشاريع والأهداف</p>
+        <h1 className="text-3xl font-bold flex items-center gap-3">
+          <FileText className="h-8 w-8 text-primary" />
+          ملاحظات المدير
+        </h1>
+        <p className="text-muted-foreground mt-1">إدارة الملاحظات والمشاريع والأهداف</p>
       </div>
 
       {/* Search Bar */}
@@ -244,7 +247,7 @@ const DirectorNotesPage: React.FC = () => {
       {/* Categories Grid - 2 Column Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {categories.map((cat) => (
-          <Card 
+          <Card
             key={cat.category}
             className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
             onClick={() => handleCategoryClick(cat.category)}
@@ -264,8 +267,8 @@ const DirectorNotesPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -284,7 +287,7 @@ const DirectorNotesPage: React.FC = () => {
       {/* Rewards and Assistance Section - 2 Column Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Rewards Card */}
-        <Card 
+        <Card
           className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
           onClick={handleRewardsClick}
         >
@@ -303,8 +306,8 @@ const DirectorNotesPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
@@ -319,14 +322,14 @@ const DirectorNotesPage: React.FC = () => {
         </Card>
 
         {/* Assistance Card */}
-        <Card 
+        <Card
           className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
           onClick={handleAssistanceClick}
         >
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Heart className="h-6 w-6 text-red-500" />
+                <Heart className="h-6 w-6 text-destructive" />
                 <div>
                   <CardTitle className="text-xl">المساعدات</CardTitle>
                   <CardDescription className="mt-1">
@@ -338,8 +341,8 @@ const DirectorNotesPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();

@@ -9,7 +9,7 @@ export async function minimizeWindow(): Promise<void> {
     const currentWindow = getCurrentWindow();
     await currentWindow.minimize();
   } catch (error) {
-    console.error('Failed to minimize window:', error);
+
   }
 }
 
@@ -26,7 +26,7 @@ export async function toggleMaximizeWindow(): Promise<void> {
       await currentWindow.maximize();
     }
   } catch (error) {
-    console.error('Failed to toggle maximize window:', error);
+
   }
 }
 
@@ -38,7 +38,7 @@ export async function closeWindow(): Promise<void> {
     const currentWindow = getCurrentWindow();
     await currentWindow.close();
   } catch (error) {
-    console.error('Failed to close window:', error);
+
   }
 }
 
@@ -48,9 +48,9 @@ export async function closeWindow(): Promise<void> {
 export async function handleSearch(query: string): Promise<void> {
   try {
     const result = await invoke('handle_search', { query });
-    console.log('Search result:', result);
+
   } catch (error) {
-    console.error('Failed to handle search:', error);
+
   }
 }
 
@@ -60,9 +60,9 @@ export async function handleSearch(query: string): Promise<void> {
 export async function handleSettings(): Promise<void> {
   try {
     const result = await invoke('open_settings');
-    console.log('Settings result:', result);
+
   } catch (error) {
-    console.error('Failed to open settings:', error);
+
   }
 }
 
@@ -72,8 +72,8 @@ export async function handleSettings(): Promise<void> {
 export async function handleThemeToggle(): Promise<void> {
   try {
     const result = await invoke('toggle_theme');
-    console.log('Theme toggle result:', result);
+
   } catch (error) {
-    console.error('Failed to toggle theme:', error);
+
   }
 }

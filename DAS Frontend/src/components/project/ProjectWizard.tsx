@@ -30,7 +30,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
   const [currentStep, setCurrentStep] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
@@ -70,7 +70,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
     const updatedLevels = projectData.enabledLevels.includes(levelId)
       ? projectData.enabledLevels.filter(id => id !== levelId)
       : [...projectData.enabledLevels, levelId];
-    
+
     setProjectData(prev => ({ ...prev, enabledLevels: updatedLevels }));
   };
 
@@ -78,7 +78,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
     const updatedDays = projectData.schoolDays.includes(day)
       ? projectData.schoolDays.filter(d => d !== day)
       : [...projectData.schoolDays, day];
-    
+
     setProjectData(prev => ({ ...prev, schoolDays: updatedDays }));
   };
 
@@ -95,11 +95,11 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
       const project = await projectService.createProject(projectData.name.trim());
       dispatch({ type: 'ADD_PROJECT', payload: project });
       dispatch({ type: 'SET_CURRENT_PROJECT', payload: project });
-      
+
       if (onProjectCreated) {
         onProjectCreated(project.id);
       }
-      
+
       navigate(`/projects/${project.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء المشروع');
@@ -118,7 +118,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
               <h2 className="text-2xl font-bold">معلومات المشروع الأساسية</h2>
               <p className="text-muted-foreground">ابدأ بإدخال اسم المشروع والمعلومات الأساسية</p>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <Label htmlFor="projectName">اسم المشروع *</Label>
@@ -154,12 +154,12 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
               <h2 className="text-2xl font-bold">المراحل الدراسية</h2>
               <p className="text-muted-foreground">اختر المراحل الدراسية المتوفرة في مدرستك</p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {EDUCATION_LEVELS.map((level) => {
                 const isSelected = projectData.enabledLevels.includes(level.id);
                 return (
-                  <Card 
+                  <Card
                     key={level.id}
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       isSelected ? 'border-primary bg-primary/5' : ''
@@ -193,7 +193,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
               <h2 className="text-2xl font-bold">إعدادات الجدولة</h2>
               <p className="text-muted-foreground">حدد أيام الدوام وعدد الحصص اليومية</p>
             </div>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>أيام الدوام المدرسي</CardTitle>
@@ -278,7 +278,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({ onProjectCreated }
             <ArrowLeft className="h-4 w-4 ml-1" />
             السابق
           </Button>
-          
+
           {currentStep < totalSteps - 1 ? (
             <Button
               onClick={handleNext}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Search, UserCheck, UserX, Save, CheckCircle2, XCircle, BookOpen } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
@@ -51,7 +51,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
   const getDayOfWeek = (dateString: string): number => {
     const date = new Date(dateString);
     const day = date.getDay(); // 0=Sunday, 1=Monday, etc.
-    
+
     // Convert JavaScript day (0-6, Sunday-Saturday) to backend day (1-5, Sunday-Thursday)
     // Sunday=0 -> 1, Monday=1 -> 2, Tuesday=2 -> 3, Wednesday=3 -> 4, Thursday=4 -> 5
     // Friday=5 and Saturday=6 should not be used (weekend)
@@ -65,7 +65,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
     setLoading(true);
     try {
       const dayOfWeek = getDayOfWeek(selectedDate);
-      
+
       if (dayOfWeek === -1) {
         // Weekend, no classes
         setTeacherSchedules([]);
@@ -79,10 +79,10 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
       );
 
       const scheduleEntries = response.data as TeacherScheduleEntry[];
-      
+
       // Group by teacher
       const teacherMap = new Map<number, TeacherDaySchedule>();
-      
+
       for (const entry of scheduleEntries) {
         if (!teacherMap.has(entry.teacher_id)) {
           teacherMap.set(entry.teacher_id, {
@@ -91,7 +91,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
             classes: []
           });
         }
-        
+
         teacherMap.get(entry.teacher_id)!.classes.push({
           schedule_id: entry.schedule_id,
           period_number: entry.period_number,
@@ -102,25 +102,25 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
           is_present: true // Default to present
         });
       }
-      
+
       // Sort classes by period number for each teacher
       const teachers = Array.from(teacherMap.values()).map(teacher => ({
         ...teacher,
         classes: teacher.classes.sort((a, b) => a.period_number - b.period_number)
       }));
-      
+
       // Get existing attendance records for this day
       const attendanceResponse = await api.get(
         `/daily/attendance/teachers?attendance_date=${selectedDate}`
       );
-      
+
       if (attendanceResponse.data) {
         const attendanceRecords = attendanceResponse.data as Array<{
           teacher_id: number;
           schedule_id: number;
           is_present: boolean;
         }>;
-        
+
         // Update presence status based on existing records
         for (const teacher of teachers) {
           for (const classEntry of teacher.classes) {
@@ -133,10 +133,10 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
           }
         }
       }
-      
+
       setTeacherSchedules(teachers);
     } catch (error) {
-      console.error('Error fetching teacher schedules:', error);
+
       alert('حدث خطأ أثناء جلب جداول الأساتذة');
     } finally {
       setLoading(false);
@@ -144,17 +144,17 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
   };
 
   const toggleClassAttendance = (teacherId: number, scheduleId: number | null, periodNumber?: number) => {
-    setTeacherSchedules(prev => 
+    setTeacherSchedules(prev =>
       prev.map(teacher => {
         if (teacher.teacher_id === teacherId) {
           return {
             ...teacher,
             classes: teacher.classes.map(cls => {
               // Match by schedule_id if available, otherwise by period_number
-              const isMatch = scheduleId !== null 
-                ? cls.schedule_id === scheduleId 
+              const isMatch = scheduleId !== null
+                ? cls.schedule_id === scheduleId
                 : cls.period_number === periodNumber;
-              
+
               return isMatch ? { ...cls, is_present: !cls.is_present } : cls;
             })
           };
@@ -181,10 +181,10 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
         attendance_date: selectedDate,
         records: attendanceData
       });
-      
+
       alert('✅ تم حفظ حضور الأساتذة بنجاح');
     } catch (error) {
-      console.error('Error saving teacher attendance:', error);
+
       alert('❌ حدث خطأ أثناء حفظ حضور الأساتذة');
     } finally {
       setSaving(false);
@@ -207,7 +207,7 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
   // Calculate stats
   const totalClasses = teacherSchedules.reduce((sum, teacher) => sum + teacher.classes.length, 0);
   const presentClasses = teacherSchedules.reduce(
-    (sum, teacher) => sum + teacher.classes.filter(c => c.is_present).length, 
+    (sum, teacher) => sum + teacher.classes.filter(c => c.is_present).length,
     0
   );
   const absentClasses = totalClasses - presentClasses;
@@ -347,9 +347,9 @@ export function TeacherAttendance({ academicYearId, sessionType, selectedDate }:
 
         {/* زر الحفظ */}
         {filteredTeachers.length > 0 && (
-          <Button 
-            onClick={handleSaveAttendance} 
-            className="w-full" 
+          <Button
+            onClick={handleSaveAttendance}
+            className="w-full"
             size="lg"
             disabled={saving}
           >

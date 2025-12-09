@@ -56,7 +56,7 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, onDelet
   const isLoss = card.net_amount < 0;
 
   return (
-    <Card 
+    <Card
       className={`ios-card hover:shadow-lg transition-all duration-300 cursor-pointer ${className}`}
       onClick={onClick}
     >
@@ -132,9 +132,9 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, onDelet
         {/* Net Amount (for 'both' type cards) */}
         {card.card_type === 'both' && (
           <div className={`flex justify-between items-center p-3 rounded-lg border ${
-            isProfit 
-              ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800' 
-              : isLoss 
+            isProfit
+              ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+              : isLoss
               ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800'
               : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
           }`}>
@@ -147,9 +147,9 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, onDelet
               الصافي
             </span>
             <span className={`font-bold ${
-              isProfit 
-                ? 'text-blue-700 dark:text-blue-400' 
-                : isLoss 
+              isProfit
+                ? 'text-blue-700 dark:text-blue-400'
+                : isLoss
                 ? 'text-orange-700 dark:text-orange-400'
                 : 'text-gray-700 dark:text-gray-300'
             }`}>
@@ -167,8 +167,8 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({ card, onClick, onDelet
           </div>
         )}
 
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="w-full mt-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
           onClick={(e) => {
             e.stopPropagation();

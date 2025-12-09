@@ -67,7 +67,7 @@ export const defaultSubjects: Record<string, SubjectTemplate[]> = {
     { name: 'التربية الفنية', weekly_hours: 1 },
     { name: 'التربية الرياضية', weekly_hours: 1 },
     { name: 'الأنشطة', weekly_hours: 1 },
-    { name: 'مادة اختيارية', weekly_hours: 5 }, 
+    { name: 'مادة اختيارية', weekly_hours: 5 },
   ],
   // الصف الخامس والسادس الأساسي
   'primary-5': [

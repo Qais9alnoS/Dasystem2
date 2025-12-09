@@ -25,7 +25,7 @@ const defaultTabs: TabItem[] = [
 const IOSTabBar = React.forwardRef<HTMLDivElement, IOSTabBarProps>(
   ({ activeTab, onTabChange, tabs = defaultTabs, className }, ref) => {
     return (
-      <div 
+      <div
         ref={ref}
         className={cn(
           "fixed bottom-0 left-0 right-0 bg-background border-t border-border backdrop-blur-md pb-safe",

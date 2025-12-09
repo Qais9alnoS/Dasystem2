@@ -135,7 +135,7 @@ const UserManagementPage = () => {
       }
 
       const response = await authApi.createUser(userData);
-      
+
       if (response.success) {
         toast({
           title: 'نجح',
@@ -219,7 +219,7 @@ const UserManagementPage = () => {
       }
 
       const response = await authApi.updateUser(userToEdit.id, userData);
-      
+
       if (response.success) {
         toast({
           title: 'نجح',
@@ -257,15 +257,15 @@ const UserManagementPage = () => {
       // Search filter
       const matchesSearch = searchQuery === '' ||
         user.username.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       // Role filter
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-      
+
       // Status filter
       const matchesStatus = statusFilter === 'all' ||
         (statusFilter === 'active' && user.is_active) ||
         (statusFilter === 'inactive' && !user.is_active);
-      
+
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [users, searchQuery, roleFilter, statusFilter]);
@@ -279,13 +279,19 @@ const UserManagementPage = () => {
   const hasActiveFilters = searchQuery !== '' || roleFilter !== 'all' || statusFilter !== 'all';
 
   return (
-    <div className="min-h-screen bg-background">
-      <IOSNavbar 
-        title="إدارة تسجيل الدخول" 
-        largeTitle={true}
-      />
-      
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <UserPlus className="h-8 w-8 text-primary" />
+              إدارة تسجيل الدخول
+            </h1>
+            <p className="text-muted-foreground mt-1">إدارة مستخدمي النظام وصلاحياتهم</p>
+          </div>
+        </div>
+
         {/* Add User Button */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -294,7 +300,7 @@ const UserManagementPage = () => {
               {filteredUsers.length} من {users.length} مستخدم
             </p>
           </div>
-          
+
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -309,7 +315,7 @@ const UserManagementPage = () => {
                   قم بإدخال بيانات المستخدم الجديد
                 </DialogDescription>
               </DialogHeader>
-              
+
               <div className="space-y-4 py-4">
                 {/* Role Selection */}
                 <div className="space-y-2">
@@ -445,7 +451,7 @@ const UserManagementPage = () => {
                       <SelectItem value="inactive">معطل</SelectItem>
                     </SelectContent>
                   </Select>
-                  
+
                   {hasActiveFilters && (
                     <Button
                       variant="outline"
@@ -503,7 +509,7 @@ const UserManagementPage = () => {
                       </TableRow>
                     ) : (
                       filteredUsers.map((user) => (
-                      <TableRow 
+                      <TableRow
                         key={user.id}
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => handleEditUser(user)}
@@ -557,7 +563,7 @@ const UserManagementPage = () => {
                 قم بتعديل بيانات المستخدم "{userToEdit?.username}"
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4 py-4">
               {/* Role Selection */}
               <div className="space-y-2">

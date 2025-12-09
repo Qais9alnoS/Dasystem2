@@ -49,6 +49,7 @@ interface WeeklyScheduleGridProps {
   onAssignmentClick?: (assignment: ScheduleAssignment) => void;
   onAssignmentEdit?: (assignment: ScheduleAssignment) => void;
   onAssignmentDelete?: (assignmentId: number) => void;
+  onSwapComplete?: () => void;
   readOnly?: boolean;
 }
 
@@ -76,6 +77,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
   onAssignmentClick,
   onAssignmentEdit,
   onAssignmentDelete,
+  onSwapComplete,
   readOnly = false
 }) => {
   const [selectedCell, setSelectedCell] = useState<ScheduleAssignment | null>(null);
@@ -84,11 +86,18 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const [isValidDrop, setIsValidDrop] = useState<boolean>(false);
   const [swapValidityCache, setSwapValidityCache] = useState<Map<string, boolean>>(new Map());
+  const [swappingCells, setSwappingCells] = useState<{cell1: string, cell2: string} | null>(null);
+  const [localAssignments, setLocalAssignments] = useState<ScheduleAssignment[]>(assignments);
   const viewMode = 'detailed'; // Always use detailed view
 
-  // Create a grid map for quick lookup
+  // Sync local assignments with props
+  useEffect(() => {
+    setLocalAssignments(assignments);
+  }, [assignments]);
+
+  // Create a grid map for quick lookup (use localAssignments for optimistic updates)
   const gridMap = new Map<string, ScheduleAssignment>();
-  assignments.forEach(assignment => {
+  localAssignments.forEach(assignment => {
     const key = `${assignment.day_of_week}-${assignment.period_number}`;
     gridMap.set(key, assignment);
   });
@@ -136,7 +145,7 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
 
     const key = `${day}-${period}`;
     const targetAssignment = gridMap.get(key);
-    
+
     // Can't drop on empty cells or on itself
     if (!targetAssignment || draggedAssignment.id === targetAssignment.id) {
       setDragOverCell(key);
@@ -155,24 +164,22 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
       return;
     }
 
-    // Check if drop is valid based on teacher availability
+    // Set initial state while checking
+    setDragOverCell(key);
+    setIsValidDrop(false); // Default to invalid until validated
+
+    // Call the validation API to check if swap is allowed
     try {
       const { schedulesApi } = await import('@/services/api');
-      const validityResult = await schedulesApi.checkSwapValidity(draggedAssignment.id, targetAssignment.id);
-      
-      const canSwap = validityResult.data?.can_swap || false;
-      
-      // Cache the result
+      const result = await schedulesApi.checkSwapValidity(draggedAssignment.id, targetAssignment.id);
+      const canSwap = result.success && result.data?.can_swap === true;
       setSwapValidityCache(prev => new Map(prev).set(cacheKey, canSwap));
-      
-      setDragOverCell(key);
       setIsValidDrop(canSwap);
       e.dataTransfer.dropEffect = canSwap ? 'move' : 'none';
     } catch (error) {
-      console.error('Error checking swap validity:', error);
-      setDragOverCell(key);
-      setIsValidDrop(false);
-      e.dataTransfer.dropEffect = 'none';
+      // On error, default to allowing the swap (server will validate on drop)
+      setSwapValidityCache(prev => new Map(prev).set(cacheKey, true));
+      setIsValidDrop(true);
     }
   };
 
@@ -209,23 +216,68 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
       return;
     }
 
+    // Check if this swap was validated as invalid - silently ignore the drop
+    const cacheKey = `${draggedAssignment.id}-${targetAssignment.id}`;
+    if (swapValidityCache.has(cacheKey) && !swapValidityCache.get(cacheKey)) {
+      setDraggedAssignment(null);
+      setDragOverCell(null);
+      setIsValidDrop(false);
+      return;
+    }
+
+    // Store cell keys for animation
+    const draggedKey = `${draggedAssignment.day_of_week}-${draggedAssignment.period_number}`;
+    const targetKey = key;
+
     // Call swap API using schedulesApi
     try {
       const { schedulesApi } = await import('@/services/api');
       const result = await schedulesApi.swap(draggedAssignment.id, targetAssignment.id);
 
       if (result.success) {
-        toast({
-          title: 'تم التبديل بنجاح',
-          description: 'تم تبديل الحصص بنجاح',
+        // Start swap animation
+        setSwappingCells({ cell1: draggedKey, cell2: targetKey });
+
+        // Optimistically update local state immediately with swapped content
+        setLocalAssignments(prev => {
+          return prev.map(a => {
+            if (a.id === draggedAssignment.id) {
+              // This assignment stays at its position but gets target's content
+              return {
+                ...a,
+                subject_id: targetAssignment.subject_id,
+                subject_name: targetAssignment.subject_name,
+                teacher_id: targetAssignment.teacher_id,
+                teacher_name: targetAssignment.teacher_name,
+              };
+            }
+            if (a.id === targetAssignment.id) {
+              // This assignment stays at its position but gets dragged's content
+              return {
+                ...a,
+                subject_id: draggedAssignment.subject_id,
+                subject_name: draggedAssignment.subject_name,
+                teacher_id: draggedAssignment.teacher_id,
+                teacher_name: draggedAssignment.teacher_name,
+              };
+            }
+            return a;
+          });
         });
-        // Trigger parent refresh
-        window.location.reload(); // Simple refresh, can be optimized
+
+        // Clear animation after it completes
+        setTimeout(() => {
+          setSwappingCells(null);
+          // Silently refresh from server in background
+          if (onSwapComplete) {
+            onSwapComplete();
+          }
+        }, 400);
       } else {
         throw new Error(result.message || 'حدث خطأ اثناء تبديل الحصص');
       }
     } catch (error: any) {
-      console.error('Swap error:', error);
+
       const errorMsg = error.response?.data?.detail || error.message || 'حدث خطأ اثناء تبديل الحصص';
       toast({
         title: 'خطأ',
@@ -251,10 +303,11 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
     const assignment = gridMap.get(key);
     const isDragOver = dragOverCell === key;
     const isDragging = draggedAssignment?.id === assignment?.id;
+    const isSwapping = swappingCells && (swappingCells.cell1 === key || swappingCells.cell2 === key);
 
     if (!assignment) {
       return (
-        <div 
+        <div
           onDragOver={(e) => handleDragOver(e, day, period)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, day, period)}
@@ -272,24 +325,30 @@ export const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({
 
     return (
       <div
-        draggable={!readOnly}
+        draggable={!readOnly && !isSwapping}
         onDragStart={(e) => handleDragStart(e, assignment)}
         onDragEnd={handleDragEnd}
         onDragOver={(e) => handleDragOver(e, day, period)}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, day, period)}
         className={cn(
-          "h-full min-h-[90px] p-3 rounded-lg transition-all duration-200 cursor-move group relative",
+          "h-full min-h-[90px] p-3 rounded-lg transition-all cursor-move group relative",
           hasConflict
             ? "bg-red-50 dark:bg-red-950 border-2 border-red-300 dark:border-red-700"
             : "bg-blue-50 dark:bg-slate-800/90 border border-blue-200 dark:border-slate-600/50",
-          !readOnly && "hover:opacity-80 active:scale-95",
+          !readOnly && !isSwapping && "hover:opacity-80 active:scale-95",
           isDragging && "opacity-50 scale-95",
           isDragOver && isValidDrop && "animate-wiggle border-green-500 dark:border-emerald-400 border-2 bg-green-50 dark:bg-slate-700/80",
-          isDragOver && !isValidDrop && "border-red-500 dark:border-red-400 border-2 bg-red-50 dark:bg-slate-800"
+          isDragOver && !isValidDrop && "border-red-500 dark:border-red-400 border-2 bg-red-50 dark:bg-slate-800",
+          isSwapping && "animate-swap-pulse ring-2 ring-emerald-500 dark:ring-emerald-400 ring-offset-2 dark:ring-offset-slate-900"
         )}
         style={{
-          animation: isDragOver && isValidDrop ? 'wiggle 0.5s ease-in-out infinite' : undefined
+          animation: isDragOver && isValidDrop
+            ? 'wiggle 0.5s ease-in-out infinite'
+            : isSwapping
+              ? 'swapPulse 0.4s ease-in-out'
+              : undefined,
+          transition: 'all 0.3s ease-in-out'
         }}
       >
         {/* Conflict Indicator */}

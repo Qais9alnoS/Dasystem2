@@ -117,7 +117,7 @@ export const ScheduleExporter: React.FC<ScheduleExporterProps> = ({
         const formatParams = new URLSearchParams();
         if (includeLogo) formatParams.append('include_logo', 'true');
         if (includeNotes) formatParams.append('include_notes', 'true');
-        
+
         if (selectedFormat === 'excel') {
           url = `http://localhost:8000/api/schedules/${scheduleId}/export/excel?${formatParams}`;
           filename = `${scheduleName}_${Date.now()}.xlsx`;

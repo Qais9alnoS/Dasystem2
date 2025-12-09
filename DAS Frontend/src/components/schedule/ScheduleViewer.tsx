@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { 
+import {
   Calendar,
   Clock,
   Users,
@@ -69,12 +69,12 @@ export const ScheduleViewer: React.FC<{
         // Fetch classes
         const classesResponse = await classesApi.getAll({ academic_year_id: academicYearId });
         setClasses(classesResponse.data || []);
-        
+
         // Fetch teachers
         const teachersResponse = await teachersApi.getAll({ academic_year_id: academicYearId });
         setTeachers(teachersResponse.data || []);
       } catch (error: any) {
-        console.error('Error fetching data:', error);
+
         toast({
           title: "خطأ في تحميل البيانات",
           description: error.message || "حدث خطأ أثناء تحميل البيانات",
@@ -94,29 +94,29 @@ export const ScheduleViewer: React.FC<{
   useEffect(() => {
     const fetchSchedules = async () => {
       if (!academicYearId) return;
-      
+
       setLoadingSchedules(true);
       try {
         if (selectedView === 'classes' && selectedClass) {
           // Fetch class schedule with real data
           const response = await schedulesApi.getWeeklyView(
-            academicYearId, 
-            sessionType, 
+            academicYearId,
+            sessionType,
             parseInt(selectedClass)
           );
-          
+
           if (response.success && response.data) {
             // Process real API response
             const weeklyData = response.data.data || {};
             const scheduleEntries: ScheduleEntry[] = [];
-            
+
             // Fetch subjects and teachers for lookups
             const subjectsResponse = await subjectsApi.getAll();
             const teachersData = teachers.length > 0 ? teachers : (await teachersApi.getAll({ academic_year_id: academicYearId })).data || [];
-            
+
             const subjectsMap = new Map((subjectsResponse.data || []).map((s: any) => [s.id, s.subject_name]));
             const teachersMap = new Map(teachersData.map((t: any) => [t.id, t.full_name]));
-            
+
             // Map day numbers to Arabic day names
             const dayNames: { [key: number]: string } = {
               1: "الأحد",
@@ -127,7 +127,7 @@ export const ScheduleViewer: React.FC<{
               6: "الجمعة",
               7: "السبت"
             };
-            
+
             // Process the weekly data
             Object.entries(weeklyData).forEach(([dayNum, periods]: [string, any]) => {
               Object.entries(periods).forEach(([periodNum, entry]: [string, any]) => {
@@ -139,13 +139,13 @@ export const ScheduleViewer: React.FC<{
                 });
               });
             });
-            
+
             // Find the selected class info
             const selectedClassInfo = classes.find(c => c.id?.toString() === selectedClass);
-            const gradeLevel = selectedClassInfo?.grade_level === 'primary' ? 'ابتدائي' 
-              : selectedClassInfo?.grade_level === 'intermediate' ? 'متوسط' 
+            const gradeLevel = selectedClassInfo?.grade_level === 'primary' ? 'ابتدائي'
+              : selectedClassInfo?.grade_level === 'intermediate' ? 'متوسط'
               : 'ثانوي';
-            
+
             const classSchedule: ClassSchedule = {
               className: `الصف ${selectedClassInfo?.grade_number} ${gradeLevel} - شعبة 1`,
               gradeLevel: gradeLevel,
@@ -153,7 +153,7 @@ export const ScheduleViewer: React.FC<{
               totalHours: scheduleEntries.length,
               schedule: scheduleEntries
             };
-            
+
             setClassSchedules([classSchedule]);
           } else {
             // No schedules found
@@ -162,27 +162,27 @@ export const ScheduleViewer: React.FC<{
         } else if (selectedView === 'teachers' && selectedTeacher) {
           // Fetch teacher schedule with real data
           const response = await schedulesApi.getWeeklyView(
-            academicYearId, 
-            sessionType, 
-            undefined, 
+            academicYearId,
+            sessionType,
+            undefined,
             parseInt(selectedTeacher)
           );
-          
+
           if (response.success && response.data) {
             // Process real API response
             const weeklyData = response.data.data || {};
             const scheduleEntries: (ScheduleEntry & { className: string })[] = [];
-            
+
             // Fetch subjects and classes for lookups
             const subjectsResponse = await subjectsApi.getAll();
             const classesData = classes.length > 0 ? classes : (await classesApi.getAll({ academic_year_id: academicYearId })).data || [];
-            
+
             const subjectsMap = new Map((subjectsResponse.data || []).map((s: any) => [s.id, s.subject_name]));
             const classesMap = new Map(classesData.map((c: any) => [
-              c.id, 
+              c.id,
               `الصف ${c.grade_number} ${c.grade_level === 'primary' ? 'ابتدائي' : c.grade_level === 'intermediate' ? 'متوسط' : 'ثانوي'}`
             ]));
-            
+
             // Map day numbers to Arabic day names
             const dayNames: { [key: number]: string } = {
               1: "الأحد",
@@ -193,7 +193,7 @@ export const ScheduleViewer: React.FC<{
               6: "الجمعة",
               7: "السبت"
             };
-            
+
             // Process the weekly data
             Object.entries(weeklyData).forEach(([dayNum, periods]: [string, any]) => {
               Object.entries(periods).forEach(([periodNum, entry]: [string, any]) => {
@@ -206,20 +206,20 @@ export const ScheduleViewer: React.FC<{
                 });
               });
             });
-            
+
             // Get unique subjects
             const uniqueSubjects = Array.from(new Set(scheduleEntries.map(e => e.subject)));
-            
+
             // Find the selected teacher info
             const selectedTeacherInfo = teachers.find(t => t.id?.toString() === selectedTeacher);
-            
+
             const teacherSchedule: TeacherSchedule = {
               teacherName: selectedTeacherInfo?.full_name || `معلم ${selectedTeacher}`,
               totalHours: scheduleEntries.length,
               subjects: uniqueSubjects,
               schedule: scheduleEntries
             };
-            
+
             setTeacherSchedules([teacherSchedule]);
           } else {
             // No schedules found
@@ -227,13 +227,13 @@ export const ScheduleViewer: React.FC<{
           }
         }
       } catch (error: any) {
-        console.error('Error fetching schedules:', error);
+
         toast({
           title: "خطأ في تحميل الجداول",
           description: error.message || "حدث خطأ أثناء تحميل الجداول",
           variant: "destructive"
         });
-        
+
         // Clear schedules on error
         if (selectedView === 'classes') {
           setClassSchedules([]);
@@ -250,14 +250,14 @@ export const ScheduleViewer: React.FC<{
 
   const renderClassScheduleTable = (classSchedule: ClassSchedule) => {
     const scheduleGrid: { [key: string]: ScheduleEntry | null } = {};
-    
+
     // Initialize grid
     SCHOOL_DAYS.forEach(day => {
       PERIODS.forEach(period => {
         scheduleGrid[`${day}-${period}`] = null;
       });
     });
-    
+
     // Fill grid with schedule entries
     classSchedule.schedule.forEach(entry => {
       scheduleGrid[`${entry.day}-${entry.period}`] = entry;
@@ -310,14 +310,14 @@ export const ScheduleViewer: React.FC<{
 
   const renderTeacherScheduleTable = (teacherSchedule: TeacherSchedule) => {
     const scheduleGrid: { [key: string]: (ScheduleEntry & { className: string }) | null } = {};
-    
+
     // Initialize grid
     SCHOOL_DAYS.forEach(day => {
       PERIODS.forEach(period => {
         scheduleGrid[`${day}-${period}`] = null;
       });
     });
-    
+
     // Fill grid with schedule entries
     teacherSchedule.schedule.forEach(entry => {
       scheduleGrid[`${entry.day}-${entry.period}`] = entry;
@@ -555,7 +555,7 @@ export const ScheduleViewer: React.FC<{
             <p className="text-sm text-muted-foreground">صف مجدول</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <Users className="h-8 w-8 mx-auto mb-2 text-green-500" />
@@ -563,7 +563,7 @@ export const ScheduleViewer: React.FC<{
             <p className="text-sm text-muted-foreground">معلم مجدول</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <Calendar className="h-8 w-8 mx-auto mb-2 text-blue-500" />

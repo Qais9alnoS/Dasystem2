@@ -19,7 +19,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, Trash2, Info, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Subject } from "@/types/school";
@@ -45,12 +44,8 @@ interface Constraint {
   description: string;
 }
 
-const PRIORITY_LEVELS = [
-  { value: 1, label: "منخفض", color: "bg-blue-100 text-blue-800" },
-  { value: 2, label: "متوسط", color: "bg-yellow-100 text-yellow-800" },
-  { value: 3, label: "عالي", color: "bg-orange-100 text-orange-800" },
-  { value: 4, label: "حرج", color: "bg-red-100 text-red-800" },
-];
+// All constraints are critical (حرج) priority - must be applied
+const CRITICAL_PRIORITY = { value: 4, label: "حرج", color: "bg-red-100 text-red-800" };
 
 export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
   data,
@@ -66,13 +61,20 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
   const [constraintType, setConstraintType] = useState<
     "no_consecutive" | "before_after" | "subject_per_day"
   >("no_consecutive");
-  const [priorityLevel, setPriorityLevel] = useState(2);
+  const [priorityLevel] = useState(4);  // Always حرج - must be applied
   const [referenceSubject, setReferenceSubject] = useState<number | null>(null);
   const [placement, setPlacement] = useState<"before" | "after">("before");
 
   useEffect(() => {
     loadSubjects();
-  }, [data.classId]);
+  }, [data.classId, data.academicYearId]);
+
+  // Load constraints AFTER subjects are loaded (so we can resolve subject names)
+  useEffect(() => {
+    if (subjects.length > 0) {
+      loadConstraints();
+    }
+  }, [subjects, data.academicYearId]);
 
   // Mark this step as ready as soon as it loads (optional step)
   useEffect(() => {
@@ -80,6 +82,40 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
     onContinue();
     setHasSignaledReady(true);
   }, [hasSignaledReady, onContinue]);
+
+  // Load existing constraints from backend
+  const loadConstraints = async () => {
+    try {
+      const response = await schedulesApi.getConstraints(data.academicYearId);
+      if (response.success && response.data) {
+        // Convert backend constraints to frontend format
+        const loadedConstraints: Constraint[] = response.data
+          .filter((c: any) => c.class_id === data.classId || c.class_id === null)
+          .map((c: any) => {
+            const subject = subjects.find(s => s.id === c.subject_id);
+            let description = '';
+            if (c.constraint_type === 'no_consecutive') {
+              description = `${subject?.subject_name || 'مادة'}: لا يجب أن تكون الحصص متتالية`;
+            } else if (c.constraint_type === 'subject_per_day') {
+              description = `${subject?.subject_name || 'مادة'}: يجب أن تكون في كل يوم`;
+            } else {
+              description = c.description || '';
+            }
+            return {
+              id: String(c.id),
+              subject_id: c.subject_id,
+              subject_name: subject?.subject_name || 'مادة غير معروفة',
+              constraint_type: c.constraint_type,
+              priority_level: c.priority_level,
+              description,
+            };
+          });
+        setConstraints(loadedConstraints);
+      }
+    } catch (error: any) {
+
+    }
+  };
 
   const loadSubjects = async () => {
     try {
@@ -96,7 +132,7 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
     }
   };
 
-  const handleAddConstraint = () => {
+  const handleAddConstraint = async () => {
     if (!selectedSubject) {
       toast({
         title: "تنبيه",
@@ -142,35 +178,77 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
       description,
     };
 
-    setConstraints([...constraints, newConstraint]);
+    // Save to backend
+    try {
+      const backendConstraint = {
+        academic_year_id: data.academicYearId,
+        constraint_type: constraintType,
+        class_id: data.classId,
+        subject_id: selectedSubject,
+        priority_level: priorityLevel,
+        applies_to_all_sections: false,
+        session_type: 'both' as const,
+        description: description,
+        is_active: true,
+      };
+
+      const response = await schedulesApi.createConstraint(backendConstraint as any);
+
+      if (response.success && response.data) {
+        // Use the ID from the backend
+        newConstraint.id = String(response.data.id);
+        setConstraints([...constraints, newConstraint]);
+
+        toast({
+          title: "تم الإضافة",
+          description: "تم حفظ القيد في قاعدة البيانات",
+        });
+      } else {
+        throw new Error(response.message || 'فشل حفظ القيد');
+      }
+    } catch (error: any) {
+      toast({
+        title: "خطأ",
+        description: error.message || "فشل حفظ القيد في قاعدة البيانات",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Reset form
     setSelectedSubject(null);
     setConstraintType("no_consecutive");
-    setPriorityLevel(2);
     setReferenceSubject(null);
     setPlacement("before");
     setShowAddDialog(false);
-
-    toast({
-      title: "تم الإضافة",
-      description: "تم إضافة القيد بنجاح",
-    });
   };
 
-  const handleDeleteConstraint = (id: string) => {
-    setConstraints(constraints.filter((c) => c.id !== id));
-    toast({
-      title: "تم الحذف",
-      description: "تم حذف القيد",
-    });
+  const handleDeleteConstraint = async (id: string) => {
+    try {
+      // Delete from backend
+      const response = await schedulesApi.deleteConstraint(parseInt(id));
+
+      if (response.success) {
+        setConstraints(constraints.filter((c) => c.id !== id));
+        toast({
+          title: "تم الحذف",
+          description: "تم حذف القيد من قاعدة البيانات",
+        });
+      } else {
+        throw new Error('فشل الحذف');
+      }
+    } catch (error: any) {
+      toast({
+        title: "خطأ",
+        description: error.message || "فشل حذف القيد",
+        variant: "destructive",
+      });
+    }
   };
 
-  const getPriorityBadge = (level: number) => {
-    const priority = PRIORITY_LEVELS.find((p) => p.value === level);
-    return priority ? (
-      <Badge className={priority.color}>{priority.label}</Badge>
-    ) : null;
+  const getPriorityBadge = () => {
+    // All constraints are critical (حرج)
+    return <Badge className={CRITICAL_PRIORITY.color}>{CRITICAL_PRIORITY.label}</Badge>;
   };
 
   const getConstraintTypeLabel = (type: string) => {
@@ -188,15 +266,6 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Info Alert */}
-      <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-        <Info className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-        <AlertDescription className="text-blue-800 dark:text-blue-100">
-          القيود هي شروط اختيارية تساعد في تحسين جودة الجدول. يمكنك تخطي هذه
-          الخطوة إذا لم تكن بحاجة لقيود محددة.
-        </AlertDescription>
-      </Alert>
-
       {/* Constraints List */}
       <Card>
         <CardHeader>
@@ -338,47 +407,6 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
                     </>
                   )}
 
-                  {/* Priority Level */}
-                  <div className="space-y-2">
-                    <Label>مستوى الأولوية</Label>
-                    <Select
-                      value={priorityLevel.toString()}
-                      onValueChange={(value) =>
-                        setPriorityLevel(parseInt(value))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIORITY_LEVELS.map((level) => (
-                          <SelectItem
-                            key={level.value}
-                            value={level.value.toString()}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span>{level.label}</span>
-                              {level.value === 4 && (
-                                <span className="text-xs text-muted-foreground">
-                                  (يجب التقيد به)
-                                </span>
-                              )}
-                              {level.value < 4 && (
-                                <span className="text-xs text-muted-foreground">
-                                  (يمكن تجاوزه)
-                                </span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {priorityLevel === 4
-                        ? "القيود الحرجة (4) يجب تحقيقها وإلا سيتم منع نشر الجدول"
-                        : "القيود غير الحرجة (1-3) ستظهر كتحذيرات ويمكن تجاوزها"}
-                    </p>
-                  </div>
                 </div>
 
                 <DialogFooter>
@@ -419,7 +447,6 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
                         <Badge variant="outline">
                           {getConstraintTypeLabel(constraint.constraint_type)}
                         </Badge>
-                        {getPriorityBadge(constraint.priority_level)}
                         <span className="text-sm font-medium">
                           {constraint.subject_name}
                         </span>
@@ -442,40 +469,6 @@ export const ConstraintManager: React.FC<ConstraintManagerProps> = ({
           )}
         </CardContent>
       </Card>
-
-      {/* Summary */}
-      {constraints.length > 0 && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-900">
-                  {constraints.length}
-                </p>
-                <p className="text-blue-600">إجمالي القيود</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-red-900">
-                  {constraints.filter((c) => c.priority_level === 4).length}
-                </p>
-                <p className="text-red-600">قيود حرجة</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-orange-900">
-                  {constraints.filter((c) => c.priority_level === 3).length}
-                </p>
-                <p className="text-orange-600">قيود عالية</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-yellow-900">
-                  {constraints.filter((c) => c.priority_level <= 2).length}
-                </p>
-                <p className="text-yellow-600">قيود منخفضة</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* لا توجد أزرار تنقّل هنا؛ الانتقال يتم عبر زر "التالي" في الـ Wizard */}
     </div>

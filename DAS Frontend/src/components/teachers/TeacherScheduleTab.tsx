@@ -92,7 +92,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
         loadAssignments();
         loadClasses();
         loadTeacherSchedule();
-        
+
         // Initialize free time slots from teacher data
         if (teacher.free_time_slots && Array.isArray(teacher.free_time_slots)) {
             // Check if it's a 2D array (legacy) or 1D array (current)
@@ -121,7 +121,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             // Initialize empty grid (5 days x 6 periods)
             initializeEmptyFreeTimeSlots();
         }
-        
+
         // Reset form when teacher changes
         setNewAssignment({ class_id: '', subject_id: '', section: '' });
         setSubjects([]);
@@ -132,15 +132,15 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
         const slots: FreeTimeSlot[] = [];
         for (let day = 0; day < 5; day++) { // Sunday to Thursday (0-4)
             for (let period = 0; period < 6; period++) { // Periods 0-5 (0-based indexing)
-                slots.push({ 
-                    day: day, 
-                    period: period, 
+                slots.push({
+                    day: day,
+                    period: period,
                     is_free: false,
                     status: 'unavailable'
                 });
             }
         }
-        console.log('Initialized empty slots:', slots.length, 'slots');
+
         setFreeTimeSlots(slots);
     };
 
@@ -155,7 +155,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
             if (response.success && response.data) {
                 // Ensure data is an array
                 const scheduleData = Array.isArray(response.data) ? response.data : [];
-                
+
                 // Map schedule entries to occupied slots format
                 const occupied = scheduleData.map((entry: any) => ({
                     day: entry.day_of_week - 1, // Convert from 1-5 to 0-4
@@ -164,10 +164,10 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     subject: entry.subject_name || 'مادة'
                 }));
                 setOccupiedSlots(occupied);
-                console.log('Loaded occupied slots:', occupied.length); // Debug log
+                 // Debug log
             }
         } catch (error) {
-            console.error('Error loading teacher schedule:', error);
+
         } finally {
             setLoadingSchedule(false);
         }
@@ -182,18 +182,18 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
 
             if (response.success && response.data) {
                 setAssignments(response.data);
-                
+
                 // Get unique class IDs to load subjects
                 const classIds = [...new Set(response.data.map((a: any) => a.class_id))];
-                
+
                 // Load subjects for all classes
-                const subjectPromises = classIds.map(classId => 
+                const subjectPromises = classIds.map(classId =>
                     subjectsApi.getAll({ class_id: classId, academic_year_id: academicYearId ? parseInt(academicYearId) : undefined })
                 );
-                
+
                 const subjectResponses = await Promise.all(subjectPromises);
                 const allSubjects: Subject[] = [];
-                
+
                 for (const subjectResponse of subjectResponses) {
                     if (subjectResponse.success && subjectResponse.data) {
                         allSubjects.push(...subjectResponse.data);
@@ -201,16 +201,16 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                         allSubjects.push(...subjectResponse);
                     }
                 }
-                
+
                 // Remove duplicates by id
                 const uniqueSubjects = Array.from(
                     new Map(allSubjects.map(s => [s.id, s])).values()
                 );
-                
+
                 setSubjects(uniqueSubjects);
             }
         } catch (error) {
-            console.error('Error loading assignments:', error);
+
         }
     };
 
@@ -228,7 +228,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 setClasses(response);
             }
         } catch (error) {
-            console.error('Error loading classes:', error);
+
         }
     };
 
@@ -246,7 +246,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 setSubjects(response);
             }
         } catch (error) {
-            console.error('Error loading subjects:', error);
+
         }
     };
 
@@ -315,20 +315,20 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
     // Helper function to calculate total weekly hours
     const calculateTotalWeeklyHours = () => {
         let total = 0;
-        
+
         for (const assignment of assignments) {
             // Find the subject for this assignment
             const subject = subjects.find(s => s.id === assignment.subject_id);
             if (subject) {
                 const weeklyHours = subject.weekly_hours || 0;
-                
+
                 // If assignment is for "all sections" (section is null or empty)
                 // multiply by number of sections in the class
                 if (!assignment.section || assignment.section === '') {
                     // Find the class to get section_count
                     const classInfo = classes.find(c => c.id === assignment.class_id);
                     const sectionCount = classInfo?.section_count || 1;
-                    
+
                     // Multiply weekly hours by number of sections
                     total += weeklyHours * sectionCount;
                 } else {
@@ -337,7 +337,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                 }
             }
         }
-        
+
         return total;
     };
 
@@ -437,16 +437,16 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                                 const classInfo = classes.find(c => c.id === assignment.class_id);
                                 // Find the corresponding subject to get weekly hours
                                 const subjectInfo = subjects.find(s => s.id === assignment.subject_id);
-                                
+
                                 // Get proper Arabic grade name
-                                const gradeLabel = classInfo 
+                                const gradeLabel = classInfo
                                     ? getGradeLabel(classInfo.grade_level, classInfo.grade_number)
                                     : assignment.class_name;
-                                
+
                                 // Calculate total weekly hours based on sections
                                 let totalWeeklyHours = subjectInfo?.weekly_hours || 0;
                                 let sectionLabel = '';
-                                
+
                                 if (!assignment.section || assignment.section === '') {
                                     // Assigned to all sections
                                     const sectionCount = classInfo?.section_count || 1;
@@ -456,7 +456,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                                     // Specific section
                                     sectionLabel = `الشعبة ${assignment.section}`;
                                 }
-                                
+
                                 return (
                                     <div
                                         key={assignment.id}
@@ -542,7 +542,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                     </CardContent>
                 </Card>
             )}
-            
+
             {/* Message when no assignments */}
             {assignments.length === 0 && (
                 <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20">
@@ -576,7 +576,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                                     const selectedClass = classes.find(c => c.id?.toString() === value);
                                     setNewAssignment({ ...newAssignment, class_id: value, section: '' });
                                     loadSubjectsForClass(parseInt(value));
-                                    
+
                                     // Generate available sections based on section_count
                                     if (selectedClass?.section_count) {
                                         const sections = [];
@@ -673,7 +673,7 @@ export const TeacherScheduleTab: React.FC<TeacherScheduleTabProps> = ({ teacher,
                             حدد الأوقات التي يكون فيها الأستاذ متاحاً (الأخضر = متاح، الرمادي = مشغول)
                         </DialogDescription>
                     </DialogHeader>
-                    
+
                     {/* Requirement Indicator */}
                     {calculateTotalWeeklyHours() > 0 && (
                         <div className="bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-700 rounded-xl p-4">

@@ -29,7 +29,7 @@ export const AddFinanceCardModal: React.FC<AddFinanceCardModalProps> = ({
 }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+
   const [cardName, setCardName] = useState('');
   const [cardType, setCardType] = useState<'income' | 'expense' | 'both'>('both');
   const [category, setCategory] = useState<'activity' | 'student' | 'custom'>('custom');
@@ -68,7 +68,7 @@ export const AddFinanceCardModal: React.FC<AddFinanceCardModalProps> = ({
       setDescription('');
       setCardType('both');
       setCategory('custom');
-      
+
       onSuccess?.();
       onClose();
     } catch (error) {

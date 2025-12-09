@@ -16,7 +16,7 @@ interface IOSNavbarProps {
 const IOSNavbar = React.forwardRef<HTMLDivElement, IOSNavbarProps>(
   ({ title, onBack, onMore, className, backButtonLabel = "Back", moreButtonLabel = "More", largeTitle = false }, ref) => {
     return (
-      <div 
+      <div
         ref={ref}
         className={cn(
           "sticky top-0 z-10 bg-background border-b border-border backdrop-blur-md",
@@ -26,8 +26,8 @@ const IOSNavbar = React.forwardRef<HTMLDivElement, IOSNavbarProps>(
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
             {onBack && (
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={onBack}
                 className="rounded-full"
@@ -37,7 +37,7 @@ const IOSNavbar = React.forwardRef<HTMLDivElement, IOSNavbarProps>(
               </Button>
             )}
           </div>
-          
+
           <div className="flex-1 text-center">
             <h1 className={cn(
               "font-semibold text-foreground truncate px-4",
@@ -46,11 +46,11 @@ const IOSNavbar = React.forwardRef<HTMLDivElement, IOSNavbarProps>(
               {title}
             </h1>
           </div>
-          
+
           <div className="flex items-center">
             {onMore && (
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={onMore}
                 className="rounded-full"

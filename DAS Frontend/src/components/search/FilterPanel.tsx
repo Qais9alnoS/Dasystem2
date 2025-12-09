@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 interface FilterPanelProps {
   filters: SearchFilters;
@@ -100,7 +101,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     const newScopes = currentScopes.includes(scope)
       ? currentScopes.filter(s => s !== scope)
       : [...currentScopes, scope];
-    
+
     const newFilters = {
       ...localFilters,
       scopes: newScopes.length > 0 ? newScopes : undefined
@@ -117,14 +118,14 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
 
   const activeFilterCount = Object.keys(localFilters).filter(key => {
     const value = localFilters[key as keyof SearchFilters];
-    return value !== undefined && value !== null && 
+    return value !== undefined && value !== null &&
            (Array.isArray(value) ? value.length > 0 : true);
   }).length;
 
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className={`fixed inset-0 bg-black/30 dark:bg-black/50 z-[60] transition-opacity duration-200 ${
           isClosing ? 'opacity-0' : 'opacity-100'
         }`}
@@ -132,7 +133,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       />
 
       {/* Filter Panel */}
-      <div 
+      <div
         className={`fixed left-0 top-0 bottom-0 w-80 bg-[hsl(var(--background))] border-r border-[hsl(var(--border))] shadow-[var(--shadow-elevation-3)] z-[70] transition-transform duration-200 ease-out ${
           isClosing ? '-translate-x-full' : 'translate-x-0'
         }`}
@@ -169,15 +170,19 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 <Label className="text-sm font-medium text-[hsl(var(--foreground))]">
                   نوع الفترة
                 </Label>
-                <select
+                <Select
                   value={localFilters.session_type || 'all'}
-                  onChange={(e) => handleSessionTypeChange(e.target.value)}
-                  className="modern-select"
+                  onValueChange={handleSessionTypeChange}
                 >
-                  <option value="all">الكل</option>
-                  <option value="morning">صباحي</option>
-                  <option value="evening">مسائي</option>
-                </select>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="morning">صباحي</SelectItem>
+                    <SelectItem value="evening">مسائي</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
@@ -187,7 +192,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 <Calendar className="h-4 w-4" />
                 نطاق التاريخ
               </Label>
-              
+
               <div className="space-y-3">
                 <div>
                   <Label htmlFor="date-from" className="text-xs text-[hsl(var(--muted-foreground))] mb-1 block">
@@ -199,7 +204,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                     placeholder="dd/mm/yyyy"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="date-to" className="text-xs text-[hsl(var(--muted-foreground))] mb-1 block">
                     إلى

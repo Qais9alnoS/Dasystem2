@@ -1,246 +1,279 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Wallet, CreditCard } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import MetricCard from './MetricCard';
-import LineChart from './LineChart';
 import BarChart from './BarChart';
 import PieChart from './PieChart';
-import TimePeriodToggle, { PeriodType } from './TimePeriodToggle';
-import api from '../../services/api';
+import { financeManagerApi } from '../../services/api';
+import { FinanceManagerDashboard } from '@/types/school';
 
-const FinanceAnalyticsDashboard: React.FC = () => {
+type PeriodType = 'weekly' | 'monthly' | 'yearly';
+
+interface FinanceAnalyticsDashboardProps {
+  compact?: boolean;
+  hideHeader?: boolean;
+}
+
+const FinanceAnalyticsDashboard: React.FC<FinanceAnalyticsDashboardProps> = ({
+  compact = false,
+  hideHeader = false
+}) => {
   const [period, setPeriod] = useState<PeriodType>('monthly');
   const [loading, setLoading] = useState(true);
-  const [overview, setOverview] = useState<any>(null);
-  const [incomeTrends, setIncomeTrends] = useState<any>(null);
-  const [expenseTrends, setExpenseTrends] = useState<any>(null);
-  const [outstanding, setOutstanding] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<FinanceManagerDashboard | null>(null);
   const [academicYear, setAcademicYear] = useState<number>(1);
+  const [chartData, setChartData] = useState<{categories: string[], incomeData: number[], expenseData: number[]}>({categories: [], incomeData: [], expenseData: []});
+  const [incomeCompletion, setIncomeCompletion] = useState<{completed_income: number, incomplete_income: number}>({completed_income: 0, incomplete_income: 0});
+
+  // Load selected academic year from localStorage on mount
+  useEffect(() => {
+    const storedYearId = localStorage.getItem('selected_academic_year_id');
+    if (storedYearId) {
+      const yearId = parseInt(storedYearId);
+      setAcademicYear(yearId);
+    }
+  }, []);
+
+  // Listen for changes in academic year selection
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedYearId = localStorage.getItem('selected_academic_year_id');
+      if (storedYearId) {
+        const yearId = parseInt(storedYearId);
+        setAcademicYear(yearId);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   useEffect(() => {
-    fetchFinancialData();
+    if (academicYear) {
+      fetchFinancialData();
+    }
+  }, [academicYear]);
+
+  useEffect(() => {
+    if (academicYear) {
+      fetchChartData();
+      fetchIncomeCompletionData();
+    }
   }, [period, academicYear]);
 
   const fetchFinancialData = async () => {
     setLoading(true);
     try {
-      const queryParams = new URLSearchParams({
-        academic_year_id: academicYear.toString(),
-        period_type: period
-      }).toString();
-
-      const [overviewRes, incomeRes, expenseRes, outstandingRes] = await Promise.all([
-        api.get(`/analytics/finance/overview?${queryParams}`),
-        api.get(`/analytics/finance/income-trends?${queryParams}`),
-        api.get(`/analytics/finance/expense-trends?${queryParams}`),
-        api.get(`/analytics/finance/outstanding-payments?academic_year_id=${academicYear}&limit=20`)
-      ]);
-
-      setOverview(overviewRes.data);
-      setIncomeTrends(incomeRes.data);
-      setExpenseTrends(expenseRes.data);
-      setOutstanding(outstandingRes.data);
+      const response = await financeManagerApi.getDashboard(academicYear);
+      setDashboard(response.data);
     } catch (error) {
-      console.error('Failed to fetch financial analytics:', error);
+
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchChartData = async () => {
+    try {
+      const response = await financeManagerApi.getTransactionsByPeriod(academicYear, period);
+      setChartData({
+        categories: response.data.periods,
+        incomeData: response.data.income_data,
+        expenseData: response.data.expense_data
+      });
+    } catch (error) {
+
+      setChartData({categories: [], incomeData: [], expenseData: []});
+    }
+  };
+
+  const fetchIncomeCompletionData = async () => {
+    try {
+      const response = await financeManagerApi.getIncomeCompletionStats(academicYear);
+      setIncomeCompletion(response.data);
+    } catch (error) {
+
+      setIncomeCompletion({completed_income: 0, incomplete_income: 0});
+    }
+  };
+
+  // Chart data is now fetched from backend with real transaction dates
+
+  const netProfit = Number(dashboard?.net_profit || 0);
+  const totalIncome = Number(dashboard?.summary?.total_income || 0);
+  const totalExpenses = Number(dashboard?.summary?.total_expenses || 0);
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className={compact ? 'space-y-6' : 'container mx-auto p-6 space-y-6'}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      {!hideHeader && (
         <div>
           <h1 className="text-3xl font-bold text-foreground">التحليلات المالية</h1>
-          <p className="text-muted-foreground mt-1">تحليل شامل للدخل والمصروفات</p>
+          <p className="text-muted-foreground mt-1">نظرة شاملة على الأداء المالي للمدرسة</p>
         </div>
-        <TimePeriodToggle value={period} onChange={setPeriod} />
+      )}
+
+      {/* Top 3 Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* الإيرادات */}
+        <Card className="relative overflow-hidden border-l-4 border-l-emerald-500">
+          <CardContent className="p-6">
+            <div className="absolute top-4 left-4">
+              <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+            </div>
+            <div className="text-right mt-2">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">الإيرادات</p>
+              {loading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-1"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                    {totalIncome.toLocaleString('ar-SY')}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">ل.س</p>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* المصروفات */}
+        <Card className="relative overflow-hidden border-l-4 border-l-red-500">
+          <CardContent className="p-6">
+            <div className="absolute top-4 left-4">
+              <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/40">
+                <Wallet className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+            <div className="text-right mt-2">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">المصروفات</p>
+              {loading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-1"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                    {totalExpenses.toLocaleString('ar-SY')}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">ل.س</p>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* صافي الربح */}
+        <Card className={`relative overflow-hidden border-l-4 ${netProfit >= 0 ? 'border-l-blue-500' : 'border-l-amber-500'}`}>
+          <CardContent className="p-6">
+            <div className="absolute top-4 left-4">
+              <div className={`p-3 rounded-lg ${netProfit >= 0 ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-amber-100 dark:bg-amber-900/40'}`}>
+                {netProfit >= 0 ? (
+                  <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <TrendingDown className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                )}
+              </div>
+            </div>
+            <div className="text-right mt-2">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">صافي الربح</p>
+              {loading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-1"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className={`text-3xl font-bold mb-1 ${netProfit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {netProfit.toLocaleString('ar-SY')}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">ل.س</p>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Financial Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="إجمالي الدخل"
-          value={overview?.summary?.total_income?.toLocaleString() || 0}
-          icon={DollarSign}
-          color="success"
-          loading={loading}
-          subtitle="ل.س"
-        />
-        <MetricCard
-          title="إجمالي المصروفات"
-          value={overview?.summary?.total_expenses?.toLocaleString() || 0}
-          icon={Wallet}
-          color="danger"
-          loading={loading}
-          subtitle="ل.س"
-        />
-        <MetricCard
-          title="صافي الربح"
-          value={overview?.summary?.net_profit?.toLocaleString() || 0}
-          icon={TrendingUp}
-          color={overview?.summary?.net_profit >= 0 ? 'accent' : 'warning'}
-          loading={loading}
-          subtitle="ل.س"
-        />
-        <MetricCard
-          title="نسبة التحصيل"
-          value={`${overview?.collection?.collection_rate || 0}%`}
-          icon={CreditCard}
-          color="primary"
-          loading={loading}
-        />
-      </div>
-
-      {/* Income & Expense Trends */}
+      {/* Charts Grid - 2 columns equal size */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>اتجاه الدخل</CardTitle>
-          </CardHeader>
-          <CardContent>
-          <LineChart
-            series={[
-              {
-                name: 'مدفوعات الطلاب',
-                data: incomeTrends?.student_payments?.map((d: any) => d.amount) || []
-              },
-              {
-                name: 'دخل آخر',
-                data: incomeTrends?.other_income?.map((d: any) => d.amount) || []
-              }
-            ]}
-            data={incomeTrends?.student_payments?.map((d: any) => ({
-              name: d.period ? new Date(d.period).toLocaleDateString('ar-SY', { month: 'short' }) : '',
-              value: d.amount
-            })) || []}
-            height="350px"
-            showArea
-            yAxisLabel="المبلغ (ل.س)"
-            loading={loading}
-          />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>اتجاه المصروفات</CardTitle>
-          </CardHeader>
-          <CardContent>
-          <LineChart
-            data={expenseTrends?.expense_trend?.map((d: any) => ({
-              name: d.period ? new Date(d.period).toLocaleDateString('ar-SY', { month: 'short' }) : '',
-              value: d.amount
-            })) || []}
-            height="350px"
-            showArea
-            yAxisLabel="المبلغ (ل.س)"
-            loading={loading}
-          />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Income & Expense by Category */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>الدخل حسب الفئة</CardTitle>
-          </CardHeader>
-          <CardContent>
-          <PieChart
-            data={incomeTrends?.by_category?.map((c: any) => ({
-              name: c.category,
-              value: c.total
-            })) || []}
-            height="350px"
-            loading={loading}
-          />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>المصروفات حسب الفئة</CardTitle>
-          </CardHeader>
-          <CardContent>
-          <PieChart
-            data={expenseTrends?.by_category?.map((c: any) => ({
-              name: c.category,
-              value: c.total
-            })) || []}
-            donut
-            height="350px"
-            loading={loading}
-          />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Outstanding Payments */}
-      {outstanding?.outstanding_payments && outstanding.outstanding_payments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>المدفوعات المستحقة</CardTitle>
-              <div className="text-sm text-muted-foreground">
-                الإجمالي: <span className="font-bold text-red-600 dark:text-red-400">
-                  {outstanding.total_outstanding?.toLocaleString()} ل.س
-                </span>
+        {/* Bar Chart Section */}
+        <Card className="h-full">
+          <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle>الإيرادات والمصروفات</CardTitle>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">مدة زمنية</span>
+              <div className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+                {(
+                  [
+                    { value: 'weekly', label: 'أسابيع' },
+                    { value: 'monthly', label: 'أشهر' },
+                    { value: 'yearly', label: 'سنوات' }
+                  ] as { value: PeriodType; label: string }[]
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPeriod(value)}
+                    className={`min-w-[70px] rounded-full px-4 py-1 text-sm font-medium transition-colors ${
+                      period === value
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">اسم الطالب</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">الصف</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">المبلغ المستحق</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">المبلغ المدفوع</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">الرصيد</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-muted-foreground">نسبة الدفع</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outstanding.outstanding_payments.map((payment: any, index: number) => (
-                    <tr key={index} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="px-4 py-3 text-sm font-medium">
-                        {payment.student_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{payment.grade}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {payment.total_due?.toLocaleString()} <span className="text-xs text-muted-foreground">ل.س</span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-green-600 dark:text-green-400">
-                        {payment.total_paid?.toLocaleString()} <span className="text-xs">ل.س</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-                          {payment.balance?.toLocaleString()} ل.س
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                            <div
-                              className="bg-green-500 dark:bg-green-600 h-2 rounded-full"
-                              style={{ width: `${payment.payment_percentage}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium">{payment.payment_percentage}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <BarChart
+              data={chartData.categories.map((name, index) => ({ name, value: 0 }))}
+              series={[
+                {
+                  name: 'الإيرادات',
+                  data: chartData.incomeData,
+                  color: '#10b981'
+                },
+                {
+                  name: 'المصروفات',
+                  data: chartData.expenseData,
+                  color: '#ef4444'
+                }
+              ]}
+              categories={chartData.categories}
+              height="550px"
+              loading={loading}
+              showLegend={true}
+            />
           </CardContent>
         </Card>
-      )}
+
+        {/* Income Completion Donut Chart */}
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>حالة الأرباح</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieChart
+              data={[
+                { name: 'أرباح مكتملة', value: incomeCompletion.completed_income },
+                { name: 'ديون مستحقة', value: incomeCompletion.incomplete_income }
+              ]}
+              colors={['#3B82F6', '#F59E0B']}
+              height="550px"
+              donut
+              loading={loading}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

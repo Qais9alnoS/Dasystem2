@@ -59,7 +59,7 @@ export const ScheduleManagementPage: React.FC = () => {
   const location = useLocation();
   const filterSectionRef = useRef<HTMLDivElement>(null);
   const isNavigatingFromDashboard = useRef(false);
-  
+
   // State management
   const [currentStep, setCurrentStep] = useState<Step>('filter');
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
@@ -92,21 +92,19 @@ export const ScheduleManagementPage: React.FC = () => {
       // Ensure we're on the create tab and filter step
       setActiveTab('create');
       setCurrentStep('filter');
-      
+
       // Reset flag after state is set
       setTimeout(() => {
         isNavigatingFromDashboard.current = false;
       }, 100);
     }
-    
+
     // Handle preselected schedule from search
     if (location.state?.viewSchedule && location.state?.scheduleData) {
-      console.log('=== Navigating to View Schedule from Search ===');
-      console.log('Schedule Data:', location.state.scheduleData);
-      
+
       // Switch to view tab
       setActiveTab('view');
-      
+
       // Set schedule data for the viewer
       if (location.state.scheduleData.academic_year_id) {
         setScheduleData({
@@ -127,7 +125,7 @@ export const ScheduleManagementPage: React.FC = () => {
     if (location.state?.scrollToClassSelection) {
       return;
     }
-    
+
     const savedData = localStorage.getItem(AUTOSAVE_KEY);
     if (savedData) {
       try {
@@ -154,7 +152,7 @@ export const ScheduleManagementPage: React.FC = () => {
           setIsPreviewMode(parsed.isPreviewMode);
         }
       } catch (error) {
-        console.error('Failed to load autosaved data:', error);
+
       }
     }
   }, []);
@@ -207,7 +205,7 @@ export const ScheduleManagementPage: React.FC = () => {
 
   // Step handlers
   const handleFilterComplete = (data: ScheduleData) => {
-    console.log('Filter complete - Schedule data:', data);
+
     setScheduleData(data);
     setScheduleAssignments([]);
     setGeneratedScheduleId(null);
@@ -327,7 +325,7 @@ export const ScheduleManagementPage: React.FC = () => {
         description: `يمكنك الآن مراجعة ${assignments.length} حصة قبل الحفظ النهائي في مرحلة التصدير.`
       });
     } catch (error: any) {
-      console.error('Error handling generated preview:', error);
+
       toast({
         title: 'تعذر عرض المعاينة',
         description: error.message || 'حدث خطأ أثناء تجهيز المعاينة',
@@ -379,21 +377,20 @@ export const ScheduleManagementPage: React.FC = () => {
       setPreviewData(null);
       setIsPreviewMode(false);
       markStepCompleted('export');
-      
+
       // Clear autosave after successful publish
       localStorage.removeItem(AUTOSAVE_KEY);
-      
+
       toast({
         title: 'تم النشر بنجاح',
         description: 'تم حفظ الجدول ويمكنك الآن تصديره أو عرضه ضمن الجداول المحفوظة.'
       });
     } catch (error: any) {
-      console.error('Error publishing schedule:', error);
-      
+
       // Check if error is about duplicate schedule name
       const errorMessage = error.response?.data?.detail || error.message || 'حدث خطأ أثناء حفظ الجدول';
       const isDuplicateName = errorMessage.includes('يوجد بالفعل جدول باسم') || errorMessage.includes('already exists');
-      
+
       toast({
         title: isDuplicateName ? '⚠️ جدول مكرر' : 'فشل النشر',
         description: errorMessage,
@@ -563,19 +560,13 @@ export const ScheduleManagementPage: React.FC = () => {
 
               {/* View Step */}
               {currentStep === 'view' && scheduleAssignments.length > 0 && (
-                <div className="space-y-4">
-                  <WeeklyScheduleGrid
-                    scheduleId={generatedScheduleId || undefined}
-                    data={scheduleData}
-                    assignments={scheduleAssignments}
-                    readOnly={isPreviewMode}
-                  />
-                  {isPreviewMode && (
-                    <div className="p-4 bg-primary/10 border border-primary/30 rounded text-sm text-primary">
-                      هذه نسخة معاينة فقط. انتقل إلى خطوة "التصدير" لحفظ الجدول بشكل نهائي.
-                    </div>
-                  )}
-                </div>
+                <WeeklyScheduleGrid
+                  scheduleId={generatedScheduleId || undefined}
+                  data={scheduleData}
+                  assignments={scheduleAssignments}
+                  onSwapComplete={refreshAssignmentsFromServer}
+                  readOnly={isPreviewMode}
+                />
               )}
 
               {currentStep === 'view' && scheduleAssignments.length === 0 && (

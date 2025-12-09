@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import echarts, { type ECharts } from '@/lib/echarts-custom';
 import { chartAnimation } from './chartTheme';
 
 interface DataPoint {
@@ -37,7 +37,7 @@ const BarChart: React.FC<BarChartProps> = ({
   showLegend = true
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ECharts | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -48,7 +48,7 @@ const BarChart: React.FC<BarChartProps> = ({
 
     const updateChart = () => {
       const isDark = document.documentElement.classList.contains('dark');
-      
+
       // Default colors if not provided
       const defaultColors = ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#06B6D4'];
       const chartColors = colors || defaultColors;
@@ -60,9 +60,6 @@ const BarChart: React.FC<BarChartProps> = ({
 
       const option: any = {
         backgroundColor: 'transparent',
-        // Explicitly disable dataZoom and visualMap
-        dataZoom: undefined,
-        visualMap: undefined,
         title: title ? {
           text: title,
           left: 'center',

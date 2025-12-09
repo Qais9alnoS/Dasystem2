@@ -102,7 +102,7 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
   // Notify parent whenever validation status changes
   useEffect(() => {
     if (!validationResult) return;
-    
+
     // Always notify parent of current validation status
     if (onValidationChange) {
       onValidationChange(validationResult.can_proceed);
@@ -113,7 +113,7 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
   // Automatically notify parent when validation allows proceeding
   useEffect(() => {
     if (!validationResult) return;
-    
+
     // If validation fails, reset the ready state
     if (!validationResult.can_proceed) {
       if (hasSignaledReady) {
@@ -121,7 +121,7 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       }
       return;
     }
-    
+
     // If validation passes and we haven't signaled yet, notify parent
     if (!hasSignaledReady) {
       onContinue();
@@ -160,11 +160,11 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
     if (availability === 'not_assigned' || availability === 'teacher_not_found') {
       return <Badge variant="destructive">غير معين</Badge>;
     }
-    
+
     if (isSufficient) {
       return <Badge className="bg-green-100 text-green-800 border-green-200">كافي</Badge>;
     }
-    
+
     return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">غير كافي</Badge>;
   };
 
@@ -194,15 +194,15 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
   // Calculate percentage considering both subject-level and system-level checks
   const completionPercentage = (() => {
     if (!validationResult.summary || validationResult.summary.total_subjects === 0) return 0;
-    
+
     // Subject-level: percentage of subjects with sufficient teacher availability
-    const subjectReadiness = 
+    const subjectReadiness =
       (validationResult.summary.teachers_with_sufficient_time / validationResult.summary.total_subjects) * 100;
-    
+
     // System-level: check for critical validation errors that block schedule generation
     // These are errors that prevent can_proceed from being true
     const hasCriticalErrors = !validationResult.can_proceed;
-    
+
     // If there are critical errors (like exclusive period conflicts, missing teachers in slots, etc.)
     // reduce the percentage significantly since the schedule cannot be generated
     if (hasCriticalErrors) {
@@ -210,7 +210,7 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
       // This ensures errors like "فترة حصرية زائدة" are reflected in the percentage
       return Math.min(subjectReadiness * 0.5, 50);
     }
-    
+
     return subjectReadiness;
   })();
 
@@ -350,13 +350,13 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({ data, on
                         <h4 className="font-medium text-foreground">{subject.subject_name}</h4>
                         {getStatusBadge(subject.status)}
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                         <div>
                           <span className="text-muted-foreground">الحصص المطلوبة:</span>
                           <span className="font-medium mr-1 text-foreground">{subject.required_periods} حصة/أسبوع</span>
                         </div>
-                        
+
                         {subject.has_teacher ? (
                           <>
                             <div>

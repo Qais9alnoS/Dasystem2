@@ -52,7 +52,7 @@ export const ActivityParticipantsManager: React.FC<ActivityParticipantsManagerPr
           setFilteredStudents(studentsResponse.data);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+
         toast({
           title: "خطأ",
           description: "فشل في تحميل بيانات المشاركين",
@@ -69,20 +69,20 @@ export const ActivityParticipantsManager: React.FC<ActivityParticipantsManagerPr
   // Filter students based on search term and selected class
   useEffect(() => {
     let result = students;
-    
+
     if (searchTerm) {
-      result = result.filter(student => 
+      result = result.filter(student =>
         student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.father_name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     if (selectedClassId) {
-      result = result.filter(student => 
+      result = result.filter(student =>
         student.grade_number === classes.find(c => c.id === selectedClassId)?.grade_number
       );
     }
-    
+
     setFilteredStudents(result);
   }, [searchTerm, selectedClassId, students, classes]);
 
@@ -111,9 +111,9 @@ export const ActivityParticipantsManager: React.FC<ActivityParticipantsManagerPr
   };
 
   const handleStudentSelect = (studentId: number) => {
-    setSelectedStudents(prev => 
-      prev.includes(studentId) 
-        ? prev.filter(id => id !== studentId) 
+    setSelectedStudents(prev =>
+      prev.includes(studentId)
+        ? prev.filter(id => id !== studentId)
         : [...prev, studentId]
     );
   };
@@ -211,8 +211,8 @@ export const ActivityParticipantsManager: React.FC<ActivityParticipantsManagerPr
               </TableHeader>
               <TableBody>
                 {filteredStudents.map((student) => (
-                  <TableRow 
-                    key={student.id} 
+                  <TableRow
+                    key={student.id}
                     className={selectedStudents.includes(student.id!) ? "bg-muted/50" : ""}
                   >
                     <TableCell>

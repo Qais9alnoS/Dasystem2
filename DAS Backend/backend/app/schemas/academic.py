@@ -74,6 +74,7 @@ class ClassBase(BaseModel):
     grade_number: int
     section_count: int = 1
     max_students_per_section: Optional[int] = None
+    quizzes_count: int = 2  # 2 or 4 quizzes
 
 class ClassCreate(ClassBase):
     pass

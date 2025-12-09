@@ -62,9 +62,10 @@ export const AttendanceTrendsCard: React.FC<AttendanceTrendsCardProps> = ({
             <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <h4 className="text-sm font-semibold text-foreground">معدل حضور الطلاب</h4>
           </div>
-          
+
           {sessionFilter === 'both' ? (
             <LineChart
+              key="student-both"
               data={studentAttendance.map((item) => ({
                 name: new Date(item.date).toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' }),
                 value: 0
@@ -88,14 +89,26 @@ export const AttendanceTrendsCard: React.FC<AttendanceTrendsCardProps> = ({
             />
           ) : (
             <LineChart
+              key={`student-${sessionFilter}`}
               data={studentAttendance.map((item) => ({
                 name: new Date(item.date).toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' }),
-                value: sessionFilter === 'morning' ? (item.morning || item.rate) : (item.evening || item.rate)
+                value: 0
               }))}
               height="220px"
               showArea
               yAxisLabel="معدل الحضور (%)"
               loading={loading}
+              series={[
+                {
+                  name: sessionFilter === 'morning' ? 'صباحي' : 'مسائي',
+                  data: studentAttendance.map((item) =>
+                    sessionFilter === 'morning'
+                      ? (item.morning || item.rate)
+                      : (item.evening || item.rate)
+                  ),
+                  color: sessionFilter === 'morning' ? '#3b82f6' : '#f59e0b'
+                }
+              ]}
             />
           )}
         </div>
@@ -106,9 +119,10 @@ export const AttendanceTrendsCard: React.FC<AttendanceTrendsCardProps> = ({
             <GraduationCap className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             <h4 className="text-sm font-semibold text-foreground">معدل حضور المعلمين</h4>
           </div>
-          
+
           {sessionFilter === 'both' ? (
             <LineChart
+              key="teacher-both"
               data={teacherAttendance.map((item) => ({
                 name: new Date(item.date).toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' }),
                 value: 0
@@ -132,14 +146,26 @@ export const AttendanceTrendsCard: React.FC<AttendanceTrendsCardProps> = ({
             />
           ) : (
             <LineChart
+              key={`teacher-${sessionFilter}`}
               data={teacherAttendance.map((item) => ({
                 name: new Date(item.date).toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' }),
-                value: sessionFilter === 'morning' ? (item.morning || item.rate) : (item.evening || item.rate)
+                value: 0
               }))}
               height="220px"
               showArea
               yAxisLabel="معدل الحضور (%)"
               loading={loading}
+              series={[
+                {
+                  name: sessionFilter === 'morning' ? 'صباحي' : 'مسائي',
+                  data: teacherAttendance.map((item) =>
+                    sessionFilter === 'morning'
+                      ? (item.morning || item.rate)
+                      : (item.evening || item.rate)
+                  ),
+                  color: sessionFilter === 'morning' ? '#3b82f6' : '#f59e0b'
+                }
+              ]}
             />
           )}
         </div>

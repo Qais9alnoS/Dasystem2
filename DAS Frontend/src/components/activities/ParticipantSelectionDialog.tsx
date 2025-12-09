@@ -64,7 +64,7 @@ export const ParticipantSelectionDialog: React.FC<
     Map<number, boolean>
   >(new Map()); // Track payment status per student
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Track initial state for change detection
   const [initialSelectedClasses, setInitialSelectedClasses] = useState<Set<number>>(new Set());
   const [initialSelectedStudents, setInitialSelectedStudents] = useState<Set<number>>(new Set());
@@ -106,7 +106,7 @@ export const ParticipantSelectionDialog: React.FC<
         activity.id!
       );
       if (registrationsResponse.success && registrationsResponse.data) {
-        console.log("Loaded registrations:", registrationsResponse.data); // Debug log
+         // Debug log
 
         const registeredStudentIds = new Set(
           registrationsResponse.data.map((r: any) => r.student_id)
@@ -119,9 +119,7 @@ export const ParticipantSelectionDialog: React.FC<
         registrationsResponse.data.forEach((r: any) => {
           existingRegsMap.set(r.student_id, r);
           paymentStatusMap.set(r.student_id, r.payment_status === "paid");
-          console.log(
-            `Student ${r.student_id}: registration ${r.id}, status ${r.payment_status}`
-          ); // Debug log
+           // Debug log
         });
         setExistingRegistrations(existingRegsMap);
         setStudentPaymentStatus(paymentStatusMap);
@@ -148,13 +146,13 @@ export const ParticipantSelectionDialog: React.FC<
         });
         setSelectedClasses(classesToCheck);
         setInitialSelectedClasses(new Set(classesToCheck));
-        console.log("Classes to check:", classesToCheck); // Debug log
-        
+         // Debug log
+
         setInitialSelectedStudents(new Set(registeredStudentIds));
-        console.log("Existing registrations map:", existingRegsMap); // Debug log
+         // Debug log
       }
     } catch (error) {
-      console.error("Error loading data:", error);
+
       toast({
         title: "خطأ",
         description: "فشل في تحميل البيانات",
@@ -225,7 +223,7 @@ export const ParticipantSelectionDialog: React.FC<
   // Handle student toggle
   const handleStudentToggle = (studentId: number) => {
     const student = students.find((s) => s.id === studentId);
-    
+
     // Find the class this student belongs to
     const studentClass = student ? classes.find(
       (c) =>
@@ -233,7 +231,7 @@ export const ParticipantSelectionDialog: React.FC<
         c.grade_number === student.grade_number &&
         c.session_type === student.session_type
     ) : null;
-    
+
     // If the student's class is checked and we're adding this student,
     // they should be automatically added (already handled by being in selectedStudents)
     // If unchecking, proceed normally
@@ -248,14 +246,14 @@ export const ParticipantSelectionDialog: React.FC<
       newSelectedStudents.add(studentId);
     }
     setSelectedStudents(newSelectedStudents);
-    
+
     // Update class checkboxes based on student selection
     if (studentClass) {
       const classStudents = getStudentsForClass(studentClass.id!);
-      const allClassStudentsSelected = classStudents.every((s) => 
+      const allClassStudentsSelected = classStudents.every((s) =>
         s.id === studentId ? newSelectedStudents.has(s.id) : newSelectedStudents.has(s.id!)
       );
-      
+
       const newSelectedClasses = new Set(selectedClasses);
       if (allClassStudentsSelected && classStudents.length > 0) {
         // All students selected, check the class
@@ -337,15 +335,13 @@ export const ParticipantSelectionDialog: React.FC<
       const updatedStudents = [];
       const removedStudents = [];
 
-      console.log("Saving participants. Total selected:", studentIds.length); // Debug log
-      console.log("Existing registrations size:", existingRegistrations.size); // Debug log
+       // Debug log
+       // Debug log
 
       // Check for students that need to be removed (in existing registrations but not in selectedStudents)
       for (const [studentId, registration] of existingRegistrations.entries()) {
         if (!selectedStudents.has(studentId)) {
-          console.log(
-            `Deleting registration ${registration.id} for student ${studentId}`
-          ); // Debug log
+           // Debug log
           promises.push(
             activitiesApi.deleteRegistration(activity.id!, registration.id)
           );
@@ -358,20 +354,10 @@ export const ParticipantSelectionDialog: React.FC<
         const hasPaid = studentPaymentStatus.get(studentId) || false;
         const newPaymentStatus = hasPaid ? "paid" : "pending";
 
-        console.log(`Processing student ${studentId}:`, {
-          // Debug log
-          hasExistingReg: !!existingReg,
-          existingRegId: existingReg?.id,
-          existingStatus: existingReg?.payment_status,
-          newStatus: newPaymentStatus,
-        });
-
         if (existingReg) {
           // Update existing registration if payment status changed
           if (existingReg.payment_status !== newPaymentStatus) {
-            console.log(
-              `Updating registration ${existingReg.id} for student ${studentId}`
-            ); // Debug log
+             // Debug log
             promises.push(
               activitiesApi.updateRegistration(existingReg.id, {
                 payment_status: newPaymentStatus,
@@ -379,11 +365,11 @@ export const ParticipantSelectionDialog: React.FC<
             );
             updatedStudents.push(studentId);
           } else {
-            console.log(`No change needed for student ${studentId}`); // Debug log
+             // Debug log
           }
         } else {
           // Create new registration
-          console.log(`Creating new registration for student ${studentId}`); // Debug log
+           // Debug log
           promises.push(
             activitiesApi.createRegistration(activity.id!, {
               student_id: studentId,
@@ -475,11 +461,11 @@ export const ParticipantSelectionDialog: React.FC<
       // Get students from classes
       const studentsInInitialClasses = new Set<number>();
       const studentsInCurrentClasses = new Set<number>();
-      
+
       for (const classId of initialSelectedClasses) {
         getStudentsForClass(classId).forEach(s => studentsInInitialClasses.add(s.id!));
       }
-      
+
       for (const classId of selectedClasses) {
         getStudentsForClass(classId).forEach(s => studentsInCurrentClasses.add(s.id!));
       }
@@ -511,7 +497,7 @@ export const ParticipantSelectionDialog: React.FC<
       }
 
       // Log bulk changes if there are any
-      if (addedClasses.length > 0 || removedClasses.length > 0 || 
+      if (addedClasses.length > 0 || removedClasses.length > 0 ||
           addedStudentsIndividual.length > 0 || removedStudentsIndividual.length > 0) {
         try {
           await activitiesApi.logBulkParticipantChange(activity.id!, {
@@ -525,7 +511,7 @@ export const ParticipantSelectionDialog: React.FC<
             }
           });
         } catch (historyError) {
-          console.error('Failed to log history:', historyError);
+
           // Don't fail the whole operation if history logging fails
         }
       }
@@ -533,7 +519,7 @@ export const ParticipantSelectionDialog: React.FC<
       onSave();
       onOpenChange(false);
     } catch (error) {
-      console.error("Error saving participants:", error);
+
       const errorMessage =
         error instanceof Error ? error.message : "فشل في حفظ المشاركين";
       toast({
@@ -801,16 +787,7 @@ export const ParticipantSelectionDialog: React.FC<
             </Tabs>
 
             {/* Footer Actions */}
-            <div className="flex items-center justify-between pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={saving}
-              >
-                <X className="h-4 w-4 ml-1" />
-                إلغاء
-              </Button>
-
+            <div className="flex items-center justify-end gap-2 pt-4 border-t">
               <Button
                 onClick={handleSave}
                 disabled={

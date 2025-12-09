@@ -21,6 +21,7 @@ class Class(BaseModel):
     grade_number = Column(Integer, nullable=False)  # 1-6 for primary, 1-3 for others
     section_count = Column(Integer, default=1)
     max_students_per_section = Column(Integer)
+    quizzes_count = Column(Integer, nullable=False, default=2)  # 2 or 4 quizzes
     
     # Relationships
     academic_year = relationship("AcademicYear", back_populates="classes")

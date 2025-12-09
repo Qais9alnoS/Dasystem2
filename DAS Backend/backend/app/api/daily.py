@@ -12,6 +12,7 @@ from app.models import (
     Schedule, AcademicYear, Subject, User, StudentAcademic,
     AcademicSettings
 )
+from app.models.students import StudentBehaviorRecord
 from app.schemas.daily import (
     HolidayCreate, HolidayUpdate, HolidayResponse,
     StudentDailyAttendanceCreate, StudentDailyAttendanceUpdate, 
@@ -24,6 +25,7 @@ from app.schemas.daily import (
 )
 from app.core.dependencies import get_current_user
 from app.utils.history_helper import log_daily_action
+from app.services.analytics_service import CacheManager
 
 router = APIRouter()
 
@@ -498,6 +500,9 @@ def create_student_attendance_bulk(
     for record in attendance_records:
         db.refresh(record)
     
+    # Invalidate attendance-related caches
+    CacheManager.invalidate_analytics('attendance')
+    
     print(f"Saved {len(attendance_records)} attendance records:")
     for r in attendance_records:
         print(f"  - Student ID: {r.student_id}, Present: {r.is_present}, Date: {r.attendance_date}")
@@ -705,6 +710,9 @@ def create_teacher_attendance_bulk_new(
         
         db.commit()
         
+        # Invalidate attendance-related caches
+        CacheManager.invalidate_analytics('attendance')
+        
         return {"message": "تم حفظ الحضور بنجاح", "count": len(attendance_records)}
     except HTTPException:
         db.rollback()
@@ -790,23 +798,72 @@ def create_student_action(
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
     
-    db_action = StudentAction(
-        **action.dict(),
-        recorded_by=current_user.id
-    )
-    db.add(db_action)
-    db.commit()
-    db.refresh(db_action)
+    # تحديد السجلات السلوكية التي يجب أن تذهب للجدول الجديد
+    behavioral_types = ['warning', 'parent_call', 'suspension', 'misbehavior', 
+                       'distinguished_participation', 'thank_you_card', 'note']
     
-    # تحديث المتوسطات للإجراءات الأكاديمية
-    if action.action_type in ['recitation', 'activity', 'quiz'] and action.subject_id and action.grade is not None:
-        update_academic_averages(
-            db=db,
+    if action.action_type in behavioral_types:
+        # إضافة إلى الجدول الجديد student_behavior_records
+        type_mapping = {
+            'misbehavior': 'مشاغبة',
+            'distinguished_participation': 'مشاركة_مميزة',
+            'thank_you_card': 'بطاقة_شكر',
+            'note': 'ملاحظة',
+            'warning': 'إنذار',
+            'parent_call': 'استدعاء_ولي_أمر',
+            'suspension': 'فصل'
+        }
+        
+        severity = None
+        if action.action_type in ['warning', 'parent_call']:
+            severity = 'medium'
+        elif action.action_type == 'suspension':
+            severity = 'high'
+        elif action.action_type == 'misbehavior':
+            severity = 'low'
+        
+        behavior_record = StudentBehaviorRecord(
             student_id=action.student_id,
             academic_year_id=action.academic_year_id,
-            subject_id=action.subject_id,
-            action_type=action.action_type
+            record_date=action.action_date,
+            record_type=type_mapping.get(action.action_type, action.action_type),
+            description=action.description,
+            recorded_by=current_user.id,
+            severity=severity
         )
+        db.add(behavior_record)
+        db.commit()
+        db.refresh(behavior_record)
+        
+        # إرجاع بنفس التنسيق لـ compatibility
+        db_action = StudentAction(
+            id=behavior_record.id,
+            student_id=behavior_record.student_id,
+            academic_year_id=behavior_record.academic_year_id,
+            action_date=behavior_record.record_date,
+            action_type=action.action_type,
+            description=behavior_record.description,
+            recorded_by=behavior_record.recorded_by
+        )
+    else:
+        # إجراءات أكاديمية تبقى في student_actions
+        db_action = StudentAction(
+            **action.dict(),
+            recorded_by=current_user.id
+        )
+        db.add(db_action)
+        db.commit()
+        db.refresh(db_action)
+        
+        # تحديث المتوسطات للإجراءات الأكاديمية
+        if action.action_type in ['recitation', 'activity', 'quiz'] and action.subject_id and action.grade is not None:
+            update_academic_averages(
+                db=db,
+                student_id=action.student_id,
+                academic_year_id=action.academic_year_id,
+                subject_id=action.subject_id,
+                action_type=action.action_type
+            )
     
     return db_action
 
@@ -820,29 +877,7 @@ def get_student_actions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """الحصول على قائمة إجراءات الطلاب مع التفاصيل"""
-    query = db.query(StudentAction)
-    
-    if student_id:
-        query = query.filter(StudentAction.student_id == student_id)
-    
-    if class_id and section:
-        students = db.query(Student).filter(
-            and_(
-                Student.class_id == class_id,
-                Student.section == section
-            )
-        ).all()
-        student_ids = [s.id for s in students]
-        query = query.filter(StudentAction.student_id.in_(student_ids))
-    
-    if action_date:
-        query = query.filter(StudentAction.action_date == action_date)
-    
-    if action_type:
-        query = query.filter(StudentAction.action_type == action_type)
-    
-    actions = query.order_by(StudentAction.action_date.desc()).all()
+    """الحصول على قائمة إجراءات الطلاب مع التفاصيل (من الجدولين)"""
     
     # إضافة البيانات الإضافية
     action_names = {
@@ -858,27 +893,110 @@ def get_student_actions(
         'note': 'ملاحظة'
     }
     
+    behavioral_types = ['warning', 'parent_call', 'suspension', 'misbehavior', 
+                       'distinguished_participation', 'thank_you_card', 'note']
+    
     result = []
-    for action in actions:
-        student = db.query(Student).filter(Student.id == action.student_id).first()
-        subject = None
-        if action.subject_id:
-            subject = db.query(Subject).filter(Subject.id == action.subject_id).first()
+    
+    # 1. قراءة السجلات السلوكية من الجدول الجديد
+    behavior_query = db.query(StudentBehaviorRecord)
+    
+    if student_id:
+        behavior_query = behavior_query.filter(StudentBehaviorRecord.student_id == student_id)
+    
+    if class_id and section:
+        students = db.query(Student).filter(
+            and_(
+                Student.class_id == class_id,
+                Student.section == section
+            )
+        ).all()
+        student_ids = [s.id for s in students]
+        behavior_query = behavior_query.filter(StudentBehaviorRecord.student_id.in_(student_ids))
+    
+    if action_date:
+        behavior_query = behavior_query.filter(StudentBehaviorRecord.record_date == action_date)
+    
+    behaviors = behavior_query.order_by(StudentBehaviorRecord.record_date.desc()).all()
+    
+    # تحويل السجلات السلوكية
+    type_reverse_mapping = {
+        'مشاغبة': 'misbehavior',
+        'مشاركة_مميزة': 'distinguished_participation',
+        'بطاقة_شكر': 'thank_you_card',
+        'ملاحظة': 'note',
+        'إنذار': 'warning',
+        'استدعاء_ولي_أمر': 'parent_call',
+        'فصل': 'suspension'
+    }
+    
+    for behavior in behaviors:
+        student = db.query(Student).filter(Student.id == behavior.student_id).first()
+        english_type = type_reverse_mapping.get(behavior.record_type, behavior.record_type)
         
+        # تصفية حسب action_type إذا كان محدداً
+        if action_type and english_type != action_type:
+            continue
+            
         result.append({
-            'id': action.id,
-            'student_id': action.student_id,
+            'id': behavior.id,
+            'student_id': behavior.student_id,
             'student_name': student.full_name if student else '',
-            'action_type': action.action_type,
-            'action_type_label': action_names.get(action.action_type, action.action_type),
-            'subject_id': action.subject_id,
-            'subject_name': subject.subject_name if subject else None,
-            'description': action.description,
-            'grade': action.grade,
-            'max_grade': action.max_grade,
-            'notes': action.notes,
-            'action_date': action.action_date.isoformat()
+            'action_type': english_type,
+            'action_type_label': action_names.get(english_type, behavior.record_type),
+            'subject_id': None,
+            'subject_name': None,
+            'description': behavior.description,
+            'grade': None,
+            'max_grade': None,
+            'notes': '',
+            'action_date': behavior.record_date.isoformat()
         })
+    
+    # 2. قراءة السجلات الأكاديمية من الجدول القديم (إذا لم يكن action_type سلوكي)
+    if not action_type or action_type not in behavioral_types:
+        academic_query = db.query(StudentAction)
+        
+        if student_id:
+            academic_query = academic_query.filter(StudentAction.student_id == student_id)
+        
+        if class_id and section:
+            academic_query = academic_query.filter(StudentAction.student_id.in_(student_ids))
+        
+        if action_date:
+            academic_query = academic_query.filter(StudentAction.action_date == action_date)
+        
+        if action_type:
+            academic_query = academic_query.filter(StudentAction.action_type == action_type)
+        
+        # استبعاد السجلات السلوكية القديمة
+        academic_query = academic_query.filter(~StudentAction.action_type.in_(behavioral_types))
+        
+        actions = academic_query.order_by(StudentAction.action_date.desc()).all()
+        
+        for action in actions:
+            student = db.query(Student).filter(Student.id == action.student_id).first()
+            subject = None
+            if action.subject_id:
+                subject = db.query(Subject).filter(Subject.id == action.subject_id).first()
+            
+            result.append({
+                'id': action.id,
+                'student_id': action.student_id,
+                'student_name': student.full_name if student else '',
+                'action_type': action.action_type,
+                'action_type_label': action_names.get(action.action_type, action.action_type),
+                'subject_id': action.subject_id,
+                'subject_name': subject.subject_name if subject else None,
+                'description': action.description,
+                'grade': action.grade,
+                'max_grade': action.max_grade,
+                'notes': action.notes,
+                'action_date': action.action_date.isoformat()
+            })
+    
+    # ترتيب النتائج حسب التاريخ
+    result.sort(key=lambda x: x['action_date'], reverse=True)
     
     return result
 

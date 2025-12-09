@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, Search, Filter, FileText, Award, Heart, Target,
   Briefcase, BookOpen, GraduationCap, Calendar, X, SlidersHorizontal
 } from 'lucide-react';
@@ -47,7 +47,7 @@ const DirectorNotesSearchPage: React.FC = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  
+
   // Filters
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -59,11 +59,11 @@ const DirectorNotesSearchPage: React.FC = () => {
   useEffect(() => {
     const query = searchParams.get('q');
     const typeParam = searchParams.get('type');
-    
+
     if (typeParam) {
       setSelectedType(typeParam);
     }
-    
+
     if (query && query.length >= 3) {
       setSearchQuery(query);
       performSearch(query);
@@ -91,7 +91,7 @@ const DirectorNotesSearchPage: React.FC = () => {
           academicYearId,
           selectedCategory !== 'all' ? selectedCategory : undefined
         );
-        
+
         if (notesResponse.success && notesResponse.data) {
           const notesData = notesResponse.data as any;
           const notesList = notesData.results || notesData.data?.results || [];
@@ -110,10 +110,10 @@ const DirectorNotesSearchPage: React.FC = () => {
       // Search rewards if type is 'all' or 'reward' (not academic year specific)
       if (selectedType === 'all' || selectedType === 'reward') {
         const rewardsResponse = await directorApi.getRewards(undefined, 0, 500);
-        
+
         if (rewardsResponse.success && rewardsResponse.data) {
           const rewards = (rewardsResponse.data as any[])
-            .filter((reward: any) => 
+            .filter((reward: any) =>
               reward.title?.toLowerCase().includes(query.toLowerCase()) ||
               reward.recipient_name?.toLowerCase().includes(query.toLowerCase()) ||
               reward.description?.toLowerCase().includes(query.toLowerCase())
@@ -134,10 +134,10 @@ const DirectorNotesSearchPage: React.FC = () => {
       // Search assistance if type is 'all' or 'assistance' (not academic year specific)
       if (selectedType === 'all' || selectedType === 'assistance') {
         const assistanceResponse = await directorApi.getAssistanceRecords(undefined, 0, 500);
-        
+
         if (assistanceResponse.success && assistanceResponse.data) {
           const assistance = (assistanceResponse.data as any[])
-            .filter((record: any) => 
+            .filter((record: any) =>
               record.title?.toLowerCase().includes(query.toLowerCase()) ||
               record.organization?.toLowerCase().includes(query.toLowerCase()) ||
               record.description?.toLowerCase().includes(query.toLowerCase())
@@ -169,7 +169,7 @@ const DirectorNotesSearchPage: React.FC = () => {
 
       setResults(filteredResults);
     } catch (error) {
-      console.error('Error searching:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في البحث',
@@ -204,9 +204,9 @@ const DirectorNotesSearchPage: React.FC = () => {
       case 'reward':
         return <Award className="h-5 w-5 text-accent" />;
       case 'assistance':
-        return <Heart className="h-5 w-5 text-red-500" />;
+        return <Heart className="h-5 w-5 text-destructive" />;
       default:
-        return <FileText className="h-5 w-5 text-gray-500" />;
+        return <FileText className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
@@ -266,8 +266,11 @@ const DirectorNotesSearchPage: React.FC = () => {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">نتائج البحث</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <Search className="h-8 w-8 text-primary" />
+            نتائج البحث
+          </h1>
+          <p className="text-muted-foreground mt-1">
             البحث عن: "{searchQuery}"
           </p>
         </div>
@@ -383,8 +386,8 @@ const DirectorNotesSearchPage: React.FC = () => {
               {selectedType !== 'all' && (
                 <Badge variant="secondary" className="gap-1">
                   {getTypeLabel(selectedType)}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
+                  <X
+                    className="h-3 w-3 cursor-pointer"
                     onClick={() => setSelectedType('all')}
                   />
                 </Badge>
@@ -392,8 +395,8 @@ const DirectorNotesSearchPage: React.FC = () => {
               {selectedCategory !== 'all' && (
                 <Badge variant="secondary" className="gap-1">
                   {getCategoryLabel(selectedCategory)}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
+                  <X
+                    className="h-3 w-3 cursor-pointer"
                     onClick={() => setSelectedCategory('all')}
                   />
                 </Badge>
@@ -401,8 +404,8 @@ const DirectorNotesSearchPage: React.FC = () => {
               {dateFrom && (
                 <Badge variant="secondary" className="gap-1">
                   من: {dateFrom}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
+                  <X
+                    className="h-3 w-3 cursor-pointer"
                     onClick={() => setDateFrom('')}
                   />
                 </Badge>
@@ -410,8 +413,8 @@ const DirectorNotesSearchPage: React.FC = () => {
               {dateTo && (
                 <Badge variant="secondary" className="gap-1">
                   إلى: {dateTo}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
+                  <X
+                    className="h-3 w-3 cursor-pointer"
                     onClick={() => setDateTo('')}
                   />
                 </Badge>
@@ -443,7 +446,7 @@ const DirectorNotesSearchPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {results.map((result) => (
-                <Card 
+                <Card
                   key={`${result.type}-${result.id}`}
                   className="cursor-pointer hover:shadow-lg transition-all duration-200"
                   onClick={() => handleResultClick(result)}
@@ -474,7 +477,7 @@ const DirectorNotesSearchPage: React.FC = () => {
                               {new Date(result.date).toLocaleDateString('ar-SA')}
                             </div>
                             {result.amount && (
-                              <Badge variant="outline" className="text-green-600">
+                              <Badge variant="outline" className="text-green-500">
                                 {result.amount.toLocaleString()} ل.س
                               </Badge>
                             )}

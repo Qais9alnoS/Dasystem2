@@ -126,12 +126,8 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
         preview_only: true, // Generate preview only, don't save to database
       };
 
-      console.log("Sending generation request:", generationRequest);
-
       // Call the backend API to generate schedules
       const response = await schedulesApi.generate(generationRequest);
-
-      console.log("Generation response:", response);
 
       if (response.success && response.data) {
         // Check if generation actually created schedules
@@ -154,10 +150,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
           // Show diagnostic info
           try {
-            console.log("Fetching diagnostics with:", {
-              academicYearId,
-              sessionType,
-            });
+
             const diagnostics = await schedulesApi.getDiagnostics(
               academicYearId,
               sessionType
@@ -167,8 +160,6 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               const recommendations = diagnostics.data.recommendations.filter(
                 (r: string | null) => r !== null
               );
-
-              console.log("Diagnostics:", diagnostics.data);
 
               if (recommendations.length > 0) {
                 toast({
@@ -186,12 +177,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               }
             }
           } catch (diagError: any) {
-            console.error("Error fetching diagnostics:", diagError);
-            console.error("Diagnostics error details:", {
-              academicYearId,
-              sessionType,
-              error: diagError.message || diagError,
-            });
+
             // Continue even if diagnostics fail - don't show error to user
           }
 
@@ -237,7 +223,6 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
         throw new Error(response.message || "فشل في إنشاء الجدول");
       }
     } catch (error: any) {
-      console.error("Error generating schedules:", error);
 
       // More detailed error message
       let errorMessage = "حدث خطأ أثناء إنشاء الجدول";
@@ -245,7 +230,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
       // Check if error is about duplicate schedule name
       const errorDetail = error.response?.data?.detail || error.message || '';
-      const isDuplicateName = errorDetail.includes('يوجد بالفعل جدول باسم') || 
+      const isDuplicateName = errorDetail.includes('يوجد بالفعل جدول باسم') ||
                              errorDetail.includes('already exists') ||
                              errorDetail.includes('جدول باسم');
 
@@ -257,7 +242,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       }
 
       if (error.details && !isDuplicateName) {
-        console.log("Error details:", error.details);
+
         errorMessage += `\n\nالتفاصيل: ${JSON.stringify(error.details)}`;
       }
 
@@ -270,16 +255,12 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
       // Try to get diagnostics even on error
       try {
-        console.log("Fetching diagnostics after error with:", {
-          academicYearId,
-          sessionType,
-        });
+
         const diagnostics = await schedulesApi.getDiagnostics(
           academicYearId,
           sessionType
         );
         if (diagnostics.success && diagnostics.data) {
-          console.log("System diagnostics:", diagnostics.data);
 
           if (!diagnostics.data.is_ready_for_generation) {
             const recommendations = diagnostics.data.recommendations.filter(
@@ -296,15 +277,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           }
         }
       } catch (diagError: any) {
-        console.error(
-          "Error fetching diagnostics after generation error:",
-          diagError
-        );
-        console.error("Diagnostics error details:", {
-          academicYearId,
-          sessionType,
-          error: diagError.message || diagError,
-        });
+
         // Don't show error to user - diagnostics is optional
       }
     } finally {

@@ -3,7 +3,7 @@
 // Sanitize HTML content to prevent XSS attacks
 export const sanitizeHTML = (content: string): string => {
     if (!content) return '';
-    
+
     // Remove HTML tags and encode special characters
     return content
         .replace(/</g, '&lt;')
@@ -16,7 +16,7 @@ export const sanitizeHTML = (content: string): string => {
 // Sanitize text input to prevent XSS and other injection attacks
 export const sanitizeTextInput = (text: string): string => {
     if (!text) return '';
-    
+
     // Remove potentially dangerous characters
     return text
         .replace(/</g, '&lt;')
@@ -29,13 +29,13 @@ export const sanitizeTextInput = (text: string): string => {
 // Validate and sanitize email addresses
 export const sanitizeEmail = (email: string): string => {
     if (!email) return '';
-    
+
     // Basic email validation and sanitization
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
         throw new Error('Invalid email format');
     }
-    
+
     // Sanitize the email
     return sanitizeTextInput(email.toLowerCase().trim());
 };
@@ -43,28 +43,28 @@ export const sanitizeEmail = (email: string): string => {
 // Validate and sanitize phone numbers
 export const sanitizePhoneNumber = (phone: string): string => {
     if (!phone) return '';
-    
+
     // Remove all non-digit characters except + at the beginning
     let sanitized = phone.replace(/[^0-9+]/g, '');
-    
+
     // Ensure + is only at the beginning
     if (sanitized.startsWith('+')) {
         sanitized = '+' + sanitized.substring(1).replace(/\+/g, '');
     }
-    
+
     // Validate phone number format for Iraqi numbers
     const phoneRegex = /^(\+964|0)[0-9]{10}$/;
     if (!phoneRegex.test(sanitized)) {
         throw new Error('Invalid phone number format');
     }
-    
+
     return sanitized;
 };
 
 // Sanitize file names to prevent directory traversal attacks
 export const sanitizeFileName = (fileName: string): string => {
     if (!fileName) return '';
-    
+
     // Remove path traversal sequences
     return fileName
         .replace(/\.\./g, '')
@@ -76,16 +76,16 @@ export const sanitizeFileName = (fileName: string): string => {
 // Validate and sanitize URLs
 export const sanitizeURL = (url: string): string => {
     if (!url) return '';
-    
+
     try {
         // Create URL object to validate
         const urlObj = new URL(url);
-        
+
         // Only allow http and https protocols
         if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
             throw new Error('Invalid protocol');
         }
-        
+
         // Return sanitized URL
         return urlObj.toString();
     } catch (error) {
@@ -155,19 +155,19 @@ export class RateLimiter {
     canMakeRequest(identifier: string): boolean {
         const now = Date.now();
         const requests = this.requests.get(identifier) || [];
-        
+
         // Remove old requests outside the time window
         const recentRequests = requests.filter(time => now - time < this.timeWindow);
-        
+
         // Check if limit exceeded
         if (recentRequests.length >= this.maxRequests) {
             return false;
         }
-        
+
         // Add current request
         recentRequests.push(now);
         this.requests.set(identifier, recentRequests);
-        
+
         return true;
     }
 
@@ -179,22 +179,22 @@ export class RateLimiter {
 // CSRF token management
 export class CSRFTokenManager {
     private static tokenKey = 'csrf_token';
-    
+
     static generateToken(): string {
         const token = generateSecureToken(32);
         localStorage.setItem(this.tokenKey, token);
         return token;
     }
-    
+
     static getToken(): string | null {
         return localStorage.getItem(this.tokenKey);
     }
-    
+
     static validateToken(token: string): boolean {
         const storedToken = this.getToken();
         return storedToken !== null && storedToken === token;
     }
-    
+
     static clearToken(): void {
         localStorage.removeItem(this.tokenKey);
     }
@@ -220,7 +220,7 @@ export const validateInput = {
         const nameRegex = /^[\u0600-\u06FFa-zA-Z\s\-'\.]+$/;
         return nameRegex.test(name);
     },
-    
+
     // Validate numeric values
     number: (value: any, min?: number, max?: number): boolean => {
         const num = Number(value);
@@ -229,22 +229,22 @@ export const validateInput = {
         if (max !== undefined && num > max) return false;
         return true;
     },
-    
+
     // Validate date format
     date: (date: string): boolean => {
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(date)) return false;
-        
+
         const d = new Date(date);
         return d instanceof Date && !isNaN(d.getTime());
     },
-    
+
     // Validate grade level
     gradeLevel: (grade: string): boolean => {
         const validGrades = ['primary', 'intermediate', 'secondary'];
         return validGrades.includes(grade);
     },
-    
+
     // Validate session type
     sessionType: (session: string): boolean => {
         const validSessions = ['morning', 'evening'];

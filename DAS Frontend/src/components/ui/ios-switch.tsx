@@ -29,7 +29,7 @@ const IOSSwitch = React.forwardRef<HTMLInputElement, IOSSwitchProps>(
             backgroundColor: props.checked ? trackActiveColor : trackColor,
           }}
         >
-          <div 
+          <div
             className="absolute top-0.5 left-[2px] bg-white rounded-full h-6 w-6 transition-all duration-300 ease-out"
             style={{
               transform: props.checked ? 'translateX(1.25rem)' : 'translateX(0)',

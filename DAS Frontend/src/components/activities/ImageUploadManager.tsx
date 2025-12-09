@@ -79,7 +79,7 @@ export const ImageUploadManager: React.FC<ImageUploadManagerProps> = ({
         description: `تم رفع ${newImages.length} صورة`,
       });
     } catch (error) {
-      console.error('Error uploading images:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في رفع الصور',

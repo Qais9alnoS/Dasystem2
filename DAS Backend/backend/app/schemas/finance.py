@@ -317,8 +317,33 @@ class FinanceCardTransactionBase(BaseModel):
             raise ValueError('Completion percentage must be between 0 and 100')
         return v
 
-class FinanceCardTransactionCreate(FinanceCardTransactionBase):
-    pass
+class FinanceCardTransactionCreate(BaseModel):
+    transaction_type: str  # "income", "expense"
+    amount: Decimal
+    payer_name: Optional[str] = None
+    responsible_person: Optional[str] = None
+    transaction_date: date
+    is_completed: bool = False
+    completion_percentage: Decimal = 100
+    notes: Optional[str] = None
+
+    @validator('transaction_type')
+    def validate_transaction_type(cls, v):
+        if v not in ['income', 'expense']:
+            raise ValueError('Transaction type must be income or expense')
+        return v
+
+    @validator('amount')
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return v
+
+    @validator('completion_percentage')
+    def validate_completion_percentage(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError('Completion percentage must be between 0 and 100')
+        return v
 
 class FinanceCardTransactionUpdate(BaseModel):
     transaction_type: Optional[str] = None

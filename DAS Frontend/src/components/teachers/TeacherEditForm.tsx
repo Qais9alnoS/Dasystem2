@@ -88,9 +88,9 @@ export const TeacherEditForm: React.FC<TeacherEditFormProps> = ({
             phone: teacher.phone || '',
             detailed_address: teacher.detailed_address || '',
             transportation_type: teacher.transportation_type,
-            qualifications: teacher.qualifications || '',
-            experience: teacher.experience || '',
-            free_time_slots: teacher.free_time_slots || '',
+            qualifications: Array.isArray(teacher.qualifications) ? JSON.stringify(teacher.qualifications) : (teacher.qualifications || ''),
+            experience: Array.isArray(teacher.experience) ? JSON.stringify(teacher.experience) : (teacher.experience || ''),
+            free_time_slots: Array.isArray(teacher.free_time_slots) ? JSON.stringify(teacher.free_time_slots) : (teacher.free_time_slots || ''),
             notes: teacher.notes || ''
         },
         mode: 'onChange'
@@ -147,27 +147,53 @@ export const TeacherEditForm: React.FC<TeacherEditFormProps> = ({
     const handleFormSubmit = async (data: TeacherFormData) => {
         setIsSubmitting(true);
         try {
-            // Call the API to update teacher
-            const response = await teachersApi.update(teacher.id, {
+            // Convert string fields back to arrays for API
+            const apiData: any = {
                 ...data,
                 academic_year_id: teacher.academic_year_id,
                 is_active: teacher.is_active
-            });
-            
+            };
+
+            // Parse JSON strings back to arrays if needed
+            if (typeof apiData.qualifications === 'string') {
+                try {
+                    apiData.qualifications = JSON.parse(apiData.qualifications);
+                } catch {
+                    // Keep as string if not valid JSON
+                }
+            }
+            if (typeof apiData.experience === 'string') {
+                try {
+                    apiData.experience = JSON.parse(apiData.experience);
+                } catch {
+                    // Keep as string if not valid JSON
+                }
+            }
+            if (typeof apiData.free_time_slots === 'string') {
+                try {
+                    apiData.free_time_slots = JSON.parse(apiData.free_time_slots);
+                } catch {
+                    // Keep as string if not valid JSON
+                }
+            }
+
+            // Call the API to update teacher
+            const response = await teachersApi.update(teacher.id, apiData);
+
             if (response.success) {
                 toast({
                     title: "نجاح",
                     description: "تم تحديث بيانات المعلم بنجاح!",
                     variant: "default"
                 });
-                
+
                 // Return updated teacher data
                 const updatedTeacher = {
                     ...teacher,
                     ...data
                 };
-                
-                onSuccess(updatedTeacher);
+
+                onSuccess(updatedTeacher as Teacher);
             } else {
                 throw new Error(response.message || 'فشل في تحديث بيانات المعلم');
             }

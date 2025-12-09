@@ -23,6 +23,34 @@
   animation: wiggle 0.5s ease-in-out infinite;
 }
 
+/* Swap Animation */
+@keyframes swapPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  25% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0.2);
+  }
+  75% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.3);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.animate-swap-pulse {
+  animation: swapPulse 0.4s ease-in-out;
+}
+
 @layer base {
   :root {
     /* iOS-inspired light mode variables */
@@ -204,6 +232,90 @@
     position: fixed;
     width: 100%;
     height: 100%;
+    /* Global text selection control - disable by default for UI elements */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    /* Disable context menu for native app feel */
+    -webkit-context-menu: none;
+  }
+
+  /* ===== Text Selection Rules ===== */
+
+  /* Auto-enable selection for user input fields */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+  }
+
+  /* Auto-enable selection for data display in tables */
+  table tbody td,
+  table tbody th {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+  }
+
+  /* Explicitly disable selection for UI chrome elements */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  nav,
+  nav *,
+  aside,
+  aside *,
+  header,
+  table thead th,
+  table thead td {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+  }
+
+  /* Utility class for enabling text selection */
+  .select-text,
+  [data-selectable="true"],
+  [data-type="value"],
+  [data-type="data"],
+  [data-copyable="true"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+  }
+
+  /* Ensure select-none works */
+  .select-none {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+  }
+
+  /* Custom selection highlight colors */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
+
+  ::-moz-selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
+
+  /* Dark mode selection colors */
+  .dark ::selection {
+    background-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+
+  .dark ::-moz-selection {
+    background-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
   }
 
   /* Scrollbar styling - hidden by default, visible on hover */
@@ -386,26 +498,31 @@
       0 0 30px hsl(var(--secondary) / 0.2);
   }
 
-  /* Custom Title Bar Styles */
+  /* Custom Title Bar Styles - Tauri/Electron specific */
   .custom-titlebar {
     -webkit-app-region: drag;
-    app-region: drag;
   }
 
   .titlebar-center {
     -webkit-app-region: no-drag;
-    app-region: no-drag;
   }
 
   .titlebar-right {
     -webkit-app-region: no-drag;
-    app-region: no-drag;
   }
 
   .titlebar-button,
   .window-control {
     -webkit-app-region: no-drag;
-    app-region: no-drag;
+  }
+
+  /* Search bar in titlebar - must be clickable */
+  .titlebar-search {
+    -webkit-app-region: no-drag !important;
+  }
+
+  .titlebar-search * {
+    -webkit-app-region: no-drag !important;
   }
 
   /* iOS Fluent UI Surface */
@@ -524,11 +641,13 @@
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
+    appearance: none;
     margin: 0;
   }
 
   input[type="number"] {
     -moz-appearance: textfield;
+    appearance: textfield;
   }
 
   /* Custom modern spinner styles */
@@ -595,7 +714,10 @@
 /* Modern Native Select Styling */
 @layer components {
   .modern-select {
-    @apply w-full h-12 px-4 pr-10 rounded-2xl border border-input bg-background text-foreground text-sm appearance-none cursor-pointer transition-all duration-200;
+    @apply w-full h-12 px-4 pr-10 rounded-2xl border border-input bg-background text-foreground text-sm cursor-pointer transition-all duration-200;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:border-primary;
     @apply hover:border-primary/50;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");

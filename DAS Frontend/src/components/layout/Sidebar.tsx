@@ -116,7 +116,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
+
       const newWidth = window.innerWidth - e.clientX;
       if (newWidth >= 80 && newWidth <= 400) {
         setCustomWidth(newWidth);
@@ -201,7 +201,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       ],
     },
     { divider: true, allowedRoles: ['director'] },
-    
+
     // المجموعة 2: معلومات المدرسة والطلاب والأساتذة
     {
       name: 'معلومات المدرسة',
@@ -244,7 +244,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       allowedRoles: ['director', 'morning_school', 'evening_school'],
     },
     { divider: true, allowedRoles: ['director'] },
-    
+
     // المجموعة 3: الصندوق وإدارة الجداول والنشاطات
     {
       name: 'الصندوق',
@@ -265,29 +265,8 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       allowedRoles: ['director'],
     },
     { divider: true, allowedRoles: ['director'] },
-    
-    // المجموعة 4: التحليلات
-    {
-      name: 'التحليلات',
-      href: '/analytics',
-      icon: TrendingUp,
-      allowedRoles: ['director', 'morning_school', 'evening_school'],
-    },
-    {
-      name: 'التحليلات الشاملة',
-      href: '/director/analytics',
-      icon: BarChart3,
-      allowedRoles: ['director'],
-    },
-    {
-      name: 'التحليلات المالية',
-      href: '/finance/analytics',
-      icon: PieChart,
-      allowedRoles: ['finance', 'director'],
-    },
-    { divider: true, allowedRoles: ['director'] },
-    
-    // المجموعة 5: السنوات الدراسية وإدارة تسجيل الدخول
+
+    // المجموعة 4: السنوات الدراسية وإدارة تسجيل الدخول
     {
       name: 'السنوات الدراسية',
       href: '/academic-years',
@@ -300,7 +279,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
       icon: Key,
       allowedRoles: ['director'],
     },
-    
+
     // Finance Manager specific sections
     {
       name: 'الطلاب',
@@ -335,7 +314,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
   });
 
   return (
-    <div 
+    <div
       className={`h-full flex flex-col relative bg-card rounded-2xl shadow-lg overflow-hidden border border-border ${!isResizing ? 'transition-all duration-300 ease-in-out' : ''}`}
       style={{ width: `${actualWidth}px` }}
       dir="rtl"
@@ -348,7 +327,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
 
       {/* Toggle Button - Inside Sidebar */}
       <div className="absolute top-3 left-3 z-50">
-        <button 
+        <button
           onClick={toggleSidebar}
           className="p-1.5 rounded-lg bg-muted hover:bg-muted-foreground/10 border border-border transition-all duration-200"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -396,7 +375,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
           const Icon = item.icon;
           const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
           const isExpanded = expandedSections.includes(item.name);
-          const isActiveSection = hasSubItems && item.subItems?.some(subItem => 
+          const isActiveSection = hasSubItems && item.subItems?.some(subItem =>
             location.pathname === subItem.href || location.pathname.startsWith(subItem.href)
           );
 
@@ -409,7 +388,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                     <NavLink
                       to={item.href}
                       className={({ isActive }) =>
-                        `w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
+                        `w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out ${
                           isActive || isActiveSection
                             ? 'bg-primary/10 text-primary'
                             : 'text-foreground hover:bg-muted'
@@ -428,7 +407,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                   ) : (
                     <button
                       onClick={() => toggleSection(item.name)}
-                      className={`w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
+                      className={`w-full flex items-center ${showText ? 'justify-between' : 'justify-center'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out ${
                         isActiveSection
                           ? 'bg-primary/10 text-primary'
                           : 'text-foreground hover:bg-muted'
@@ -462,7 +441,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
                             key={subItem.name}
                             to={subItem.href}
                             className={({ isActive }) =>
-                              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
+                              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-in-out ${
                                 isActive
                                   ? 'bg-primary text-primary-foreground'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -490,10 +469,10 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
               className={() => {
                 // For finance pages, check full URL including query params
                 const currentPath = location.pathname + location.search;
-                const isActive = currentPath === item.href || 
+                const isActive = currentPath === item.href ||
                                 (item.href.includes('?') && currentPath.startsWith(item.href));
-                
-                return `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out hover:scale-105 ${
+
+                return `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ease-in-out ${
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted'
@@ -545,7 +524,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed, sidebarWidth }) => {
             )}
           </button>
         </div>
-        
+
         {/* Logout Button */}
         <div className="px-4 pb-4">
           <button

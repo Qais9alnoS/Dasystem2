@@ -103,10 +103,26 @@ class ScheduleConstraintUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
 
-class ScheduleConstraintResponse(ScheduleConstraintBase):
+class ScheduleConstraintResponse(BaseModel):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    academic_year_id: Optional[int] = None
+    constraint_type: Optional[str] = None
+    class_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    day_of_week: Optional[int] = None
+    period_number: Optional[int] = None
+    time_range_start: Optional[int] = None
+    time_range_end: Optional[int] = None
+    max_consecutive_periods: Optional[int] = None
+    min_consecutive_periods: Optional[int] = None
+    applies_to_all_sections: Optional[bool] = False
+    session_type: Optional[str] = "both"
+    priority_level: Optional[int] = 1
+    description: Optional[str] = None
+    is_active: Optional[bool] = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -608,6 +624,11 @@ class ScheduleSwapResponse(BaseModel):
     schedule2: Optional[ScheduleResponse] = None
     conflicts: List[str] = []
     
+class ScheduleSwapValidityResponse(BaseModel):
+    can_swap: bool
+    reason: Optional[str] = None
+    conflicts: List[str] = []
+    
 @router.post("/swap", response_model=ScheduleSwapResponse)
 async def swap_schedule_periods(
     swap_request: ScheduleSwapRequest,
@@ -643,37 +664,88 @@ async def swap_schedule_periods(
                 conflicts=["Session types don't match"]
             )
         
-        # Store original values
-        original_1 = {
-            'day_of_week': schedule1.day_of_week,
-            'period_number': schedule1.period_number,
-            'subject_id': schedule1.subject_id,
-            'teacher_id': schedule1.teacher_id
-        }
-        original_2 = {
-            'day_of_week': schedule2.day_of_week,
-            'period_number': schedule2.period_number,
-            'subject_id': schedule2.subject_id,
-            'teacher_id': schedule2.teacher_id
-        }
+        import json
         
-        # Perform swap - swap everything about the periods
-        schedule1.day_of_week = original_2['day_of_week']
-        schedule1.period_number = original_2['period_number']
-        schedule1.subject_id = original_2['subject_id']
-        schedule1.teacher_id = original_2['teacher_id']
+        # Store original values - only swap subject and teacher, NOT day/period
+        # The time slots (day_of_week, period_number) stay fixed for each schedule record
+        original_1_subject = schedule1.subject_id
+        original_1_teacher = schedule1.teacher_id
+        original_2_subject = schedule2.subject_id
+        original_2_teacher = schedule2.teacher_id
         
-        schedule2.day_of_week = original_1['day_of_week']
-        schedule2.period_number = original_1['period_number']
-        schedule2.subject_id = original_1['subject_id']
-        schedule2.teacher_id = original_1['teacher_id']
+        # Helper function to check if teacher is available at a specific time slot
+        def is_teacher_available(teacher_id: int, day_of_week: int, period_number: int) -> tuple[bool, str]:
+            """Check if teacher is available at the given time slot based on free_time_slots"""
+            teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+            if not teacher:
+                return False, "المعلم غير موجود"
+            
+            if not teacher.free_time_slots:
+                # No free_time_slots defined means teacher is available everywhere
+                return True, ""
+            
+            try:
+                slots_data = json.loads(teacher.free_time_slots)
+                # Convert 1-based day/period to 0-based index
+                day_idx = day_of_week - 1
+                period_idx = period_number - 1
+                slot_idx = day_idx * 6 + period_idx  # 6 periods per day
+                
+                if 0 <= slot_idx < len(slots_data):
+                    slot = slots_data[slot_idx]
+                    status = slot.get('status', 'free')
+                    is_free = slot.get('is_free', True)
+                    
+                    # Check if slot is marked as unavailable (not free and not assigned)
+                    if status == 'unavailable' or (not is_free and status != 'assigned'):
+                        return False, f"المعلم {teacher.full_name} غير متاح في هذا الوقت"
+                    
+                    # If it's assigned to a different class, that's handled by schedule conflict check
+                    return True, ""
+                    
+            except (json.JSONDecodeError, TypeError, IndexError) as e:
+                print(f"Error parsing free_time_slots for teacher {teacher_id}: {e}")
+            
+            return True, ""  # Default to available if can't parse
         
-        # Check for conflicts after swap
+        # Check teacher availability BEFORE performing the swap
         conflicts = []
         
-        # Check if teacher 1 has conflict at new time
+        # Check if teacher2 (who will move to schedule1's position) is available at that time
+        available1, msg1 = is_teacher_available(original_2_teacher, schedule1.day_of_week, schedule1.period_number)
+        if not available1:
+            conflicts.append(msg1)
+        
+        # Check if teacher1 (who will move to schedule2's position) is available at that time
+        available2, msg2 = is_teacher_available(original_1_teacher, schedule2.day_of_week, schedule2.period_number)
+        if not available2:
+            conflicts.append(msg2)
+        
+        # If availability conflicts found, return error immediately
+        if conflicts:
+            return ScheduleSwapResponse(
+                success=False,
+                message="فشل التبديل بسبب عدم توفر المعلم",
+                conflicts=conflicts
+            )
+        
+        # Perform swap - only swap subject and teacher
+        # Each schedule record keeps its original time slot (day/period)
+        schedule1.subject_id = original_2_subject
+        schedule1.teacher_id = original_2_teacher
+        
+        schedule2.subject_id = original_1_subject
+        schedule2.teacher_id = original_1_teacher
+        
+        # Debug logging
+        print(f"DEBUG SWAP: schedule1 (id={schedule1.id}) at day={schedule1.day_of_week}, period={schedule1.period_number} now has subject={schedule1.subject_id}, teacher={schedule1.teacher_id}")
+        print(f"DEBUG SWAP: schedule2 (id={schedule2.id}) at day={schedule2.day_of_week}, period={schedule2.period_number} now has subject={schedule2.subject_id}, teacher={schedule2.teacher_id}")
+        
+        # Check for schedule conflicts after swap (teacher teaching two classes at same time)
+        # Check if the new teacher at schedule1's position has another class at this time
         teacher1_conflict = db.query(Schedule).filter(
             Schedule.id != schedule1.id,
+            Schedule.id != schedule2.id,
             Schedule.teacher_id == schedule1.teacher_id,
             Schedule.day_of_week == schedule1.day_of_week,
             Schedule.period_number == schedule1.period_number,
@@ -682,10 +754,12 @@ async def swap_schedule_periods(
         ).first()
         
         if teacher1_conflict:
-            conflicts.append(f"المعلم (ID: {schedule1.teacher_id}) لديه حصة أخرى في هذا الوقت")
+            print(f"DEBUG: teacher1_conflict found: id={teacher1_conflict.id}")
+            conflicts.append(f"المعلم لديه حصة أخرى في هذا الوقت")
         
-        # Check if teacher 2 has conflict at new time
+        # Check if the new teacher at schedule2's position has another class at this time
         teacher2_conflict = db.query(Schedule).filter(
+            Schedule.id != schedule1.id,
             Schedule.id != schedule2.id,
             Schedule.teacher_id == schedule2.teacher_id,
             Schedule.day_of_week == schedule2.day_of_week,
@@ -695,30 +769,10 @@ async def swap_schedule_periods(
         ).first()
         
         if teacher2_conflict:
-            conflicts.append(f"المعلم (ID: {schedule2.teacher_id}) لديه حصة أخرى في هذا الوقت")
+            print(f"DEBUG: teacher2_conflict found: id={teacher2_conflict.id}")
+            conflicts.append(f"المعلم لديه حصة أخرى في هذا الوقت")
         
-        # Check if class has conflict
-        class1_conflict = db.query(Schedule).filter(
-            Schedule.id != schedule1.id,
-            Schedule.class_id == schedule1.class_id,
-            Schedule.section == schedule1.section,
-            Schedule.day_of_week == schedule1.day_of_week,
-            Schedule.period_number == schedule1.period_number
-        ).first()
-        
-        if class1_conflict:
-            conflicts.append(f"الصف {schedule1.class_id} شعبة {schedule1.section} لديه حصة أخرى في هذا الوقت")
-        
-        class2_conflict = db.query(Schedule).filter(
-            Schedule.id != schedule2.id,
-            Schedule.class_id == schedule2.class_id,
-            Schedule.section == schedule2.section,
-            Schedule.day_of_week == schedule2.day_of_week,
-            schedule2.period_number == schedule2.period_number
-        ).first()
-        
-        if class2_conflict:
-            conflicts.append(f"الصف {schedule2.class_id} شعبة {schedule2.section} لديه حصة أخرى في هذا الوقت")
+        # No class conflict checks needed - we're not changing time slots
         
         # If conflicts found, rollback and return error
         if conflicts:
@@ -747,6 +801,135 @@ async def swap_schedule_periods(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error swapping schedules: {str(e)}")
+
+@router.post("/check-swap-validity", response_model=ScheduleSwapValidityResponse)
+async def check_swap_validity(
+    swap_request: ScheduleSwapRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_director_user)
+):
+    """Check if two schedule periods can be swapped without actually performing the swap.
+
+    This mirrors the validation logic in swap_schedule_periods but does not modify the database.
+    """
+    # Fetch both schedules
+    schedule1 = db.query(Schedule).filter(Schedule.id == swap_request.schedule1_id).first()
+    schedule2 = db.query(Schedule).filter(Schedule.id == swap_request.schedule2_id).first()
+
+    if not schedule1 or not schedule2:
+        return ScheduleSwapValidityResponse(
+            can_swap=False,
+            reason="أحد الحصتين غير موجودة",
+            conflicts=[
+                msg
+                for msg in [
+                    None if schedule1 else f"Schedule 1 (ID: {swap_request.schedule1_id}) not found",
+                    None if schedule2 else f"Schedule 2 (ID: {swap_request.schedule2_id}) not found",
+                ]
+                if msg is not None
+            ],
+        )
+
+    # Validate: Must be same academic year and session
+    if schedule1.academic_year_id != schedule2.academic_year_id:
+        return ScheduleSwapValidityResponse(
+            can_swap=False,
+            reason="لا يمكن تبديل حصص من سنوات دراسية مختلفة",
+            conflicts=["Academic years don't match"],
+        )
+
+    if schedule1.session_type != schedule2.session_type:
+        return ScheduleSwapValidityResponse(
+            can_swap=False,
+            reason="لا يمكن تبديل حصص من فترات مختلفة (صباحي/مسائي)",
+            conflicts=["Session types don't match"],
+        )
+
+    import json
+    
+    conflicts: List[str] = []
+
+    # Helper function to check if teacher is available at a specific time slot
+    def is_teacher_available(teacher_id: int, day_of_week: int, period_number: int) -> tuple[bool, str]:
+        """Check if teacher is available at the given time slot based on free_time_slots"""
+        teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+        if not teacher:
+            return False, "المعلم غير موجود"
+        
+        if not teacher.free_time_slots:
+            return True, ""
+        
+        try:
+            slots_data = json.loads(teacher.free_time_slots)
+            day_idx = day_of_week - 1
+            period_idx = period_number - 1
+            slot_idx = day_idx * 6 + period_idx
+            
+            if 0 <= slot_idx < len(slots_data):
+                slot = slots_data[slot_idx]
+                status = slot.get('status', 'free')
+                is_free = slot.get('is_free', True)
+                
+                if status == 'unavailable' or (not is_free and status != 'assigned'):
+                    return False, f"المعلم {teacher.full_name} غير متاح في هذا الوقت"
+                
+                return True, ""
+                
+        except (json.JSONDecodeError, TypeError, IndexError):
+            pass
+        
+        return True, ""
+
+    # Check teacher availability first
+    # Check if teacher2 (who will move to schedule1's position) is available
+    available1, msg1 = is_teacher_available(schedule2.teacher_id, schedule1.day_of_week, schedule1.period_number)
+    if not available1:
+        conflicts.append(msg1)
+    
+    # Check if teacher1 (who will move to schedule2's position) is available
+    available2, msg2 = is_teacher_available(schedule1.teacher_id, schedule2.day_of_week, schedule2.period_number)
+    if not available2:
+        conflicts.append(msg2)
+
+    # Check schedule conflicts (teacher teaching two classes at same time)
+    # Check if teacher2 (who will move to schedule1's position) has a conflict
+    teacher2_at_slot1_conflict = db.query(Schedule).filter(
+        Schedule.id != schedule1.id,
+        Schedule.id != schedule2.id,
+        Schedule.teacher_id == schedule2.teacher_id,
+        Schedule.day_of_week == schedule1.day_of_week,
+        Schedule.period_number == schedule1.period_number,
+        Schedule.academic_year_id == schedule1.academic_year_id,
+        Schedule.session_type == schedule1.session_type,
+    ).first()
+    if teacher2_at_slot1_conflict:
+        conflicts.append(f"المعلم لديه حصة أخرى في هذا الوقت")
+
+    # Check if teacher1 (who will move to schedule2's position) has a conflict
+    teacher1_at_slot2_conflict = db.query(Schedule).filter(
+        Schedule.id != schedule1.id,
+        Schedule.id != schedule2.id,
+        Schedule.teacher_id == schedule1.teacher_id,
+        Schedule.day_of_week == schedule2.day_of_week,
+        Schedule.period_number == schedule2.period_number,
+        Schedule.academic_year_id == schedule2.academic_year_id,
+        Schedule.session_type == schedule2.session_type,
+    ).first()
+    if teacher1_at_slot2_conflict:
+        conflicts.append(f"المعلم لديه حصة أخرى في هذا الوقت")
+
+    if conflicts:
+        return ScheduleSwapValidityResponse(
+            can_swap=False,
+            reason="فشل التبديل بسبب تعارضات",
+            conflicts=conflicts,
+        )
+
+    return ScheduleSwapValidityResponse(
+        can_swap=True,
+        reason="يمكن التبديل بدون تعارض",
+        conflicts=[],
+    )
 
 # Schedule Constraint Management
 @router.get("/constraints/", response_model=List[ScheduleConstraintResponse])

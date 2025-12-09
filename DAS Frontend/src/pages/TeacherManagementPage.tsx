@@ -33,7 +33,7 @@ const TeacherManagementPage = () => {
     const [showAddDialog, setShowAddDialog] = useState(false);
 
     // Get session type based on user role
-    const sessionType = authState.user?.role === 'morning_school' ? 'morning' : 
+    const sessionType = authState.user?.role === 'morning_school' ? 'morning' :
                        authState.user?.role === 'evening_school' ? 'evening' : undefined;
 
     useEffect(() => {
@@ -48,7 +48,7 @@ const TeacherManagementPage = () => {
             const teacher = teachers.find(t => t.id === teacherId);
             if (teacher) {
                 setSelectedTeacher(teacher);
-                console.log('Pre-selected teacher from search:', teacher);
+
             }
             // Clear the state after using it
             window.history.replaceState({}, document.title);
@@ -59,7 +59,7 @@ const TeacherManagementPage = () => {
         setLoading(true);
         try {
             const academicYearId = localStorage.getItem('selected_academic_year_id');
-            
+
             const response = await teachersApi.getAll({
                 academic_year_id: academicYearId ? parseInt(academicYearId) : undefined,
                 session_type: sessionType,
@@ -84,14 +84,14 @@ const TeacherManagementPage = () => {
                                 const textarea = document.createElement('textarea');
                                 textarea.innerHTML = field;
                                 const decodedField = textarea.value;
-                                
+
                                 const parsed = JSON.parse(decodedField);
-                                
+
                                 // If parsed is a 2D array (legacy free_time_slots), flatten it
                                 if (fieldName === 'free_time_slots' && Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
                                     return parsed.flat();
                                 }
-                                
+
                                 return parsed;
                             } catch (e) {
                                 return [];
@@ -107,16 +107,16 @@ const TeacherManagementPage = () => {
                         free_time_slots: parseJsonField(teacher.free_time_slots, 'free_time_slots')
                     };
                 });
-                
+
                 setTeachers(parsedTeachers);
-                
+
                 // Select first teacher if available
                 if (parsedTeachers.length > 0 && !selectedTeacher) {
                     setSelectedTeacher(parsedTeachers[0]);
                 }
             }
         } catch (error) {
-            console.error('Error loading teachers:', error);
+
             toast({
                 title: "خطأ",
                 description: "فشل تحميل بيانات الأساتذة",
@@ -151,12 +151,12 @@ const TeacherManagementPage = () => {
                     title: "نجاح",
                     description: "تم حذف الأستاذ بنجاح",
                 });
-                
+
                 // Clear selected teacher if it was deleted
                 if (selectedTeacher?.id === teacherId) {
                     setSelectedTeacher(null);
                 }
-                
+
                 // Reload teachers list
                 loadTeachers();
             }
@@ -185,8 +185,8 @@ const TeacherManagementPage = () => {
                             إدارة الأساتذة
                         </h1>
                         <p className="text-muted-foreground mt-1">
-                            {sessionType === 'morning' ? 'الدوام الصباحي' : 
-                             sessionType === 'evening' ? 'الدوام المسائي' : 
+                            {sessionType === 'morning' ? 'الدوام الصباحي' :
+                             sessionType === 'evening' ? 'الدوام المسائي' :
                              'جميع الدوامات'}
                         </p>
                     </div>
@@ -273,15 +273,15 @@ const TeacherManagementPage = () => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                selectedTeacher.session_type === 'morning' 
-                                                    ? 'bg-accent/20 text-accent-foreground' 
+                                                selectedTeacher.session_type === 'morning'
+                                                    ? 'bg-accent/20 text-accent-foreground'
                                                     : 'bg-primary/20 text-primary'
                                             }`}>
                                                 {selectedTeacher.session_type === 'morning' ? 'صباحي' : 'مسائي'}
                                             </div>
                                             <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                selectedTeacher.is_active 
-                                                    ? 'bg-green-100 text-green-800' 
+                                                selectedTeacher.is_active
+                                                    ? 'bg-green-100 text-green-800'
                                                     : 'bg-gray-100 text-gray-800'
                                             }`}>
                                                 {selectedTeacher.is_active ? 'نشط' : 'غير نشط'}
@@ -311,14 +311,14 @@ const TeacherManagementPage = () => {
                                         </TabsList>
 
                                         <TabsContent value="personal">
-                                            <TeacherPersonalInfoTab 
+                                            <TeacherPersonalInfoTab
                                                 teacher={selectedTeacher}
                                                 onUpdate={handleTeacherUpdated}
                                             />
                                         </TabsContent>
 
                                         <TabsContent value="schedule">
-                                            <TeacherScheduleTab 
+                                            <TeacherScheduleTab
                                                 teacher={selectedTeacher}
                                                 onUpdate={handleTeacherUpdated}
                                             />

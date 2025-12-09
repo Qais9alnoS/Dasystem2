@@ -343,6 +343,7 @@ class ValidationService:
         # NEW: Advanced validation checks for slot timing and coverage optimization
         slot_timing_warnings = []
         coverage_warnings = []
+        has_critical_coverage_issue = False
         
         # Check for timing conflicts: slots where multiple teachers are free vs. single-teacher slots
         import json
@@ -417,6 +418,9 @@ class ValidationService:
             suggestions.append(
                 "نصيحة: حاول توزيع أوقات الفراغ للمعلمين بحيث تكون متباعدة لتغطية أكبر عدد من الفترات"
             )
+            # NEW: Treat this pattern as a critical coverage issue that should block generation,
+            # since it frequently leads to empty periods in the actual distribution algorithm
+            has_critical_coverage_issue = True
         
         # Check for teachers with excessive free slots vs. requirements
         for teacher_id, teacher_cache in teacher_availability_cache.items():
@@ -441,7 +445,8 @@ class ValidationService:
             total_periods_needed >= required_periods and
             len(periods_without_teachers) == 0 and  # Must have teachers for all periods
             len(teachers_without_freetime) == 0 and  # All teachers must have free time configured
-            not has_guaranteed_empties  # CRITICAL: Block if guaranteed empty slots detected
+            not has_guaranteed_empties and  # CRITICAL: Block if guaranteed empty slots detected
+            not has_critical_coverage_issue  # NEW: Block if coverage pattern is known to cause empty periods
         )
         is_valid = can_proceed and len(insufficient_availability) == 0
         

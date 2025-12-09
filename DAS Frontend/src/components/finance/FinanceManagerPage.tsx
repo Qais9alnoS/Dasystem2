@@ -1,70 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useLocation } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { TreasurySection } from './TreasurySection';
 import { StudentsFinanceSection } from './StudentsFinanceSection';
-import { YearSelectionSection } from './YearSelectionSection';
 import { Calendar } from 'lucide-react';
-import { academicYearsApi } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
 export const FinanceManagerPage: React.FC = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
+  const [yearName, setYearName] = useState<string>('');
   const activeTab = searchParams.get('tab') || 'treasury';
-  
+
   // Get preselected card from navigation state (from search or quick actions)
   const preselectedCardId = (location.state as any)?.preselectedCardId;
   const openCardPopup = (location.state as any)?.openCardPopup;
   const openAddCardDialog = (location.state as any)?.openAddCardDialog;
-  
+
   // Get preselected student from navigation state (from search)
   const preselectedStudentId = (location.state as any)?.preselectedStudentId;
   const openFinancePopup = (location.state as any)?.openFinancePopup;
   const studentData = (location.state as any)?.studentData;
 
+  // Load selected academic year from localStorage
   useEffect(() => {
-    loadActiveYear();
+    const yearId = localStorage.getItem('selected_academic_year_id');
+    const yearNameStored = localStorage.getItem('selected_academic_year_name');
+
+    if (yearId) {
+      setSelectedYearId(parseInt(yearId, 10));
+      setYearName(yearNameStored || '');
+    }
   }, []);
 
-  const loadActiveYear = async () => {
-    try {
-      const response = await academicYearsApi.getAll();
-      const activeYear = response.data.find(y => y.is_active);
-      if (activeYear) {
-        setSelectedYearId(activeYear.id);
-      } else if (response.data.length > 0) {
-        // If no active year, use the first available
-        setSelectedYearId(response.data[0].id);
-      }
-    } catch (error) {
-      toast({
-        title: 'خطأ',
-        description: 'فشل تحميل السنة الدراسية',
-        variant: 'destructive'
-      });
-    }
-  };
+  // Listen for changes in academic year selection
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const yearId = localStorage.getItem('selected_academic_year_id');
+      const yearNameStored = localStorage.getItem('selected_academic_year_name');
 
-  const handleYearChange = (yearId: number) => {
-    setSelectedYearId(yearId);
-    toast({
-      title: 'تم التحديث',
-      description: 'تم تغيير السنة الدراسية بنجاح'
-    });
-  };
+      if (yearId) {
+        setSelectedYearId(parseInt(yearId, 10));
+        setYearName(yearNameStored || '');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   if (!selectedYearId) {
     return (
       <div className="container mx-auto p-6">
         <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
           <Calendar className="w-16 h-16 mb-4" />
-          <p className="text-lg font-medium mb-4">يرجى اختيار سنة دراسية</p>
-          <YearSelectionSection
-            selectedYearId={selectedYearId}
-            onYearChange={handleYearChange}
-          />
+          <p className="text-lg font-medium mb-4">لم يتم اختيار سنة دراسية</p>
+          <p className="text-sm text-muted-foreground mb-6">يرجى اختيار سنة دراسية من صفحة إدارة السنوات الدراسية</p>
+          <button
+            onClick={() => navigate('/academic-years')}
+            className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            الذهاب إلى إدارة السنوات الدراسية
+          </button>
         </div>
       </div>
     );
@@ -74,26 +73,19 @@ export const FinanceManagerPage: React.FC = () => {
   const renderSection = () => {
     switch (activeTab) {
       case 'treasury':
-        return <TreasurySection 
-          academicYearId={selectedYearId} 
+        return <TreasurySection
+          academicYearId={selectedYearId}
           preselectedCardId={preselectedCardId}
           openCardPopup={openCardPopup}
           openAddCardDialog={openAddCardDialog}
         />;
       case 'students':
-        return <StudentsFinanceSection 
+        return <StudentsFinanceSection
           academicYearId={selectedYearId}
           preselectedStudentId={preselectedStudentId}
           openFinancePopup={openFinancePopup}
           studentData={studentData}
         />;
-      case 'year':
-        return (
-          <YearSelectionSection
-            selectedYearId={selectedYearId}
-            onYearChange={handleYearChange}
-          />
-        );
       default:
         return <TreasurySection academicYearId={selectedYearId} />;
     }

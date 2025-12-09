@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import echarts, { type ECharts } from '@/lib/echarts-custom';
 import { getChartTheme } from './chartTheme';
 
 interface DataPoint {
@@ -25,7 +25,7 @@ const PieChart: React.FC<PieChartProps> = ({
   colors
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ECharts | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -35,99 +35,121 @@ const PieChart: React.FC<PieChartProps> = ({
         chartInstance.current = echarts.init(chartRef.current);
       }
     } catch (error) {
-      console.error('PieChart: Failed to initialize', error);
+
       return;
     }
 
-    const isDark = document.documentElement.classList.contains('dark');
-    const theme = getChartTheme();
+    const updateChart = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      const theme = getChartTheme();
 
-    // Handle empty or all-zero data
-    const hasData = data && data.length > 0 && data.some(d => d.value > 0);
-    const chartData = hasData ? data : [{ name: 'لا توجد بيانات', value: 1 }];
+      // Handle empty or all-zero data
+      const hasData = data && data.length > 0 && data.some(d => d.value > 0);
+      const chartData = hasData ? data : [{ name: 'لا توجد بيانات', value: 1 }];
 
-    const option: any = {
-      title: title ? {
-        text: title,
-        left: 'center',
-        textStyle: {
-          color: isDark ? '#e5e7eb' : '#374151',
-          fontSize: 14,
-          fontWeight: 'bold'
-        }
-      } : undefined,
-      tooltip: {
-        trigger: 'item',
-        formatter: '{a} <br/>{b}: {c} ({d}%)',
-        backgroundColor: isDark ? '#1f2937' : '#fff',
-        borderColor: isDark ? '#374151' : '#e5e7eb',
-        textStyle: {
-          color: isDark ? '#e5e7eb' : '#374151'
-        }
-      },
-      legend: hasData ? {
-        orient: 'horizontal',
-        bottom: '5%',
-        left: 'center',
-        textStyle: {
-          color: isDark ? '#9ca3af' : '#374151',
-          fontSize: 12
-        },
-        itemGap: 15,
-        itemWidth: 14,
-        itemHeight: 14
-      } : undefined,
-      series: [{
-        name: title || 'البيانات',
-        type: 'pie',
-        radius: donut ? ['35%', '55%'] : '55%',
-        center: ['50%', '40%'],
-        data: chartData,
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
+      const option: any = {
+        title: title ? {
+          text: title,
+          left: 'center',
+          textStyle: {
+            color: isDark ? '#e5e7eb' : '#374151',
+            fontSize: 14,
+            fontWeight: 'bold'
+          }
+        } : undefined,
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)',
+          backgroundColor: isDark ? '#1f2937' : '#fff',
+          borderColor: isDark ? '#374151' : '#e5e7eb',
+          textStyle: {
+            color: isDark ? '#e5e7eb' : '#374151'
           }
         },
-        label: {
-          show: false // Hide labels, use legend instead
-        },
-        labelLine: {
-          show: false
-        },
-        itemStyle: {
-          borderRadius: 4,
-          borderColor: isDark ? '#1f2937' : '#fff',
-          borderWidth: 2
+        legend: hasData ? {
+          orient: 'horizontal',
+          bottom: '5%',
+          left: 'center',
+          textStyle: {
+            color: isDark ? '#9ca3af' : '#374151',
+            fontSize: 12
+          },
+          itemGap: 15,
+          itemWidth: 14,
+          itemHeight: 14,
+          // Disable click filter behavior so legend acts as labels only
+          selectedMode: false
+        } : undefined,
+        series: [{
+          name: title || 'البيانات',
+          type: 'pie',
+          radius: donut ? ['45%', '70%'] : '65%',
+          center: ['50%', '45%'],
+          data: chartData,
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          },
+          label: {
+            show: false // Hide labels, use legend instead
+          },
+          labelLine: {
+            show: false
+          },
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: isDark ? '#1f2937' : '#fff',
+            borderWidth: 2
+          }
+        }],
+        color: colors || theme.color
+      };
+
+      try {
+        if (chartInstance.current && !chartInstance.current.isDisposed()) {
+          chartInstance.current.setOption(option);
+
+          if (loading) {
+            chartInstance.current.showLoading();
+          } else {
+            chartInstance.current.hideLoading();
+          }
         }
-      }],
-      color: colors || theme.color
+      } catch (error) {
+
+      }
     };
 
-    try {
-      if (chartInstance.current && !chartInstance.current.isDisposed()) {
-        chartInstance.current.setOption(option);
-        
-        if (loading) {
-          chartInstance.current.showLoading();
-        } else {
-          chartInstance.current.hideLoading();
-        }
-      }
-    } catch (error) {
-      console.error('PieChart: Failed to set option', error);
-      return;
-    }
+    updateChart();
 
     const handleResize = () => {
       if (chartInstance.current && !chartInstance.current.isDisposed()) {
         chartInstance.current.resize();
       }
     };
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateChart();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
     window.addEventListener('resize', handleResize);
 
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
   }, [data, title, donut, loading, colors]);
 
   useEffect(() => {

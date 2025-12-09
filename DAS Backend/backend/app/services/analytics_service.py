@@ -12,7 +12,7 @@ import hashlib
 from functools import wraps
 
 from app.database import SessionLocal
-from app.models.students import Student, StudentAcademic, StudentFinance, StudentPayment
+from app.models.students import Student, StudentAcademic, StudentFinance, StudentPayment, StudentBehaviorRecord
 from app.models.teachers import Teacher, TeacherAssignment, TeacherAttendance, TeacherFinance
 from app.models.academic import AcademicYear, Class, Subject
 from app.models.finance import FinanceTransaction, FinanceCategory, Budget
@@ -21,7 +21,7 @@ from app.models.daily import StudentDailyAttendance, TeacherPeriodAttendance
 
 
 class CacheManager:
-    """Simple in-memory cache manager (will use Redis in production)"""
+    """Simple in-memory cache manager with pattern-based invalidation"""
     _cache = {}
     _ttl = {}
     
@@ -42,8 +42,42 @@ class CacheManager:
     
     @classmethod
     def clear(cls):
+        """Clear all cache entries"""
         cls._cache.clear()
         cls._ttl.clear()
+    
+    @classmethod
+    def invalidate_pattern(cls, pattern: str):
+        """Invalidate all cache keys matching a pattern"""
+        keys_to_delete = [key for key in cls._cache.keys() if pattern in key]
+        for key in keys_to_delete:
+            del cls._cache[key]
+            if key in cls._ttl:
+                del cls._ttl[key]
+    
+    @classmethod
+    def invalidate_analytics(cls, category: str = None):
+        """
+        Invalidate analytics cache by category
+        Categories: 'overview', 'academic', 'attendance', 'distribution', 'grades', 'all'
+        """
+        if category == 'all' or category is None:
+            cls.clear()
+        else:
+            # Invalidate specific function caches
+            if category == 'overview':
+                cls.invalidate_pattern('get_overview_stats')
+            elif category == 'academic':
+                cls.invalidate_pattern('get_academic_performance')
+                cls.invalidate_pattern('get_school_wide_grades')
+            elif category == 'attendance':
+                cls.invalidate_pattern('get_attendance_analytics')
+                cls.invalidate_pattern('get_overview_stats')  # Also invalidate overview as it includes attendance
+            elif category == 'distribution':
+                cls.invalidate_pattern('get_student_distribution')
+            elif category == 'grades':
+                cls.invalidate_pattern('get_school_wide_grades')
+                cls.invalidate_pattern('get_academic_performance')
 
 
 def cache_result(ttl_seconds: int = 300):
@@ -130,7 +164,7 @@ class AnalyticsService:
     # OVERVIEW ANALYTICS
     # =========================
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_overview_stats(self, academic_year_id: int, session_type: Optional[str] = None,
                            user_role: Optional[str] = None) -> Dict[str, Any]:
         """Get high-level overview statistics"""
@@ -207,7 +241,7 @@ class AnalyticsService:
     # STUDENT ANALYTICS
     # =========================
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_student_distribution(self, academic_year_id: int, 
                                 session_type: Optional[str] = None) -> Dict[str, Any]:
         """Get student distribution by various categories"""
@@ -312,7 +346,7 @@ class AnalyticsService:
         finally:
             db.close()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_academic_performance(self, academic_year_id: int, session_type: Optional[str] = None,
                                  class_id: Optional[int] = None) -> Dict[str, Any]:
         """Get academic performance statistics"""
@@ -347,10 +381,17 @@ class AnalyticsService:
             # Collect grades by type
             board_grades = [r.board_grades for r in records if r.board_grades is not None]
             recitation_grades = [r.recitation_grades for r in records if r.recitation_grades is not None]
-            first_exam = [r.first_exam_grades for r in records if r.first_exam_grades is not None]
+            
+            # Quiz grades (المذاكرات)
+            first_quiz = [r.first_quiz_grade for r in records if r.first_quiz_grade is not None]
+            second_quiz = [r.second_quiz_grade for r in records if r.second_quiz_grade is not None]
+            third_quiz = [r.third_quiz_grade for r in records if r.third_quiz_grade is not None]
+            fourth_quiz = [r.fourth_quiz_grade for r in records if r.fourth_quiz_grade is not None]
+            
+            # Exam grades (الامتحانات)
             midterm = [r.midterm_grades for r in records if r.midterm_grades is not None]
-            second_exam = [r.second_exam_grades for r in records if r.second_exam_grades is not None]
             final_exam = [r.final_exam_grades for r in records if r.final_exam_grades is not None]
+            
             behavior = [r.behavior_grade for r in records if r.behavior_grade is not None]
             activity = [r.activity_grade for r in records if r.activity_grade is not None]
             
@@ -374,9 +415,11 @@ class AnalyticsService:
                 "exam_statistics": {
                     "board_grades": calc_stats(board_grades),
                     "recitation": calc_stats(recitation_grades),
-                    "first_exam": calc_stats(first_exam),
+                    "first_quiz": calc_stats(first_quiz),
+                    "second_quiz": calc_stats(second_quiz),
+                    "third_quiz": calc_stats(third_quiz),
+                    "fourth_quiz": calc_stats(fourth_quiz),
                     "midterm": calc_stats(midterm),
-                    "second_exam": calc_stats(second_exam),
                     "final_exam": calc_stats(final_exam),
                     "behavior": calc_stats(behavior),
                     "activity": calc_stats(activity)
@@ -395,7 +438,7 @@ class AnalyticsService:
         finally:
             db.close()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_attendance_analytics(self, academic_year_id: int, period_type: str = "monthly",
                                 session_type: Optional[str] = None) -> Dict[str, Any]:
         """Get attendance analytics for students and teachers"""
@@ -491,6 +534,515 @@ class AnalyticsService:
                     for sid, name, count in top_absent_students
                 ]
             }
+            
+        finally:
+            db.close()
+    
+    @cache_result(ttl_seconds=60)
+    def get_school_wide_grades(self, academic_year_id: int, 
+                               subject_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get school-wide grade averages for all quizzes and exams by session
+        Returns average grades separated by morning and evening sessions
+        """
+        db = SessionLocal()
+        try:
+            results = []
+            
+            # Base query joining StudentAcademic with Student and Subject
+            base_query = db.query(
+                StudentAcademic,
+                Student.session_type,
+                Subject.subject_name
+            ).join(
+                Student, StudentAcademic.student_id == Student.id
+            ).join(
+                Subject, StudentAcademic.subject_id == Subject.id
+            ).filter(
+                StudentAcademic.academic_year_id == academic_year_id,
+                Student.is_active == True
+            )
+            
+            # Apply subject filter if provided
+            if subject_filter and subject_filter != 'all':
+                base_query = base_query.filter(Subject.subject_name == subject_filter)
+            
+            records = base_query.all()
+            
+            if not records:
+                return []
+            
+            # Group by subject
+            subjects = {}
+            for academic, session_type, subject_name in records:
+                if subject_name not in subjects:
+                    subjects[subject_name] = {
+                        'morning': {
+                            'quiz1': [], 'quiz2': [], 'quiz3': [], 'quiz4': [],
+                            'midterm': [], 'final': []
+                        },
+                        'evening': {
+                            'quiz1': [], 'quiz2': [], 'quiz3': [], 'quiz4': [],
+                            'midterm': [], 'final': []
+                        }
+                    }
+                
+                session = subjects[subject_name][session_type]
+                
+                # Collect quiz grades
+                if academic.first_quiz_grade is not None:
+                    session['quiz1'].append(float(academic.first_quiz_grade))
+                if academic.second_quiz_grade is not None:
+                    session['quiz2'].append(float(academic.second_quiz_grade))
+                if academic.third_quiz_grade is not None:
+                    session['quiz3'].append(float(academic.third_quiz_grade))
+                if academic.fourth_quiz_grade is not None:
+                    session['quiz4'].append(float(academic.fourth_quiz_grade))
+                
+                # Collect exam grades
+                if academic.midterm_grades is not None:
+                    session['midterm'].append(float(academic.midterm_grades))
+                if academic.final_exam_grades is not None:
+                    session['final'].append(float(academic.final_exam_grades))
+            
+            # Calculate averages and format output
+            for subject_name, sessions in subjects.items():
+                # Process quizzes
+                for quiz_num in range(1, 5):
+                    quiz_key = f'quiz{quiz_num}'
+                    morning_grades = sessions['morning'][quiz_key]
+                    evening_grades = sessions['evening'][quiz_key]
+                    
+                    if morning_grades or evening_grades:
+                        results.append({
+                            'assignment_type': 'مذاكرة',
+                            'assignment_number': quiz_num,
+                            'morning_average': round(sum(morning_grades) / len(morning_grades), 2) if morning_grades else 0,
+                            'evening_average': round(sum(evening_grades) / len(evening_grades), 2) if evening_grades else 0,
+                            'subject_name': subject_name
+                        })
+                
+                # Process midterm exam
+                morning_midterm = sessions['morning']['midterm']
+                evening_midterm = sessions['evening']['midterm']
+                if morning_midterm or evening_midterm:
+                    results.append({
+                        'assignment_type': 'امتحان',
+                        'assignment_number': 1,  # Midterm as exam #1
+                        'morning_average': round(sum(morning_midterm) / len(morning_midterm), 2) if morning_midterm else 0,
+                        'evening_average': round(sum(evening_midterm) / len(evening_midterm), 2) if evening_midterm else 0,
+                        'subject_name': subject_name
+                    })
+                
+                # Process final exam
+                morning_final = sessions['morning']['final']
+                evening_final = sessions['evening']['final']
+                if morning_final or evening_final:
+                    results.append({
+                        'assignment_type': 'امتحان',
+                        'assignment_number': 2,  # Final as exam #2
+                        'morning_average': round(sum(morning_final) / len(morning_final), 2) if morning_final else 0,
+                        'evening_average': round(sum(evening_final) / len(evening_final), 2) if evening_final else 0,
+                        'subject_name': subject_name
+                    })
+            
+            return results
+            
+        finally:
+            db.close()
+    
+    def get_student_attendance_trend(
+        self,
+        student_id: int,
+        academic_year_id: int,
+        period_type: str = "weekly"  # "weekly" or "monthly"
+    ) -> List[Dict[str, Any]]:
+        """
+        Get student attendance trend by week or month
+        Returns attendance rate (percentage) for each period
+        """
+        db = SessionLocal()
+        try:
+            # Get all attendance records for the student in this academic year
+            attendance_records = db.query(StudentDailyAttendance).filter(
+                and_(
+                    StudentDailyAttendance.student_id == student_id,
+                    StudentDailyAttendance.academic_year_id == academic_year_id
+                )
+            ).order_by(StudentDailyAttendance.attendance_date).all()
+            
+            if not attendance_records:
+                return []
+            
+            # Get date range from actual attendance records
+            start_date = min(record.attendance_date for record in attendance_records)
+            end_date = max(record.attendance_date for record in attendance_records)
+            
+            # Group attendance by period
+            if period_type == "weekly":
+                return self._group_attendance_by_week(attendance_records, start_date, end_date)
+            else:  # monthly
+                return self._group_attendance_by_month(attendance_records, start_date, end_date)
+                
+        finally:
+            db.close()
+    
+    def _group_attendance_by_week(
+        self,
+        attendance_records: List[StudentDailyAttendance],
+        start_date: date,
+        end_date: date
+    ) -> List[Dict[str, Any]]:
+        """Group attendance records by week and calculate attendance rate"""
+        # Create a dictionary to store attendance by week
+        weeks_data = {}
+        
+        # Process each attendance record
+        for record in attendance_records:
+            # Calculate week number from start_date
+            days_diff = (record.attendance_date - start_date).days
+            week_num = days_diff // 7 + 1
+            
+            if week_num not in weeks_data:
+                weeks_data[week_num] = {
+                    'total_days': 0,
+                    'present_days': 0,
+                    'week_start': start_date + timedelta(days=(week_num - 1) * 7)
+                }
+            
+            weeks_data[week_num]['total_days'] += 1
+            if record.is_present:
+                weeks_data[week_num]['present_days'] += 1
+        
+        # Calculate attendance rate for each week
+        results = []
+        for week_num in sorted(weeks_data.keys()):
+            week_data = weeks_data[week_num]
+            attendance_rate = 0
+            if week_data['total_days'] > 0:
+                attendance_rate = round((week_data['present_days'] / week_data['total_days']) * 100, 2)
+            
+            results.append({
+                'period': f'الأسبوع {week_num}',
+                'week_number': week_num,
+                'attendance_rate': attendance_rate,
+                'total_days': week_data['total_days'],
+                'present_days': week_data['present_days'],
+                'start_date': week_data['week_start'].isoformat()
+            })
+        
+        return results
+    
+    def _group_attendance_by_month(
+        self,
+        attendance_records: List[StudentDailyAttendance],
+        start_date: date,
+        end_date: date
+    ) -> List[Dict[str, Any]]:
+        """Group attendance records by month and calculate attendance rate"""
+        # Create a dictionary to store attendance by month
+        months_data = {}
+        
+        # Process each attendance record
+        for record in attendance_records:
+            month_key = f"{record.attendance_date.year}-{record.attendance_date.month:02d}"
+            
+            if month_key not in months_data:
+                months_data[month_key] = {
+                    'total_days': 0,
+                    'present_days': 0,
+                    'year': record.attendance_date.year,
+                    'month': record.attendance_date.month
+                }
+            
+            months_data[month_key]['total_days'] += 1
+            if record.is_present:
+                months_data[month_key]['present_days'] += 1
+        
+        # Arabic month names
+        month_names = [
+            'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
+            'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
+        ]
+        
+        # Calculate attendance rate for each month
+        results = []
+        for month_key in sorted(months_data.keys()):
+            month_data = months_data[month_key]
+            attendance_rate = 0
+            if month_data['total_days'] > 0:
+                attendance_rate = round((month_data['present_days'] / month_data['total_days']) * 100, 2)
+            
+            results.append({
+                'period': month_names[month_data['month'] - 1],
+                'month': month_data['month'],
+                'year': month_data['year'],
+                'attendance_rate': attendance_rate,
+                'total_days': month_data['total_days'],
+                'present_days': month_data['present_days'],
+                'month_key': month_key
+            })
+        
+        return results
+    
+    def get_student_grades_timeline(
+        self,
+        student_id: int,
+        academic_year_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get student's average grades timeline across all subjects
+        Timeline order depends on class quizzes_count (2 or 4)
+        """
+        db = SessionLocal()
+        try:
+            # Get student to find their class
+            student = db.query(Student).filter(Student.id == student_id).first()
+            if not student:
+                return []
+            
+            # Get the class to know quizzes_count
+            student_class = db.query(Class).filter(
+                and_(
+                    Class.id == student.class_id,
+                    Class.academic_year_id == academic_year_id
+                )
+            ).first()
+            
+            if not student_class:
+                return []
+            
+            quizzes_count = student_class.quizzes_count
+            
+            # Get all academic records for this student in this academic year
+            academic_records = db.query(StudentAcademic).filter(
+                and_(
+                    StudentAcademic.student_id == student_id,
+                    StudentAcademic.academic_year_id == academic_year_id
+                )
+            ).all()
+            
+            if not academic_records:
+                return []
+            
+            # Calculate averages for each assessment
+            timeline = []
+            
+            if quizzes_count == 2:
+                # Order: مذاكرة أولى، امتحان نصفي، مذاكرة ثانية، امتحان نهائي
+                assessments = [
+                    ('first_quiz_grade', 'مذاكرة أولى'),
+                    ('midterm_grades', 'امتحان نصفي'),
+                    ('second_quiz_grade', 'مذاكرة ثانية'),
+                    ('final_exam_grades', 'امتحان نهائي')
+                ]
+            else:  # quizzes_count == 4
+                # Order: مذاكرة أولى، مذاكرة ثانية، امتحان نصفي، مذاكرة ثالثة، مذاكرة رابعة، امتحان نهائي
+                assessments = [
+                    ('first_quiz_grade', 'مذاكرة أولى'),
+                    ('second_quiz_grade', 'مذاكرة ثانية'),
+                    ('midterm_grades', 'امتحان نصفي'),
+                    ('third_quiz_grade', 'مذاكرة ثالثة'),
+                    ('fourth_quiz_grade', 'مذاكرة رابعة'),
+                    ('final_exam_grades', 'امتحان نهائي')
+                ]
+            
+            # Calculate average for each assessment across all subjects
+            for field_name, label in assessments:
+                grades = []
+                for record in academic_records:
+                    grade = getattr(record, field_name, None)
+                    if grade is not None:
+                        grades.append(float(grade))
+                
+                # Calculate average
+                if grades:
+                    average = round(sum(grades) / len(grades), 2)
+                else:
+                    average = 0
+                
+                timeline.append({
+                    'assessment': label,
+                    'average_grade': average,
+                    'subjects_count': len(grades)
+                })
+            
+            return timeline
+            
+        finally:
+            db.close()
+    
+    def get_student_grades_by_subject(
+        self,
+        student_id: int,
+        academic_year_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get student's average grades by subject
+        Calculates average of all assessments (quizzes + exams) for each subject
+        """
+        db = SessionLocal()
+        try:
+            # Get all academic records for this student in this academic year
+            academic_records = db.query(StudentAcademic).filter(
+                and_(
+                    StudentAcademic.student_id == student_id,
+                    StudentAcademic.academic_year_id == academic_year_id
+                )
+            ).all()
+            
+            if not academic_records:
+                return []
+            
+            # Calculate average for each subject
+            subject_averages = []
+            
+            for record in academic_records:
+                # Get subject name
+                subject = db.query(Subject).filter(Subject.id == record.subject_id).first()
+                if not subject:
+                    continue
+                
+                # Collect all grades for this subject
+                grades = []
+                
+                # Add quiz grades
+                if record.first_quiz_grade is not None:
+                    grades.append(float(record.first_quiz_grade))
+                if record.second_quiz_grade is not None:
+                    grades.append(float(record.second_quiz_grade))
+                if record.third_quiz_grade is not None:
+                    grades.append(float(record.third_quiz_grade))
+                if record.fourth_quiz_grade is not None:
+                    grades.append(float(record.fourth_quiz_grade))
+                
+                # Add exam grades
+                if record.midterm_grades is not None:
+                    grades.append(float(record.midterm_grades))
+                if record.final_exam_grades is not None:
+                    grades.append(float(record.final_exam_grades))
+                
+                # Calculate average
+                if grades:
+                    average = round(sum(grades) / len(grades), 2)
+                else:
+                    average = 0
+                
+                subject_averages.append({
+                    'subject_name': subject.subject_name,
+                    'average_grade': average,
+                    'assessments_count': len(grades)
+                })
+            
+            return subject_averages
+            
+        finally:
+            db.close()
+    
+    def get_student_financial_summary(
+        self,
+        student_id: int,
+        academic_year_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get student's financial summary (paid vs remaining balance)
+        Returns data for pie chart display
+        """
+        db = SessionLocal()
+        try:
+            from app.models.students import StudentFinance, StudentPayment
+            
+            # Get student's finance record
+            finance = db.query(StudentFinance).filter(
+                and_(
+                    StudentFinance.student_id == student_id,
+                    StudentFinance.academic_year_id == academic_year_id
+                )
+            ).first()
+            
+            if not finance:
+                return {
+                    'total_amount': 0,
+                    'total_paid': 0,
+                    'remaining_balance': 0,
+                    'paid_percentage': 0,
+                    'remaining_percentage': 0
+                }
+            
+            # Calculate total amount owed
+            total_amount = float(finance.total_amount)
+            
+            # Get all payments for this student in this academic year
+            payments = db.query(StudentPayment).filter(
+                and_(
+                    StudentPayment.student_id == student_id,
+                    StudentPayment.academic_year_id == academic_year_id
+                )
+            ).all()
+            
+            # Calculate total paid
+            total_paid = sum(float(payment.payment_amount) for payment in payments)
+            
+            # Calculate remaining balance
+            remaining_balance = max(0, total_amount - total_paid)
+            
+            # Calculate percentages
+            if total_amount > 0:
+                paid_percentage = round((total_paid / total_amount) * 100, 2)
+                remaining_percentage = round((remaining_balance / total_amount) * 100, 2)
+            else:
+                paid_percentage = 0
+                remaining_percentage = 0
+            
+            return {
+                'total_amount': round(total_amount, 2),
+                'total_paid': round(total_paid, 2),
+                'remaining_balance': round(remaining_balance, 2),
+                'paid_percentage': paid_percentage,
+                'remaining_percentage': remaining_percentage
+            }
+            
+        finally:
+            db.close()
+    
+    def get_student_behavior_records(
+        self,
+        student_id: int,
+        academic_year_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get student's behavior records (مشاغبة، مشاركة مميزة، بطاقة شكر، ملاحظة، إنذار، استدعاء ولي أمر، فصل)
+        Returns all records sorted by date (most recent first)
+        """
+        db = SessionLocal()
+        try:
+            # Get all behavior records for this student in this academic year
+            records = db.query(StudentBehaviorRecord).filter(
+                and_(
+                    StudentBehaviorRecord.student_id == student_id,
+                    StudentBehaviorRecord.academic_year_id == academic_year_id
+                )
+            ).order_by(StudentBehaviorRecord.record_date.desc()).all()
+            
+            # Format records
+            formatted_records = []
+            for record in records:
+                # Get recorded by user name if available
+                recorded_by_name = None
+                if record.recorded_by_user:
+                    recorded_by_name = record.recorded_by_user.username
+                
+                formatted_records.append({
+                    'id': record.id,
+                    'record_type': record.record_type,
+                    'record_date': record.record_date.isoformat() if record.record_date else None,
+                    'description': record.description,
+                    'severity': record.severity,
+                    'recorded_by': recorded_by_name,
+                    'created_at': record.created_at.isoformat() if record.created_at else None
+                })
+            
+            return formatted_records
             
         finally:
             db.close()

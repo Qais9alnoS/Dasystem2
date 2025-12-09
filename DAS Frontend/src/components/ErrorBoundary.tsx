@@ -34,7 +34,6 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error('ErrorBoundary caught an error:', error, errorInfo);
 
         this.setState({
             error,
@@ -59,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 errorDetails
             );
         } catch (telegramError) {
-            console.warn('Failed to send error to Telegram:', telegramError);
+
         }
 
         // Log to monitoring service in production
@@ -71,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     private logErrorToService = (error: Error, errorInfo: ErrorInfo) => {
         // Implementation for logging to external service
-        console.log('Logging error to monitoring service:', { error, errorInfo });
+
     };
 
     private handleReload = () => {
@@ -202,13 +201,13 @@ export const useErrorHandler = () => {
     }, []);
 
     const handleError = React.useCallback((error: Error) => {
-        console.error('Error caught by useErrorHandler:', error);
+
         setError(error);
 
         // Log to monitoring service
         if (process.env.NODE_ENV === 'production') {
             // Send to monitoring service
-            console.log('Logging error to monitoring service:', error);
+
         }
     }, []);
 

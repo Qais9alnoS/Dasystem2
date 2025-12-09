@@ -76,18 +76,16 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
   // Auto-open preselected schedule
   useEffect(() => {
     if (preselectedScheduleId && schedules.length > 0) {
-      console.log('=== Opening Preselected Schedule ===');
-      console.log('Schedule ID:', preselectedScheduleId);
-      
+
       const schedule = schedules.find(s => s.id === preselectedScheduleId);
       if (schedule) {
-        console.log('Found schedule:', schedule);
+
         handleViewSchedule(schedule);
-        
+
         // Clear navigation state to prevent re-triggering
         window.history.replaceState({}, document.title);
       } else {
-        console.warn('Schedule not found with ID:', preselectedScheduleId);
+
       }
     }
   }, [preselectedScheduleId, schedules]);
@@ -103,7 +101,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
       if (response.success && response.data) {
         // Group schedules by class and section
         const groupedSchedules = new Map<string, SavedSchedule>();
-        
+
         response.data.forEach((schedule: any) => {
           const key = `${schedule.class_id}-${schedule.section}`;
           if (!groupedSchedules.has(key)) {
@@ -127,7 +125,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
         setSchedules(Array.from(groupedSchedules.values()));
       }
     } catch (error: any) {
-      console.error('Error fetching schedules:', error);
+
       toast({
         title: "خطأ في تحميل الجداول",
         description: error.message || "حدث خطأ أثناء تحميل الجداول المحفوظة",
@@ -164,13 +162,13 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
         const teachersMap = new Map();
 
         if (subjectsResponse.success && subjectsResponse.data) {
-          subjectsResponse.data.forEach((s: any) => 
+          subjectsResponse.data.forEach((s: any) =>
             subjectsMap.set(s.id, s.subject_name)
           );
         }
 
         if (teachersResponse.success && teachersResponse.data) {
-          teachersResponse.data.forEach((t: any) => 
+          teachersResponse.data.forEach((t: any) =>
             teachersMap.set(t.id, t.full_name)
           );
         }
@@ -193,7 +191,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
         setScheduleAssignments(assignments);
       }
     } catch (error: any) {
-      console.error('Error loading schedule details:', error);
+
       toast({
         title: "خطأ في عرض الجدول",
         description: error.message || "حدث خطأ أثناء عرض تفاصيل الجدول",
@@ -201,6 +199,65 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
       });
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  // Silent refresh without loading indicator (for swap animation)
+  const handleSwapComplete = async () => {
+    if (!selectedSchedule) return;
+
+    try {
+      // Fetch schedule details silently (no loading state)
+      const schedulesResponse = await schedulesApi.getAll({
+        academic_year_id: selectedSchedule.academic_year_id,
+        session_type: selectedSchedule.session_type,
+        class_id: selectedSchedule.class_id
+      });
+
+      if (schedulesResponse.success && schedulesResponse.data) {
+        const schedules = schedulesResponse.data.filter(
+          (s: any) => s.section === selectedSchedule.section
+        );
+
+        // Fetch subjects and teachers for mapping
+        const subjectsResponse = await subjectsApi.getAll();
+        const teachersResponse = await teachersApi.getAll();
+
+        const subjectsMap = new Map();
+        const teachersMap = new Map();
+
+        if (subjectsResponse.success && subjectsResponse.data) {
+          subjectsResponse.data.forEach((s: any) =>
+            subjectsMap.set(s.id, s.subject_name)
+          );
+        }
+
+        if (teachersResponse.success && teachersResponse.data) {
+          teachersResponse.data.forEach((t: any) =>
+            teachersMap.set(t.id, t.full_name)
+          );
+        }
+
+        // Transform to assignments
+        const assignments = schedules.map((s: any) => ({
+          id: s.id,
+          time_slot_id: s.id,
+          day_of_week: s.day_of_week,
+          period_number: s.period_number,
+          subject_id: s.subject_id,
+          subject_name: subjectsMap.get(s.subject_id) || 'مادة غير محددة',
+          teacher_id: s.teacher_id,
+          teacher_name: teachersMap.get(s.teacher_id) || 'معلم غير محدد',
+          room: s.room,
+          notes: s.notes,
+          has_conflict: false
+        }));
+
+        setScheduleAssignments(assignments);
+      }
+    } catch (error: any) {
+
+      // Silent fail - the optimistic update already shows the correct data
     }
   };
 
@@ -220,10 +277,10 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
 
       if (response.success) {
         const teachersRestored = response.data?.restored_teachers || [];
-        const restoredInfo = teachersRestored.length > 0 
-          ? ` (تم استعادة أوقات فراغ ${teachersRestored.length} معلمين)` 
+        const restoredInfo = teachersRestored.length > 0
+          ? ` (تم استعادة أوقات فراغ ${teachersRestored.length} معلمين)`
           : '';
-        
+
         toast({
           title: "تم الحذف بنجاح",
           description: `تم حذف الجدول بنجاح (${response.data?.deleted_count || 0} حصة)${restoredInfo}`
@@ -363,7 +420,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
       {/* Schedule Viewer Dialog */}
       <Dialog open={showViewer} onOpenChange={setShowViewer}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
+          <DialogHeader className="pr-12">
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-600" />
               عرض الجدول - الصف {selectedSchedule?.class_id} شعبة {selectedSchedule?.section}
@@ -382,6 +439,7 @@ export const SavedSchedulesViewer: React.FC<SavedSchedulesViewerProps> = ({
                 sessionType: selectedSchedule?.session_type || 'morning'
               }}
               assignments={scheduleAssignments}
+              onSwapComplete={handleSwapComplete}
               readOnly={false}
             />
           )}

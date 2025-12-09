@@ -21,12 +21,7 @@ import MarkdownNoteEditor from '@/components/director-notes/MarkdownNoteEditor';
 import RewardsManager from '@/components/director-notes/RewardsManager';
 import AssistanceManager from '@/components/director-notes/AssistanceManager';
 import { FinanceManagerPage } from '@/components/finance';
-import { 
-  AnalyticsDashboard, 
-  FinanceAnalyticsDashboard, 
-  DirectorAnalyticsDashboard,
-  StudentAnalyticsPage 
-} from '@/components/analytics';
+import { StudentAnalyticsPage } from '@/components/analytics';
 
 const queryClient = new QueryClient();
 
@@ -47,24 +42,24 @@ const getRoleLabel = (role: string): string => {
 const AccessDenied = () => {
   const navigate = useNavigate();
   const { state } = useAuth();
-  
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] p-6">
       <div className="max-w-md w-full text-center">
         <div className="mb-6">
           <div className="w-20 h-20 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-10 w-10 text-red-600 dark:text-red-400" 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-10 w-10 text-red-600 dark:text-red-400"
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
               />
             </svg>
           </div>
@@ -105,10 +100,10 @@ const ProtectedApp = () => {
         // Always check the backend to ensure database state matches localStorage
         const { academicYearsApi } = await import('@/services/api');
         const response = await academicYearsApi.checkFirstRun();
-        
+
         if (response.success && response.data) {
           setNeedsFirstRunSetup(response.data.is_first_run);
-          
+
           if (response.data.is_first_run) {
             // Clear any stale localStorage data if database has no years
             localStorage.removeItem('first_run_completed');
@@ -121,7 +116,7 @@ const ProtectedApp = () => {
           }
         }
       } catch (error) {
-        console.error('Error checking first run status:', error);
+
         // On error, check localStorage as fallback
         const firstRunCompleted = localStorage.getItem('first_run_completed');
         if (firstRunCompleted === 'true') {
@@ -145,7 +140,7 @@ const ProtectedApp = () => {
       try {
         const { academicYearsApi } = await import('@/services/api');
         const response = await academicYearsApi.checkFirstRun();
-        
+
         if (response.success && response.data && response.data.is_first_run) {
           // All academic years were deleted, force redirect to first run
           setNeedsFirstRunSetup(true);
@@ -155,13 +150,13 @@ const ProtectedApp = () => {
           localStorage.removeItem('auto_open_academic_year');
         }
       } catch (error) {
-        console.error('Error checking academic years existence:', error);
+
       }
     };
 
     // Check every 5 seconds
     const interval = setInterval(checkAcademicYearsExist, 5000);
-    
+
     return () => clearInterval(interval);
   }, [state.isAuthenticated, needsFirstRunSetup]);
 
@@ -190,13 +185,13 @@ const ProtectedApp = () => {
   // Show first run setup if needed
   if (needsFirstRunSetup) {
     return (
-      <FirstRunSetup 
+      <FirstRunSetup
         onComplete={() => {
           setNeedsFirstRunSetup(false);
           localStorage.setItem('first_run_completed', 'true');
           // After first run, navigate to year management
           navigate('/academic-years');
-        }} 
+        }}
       />
     );
   }
@@ -218,152 +213,123 @@ const ProtectedApp = () => {
         {/* Teacher Management */}
         <Route path="teachers" element={<TeacherManagementPage />} />
         {/* Schedule Management */}
-        <Route 
-          path="schedules" 
+        <Route
+          path="schedules"
           element={
             <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <ScheduleManagementPage />
             </ProtectedRoute>
-          } 
+          }
         />
         {/* Daily Page - Morning and Evening School Staff */}
-        <Route 
-          path="daily" 
+        <Route
+          path="daily"
           element={
             <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <DailyPage />
             </ProtectedRoute>
-          } 
+          }
         />
         {/* Student Management */}
-        <Route 
-          path="students/personal-info" 
+        <Route
+          path="students/personal-info"
           element={
             <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <StudentPersonalInfoPage />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="students/academic-info" 
+        <Route
+          path="students/academic-info"
           element={
             <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <StudentAcademicInfoPage />
             </ProtectedRoute>
-          } 
+          }
         />
-        {/* Activities Management - Director Only */}
-        <Route 
-          path="activities" 
-          element={
-            <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
-              <ActivitiesManagementPage />
-            </ProtectedRoute>
-          } 
-        />
-        {/* Finance Management - Finance Officer Only */}
-        <Route 
-          path="finance" 
-          element={
-            <ProtectedRoute allowedRoles={['finance', 'director']} fallback={<AccessDenied />}>
-              <FinanceManagerPage />
-            </ProtectedRoute>
-          } 
-        />
-        {/* User Management - Director Only */}
-        <Route 
-          path="user-management" 
-          element={
-            <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
-              <UserManagementPage />
-            </ProtectedRoute>
-          } 
-        />
-        {/* Analytics Routes */}
-        {/* Morning/Evening Analytics */}
-        <Route 
-          path="analytics" 
-          element={
-            <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
-              <AnalyticsDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        {/* Student-Specific Analytics */}
-        <Route 
-          path="students/analytics" 
+        <Route
+          path="students/analytics"
           element={
             <ProtectedRoute allowedRoles={['director', 'morning_school', 'evening_school']} fallback={<AccessDenied />}>
               <StudentAnalyticsPage />
             </ProtectedRoute>
-          } 
+          }
         />
-        {/* Finance Analytics */}
-        <Route 
-          path="finance/analytics" 
-          element={
-            <ProtectedRoute allowedRoles={['finance', 'director']} fallback={<AccessDenied />}>
-              <FinanceAnalyticsDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        {/* Director Comprehensive Analytics */}
-        <Route 
-          path="director/analytics" 
+        {/* Activities Management - Director Only */}
+        <Route
+          path="activities"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
-              <DirectorAnalyticsDashboard />
+              <ActivitiesManagementPage />
             </ProtectedRoute>
-          } 
+          }
+        />
+        {/* Finance Management - Finance Officer Only */}
+        <Route
+          path="finance"
+          element={
+            <ProtectedRoute allowedRoles={['finance', 'director']} fallback={<AccessDenied />}>
+              <FinanceManagerPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* User Management - Director Only */}
+        <Route
+          path="user-management"
+          element={
+            <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
+              <UserManagementPage />
+            </ProtectedRoute>
+          }
         />
         {/* Director Notes - Director Only Protected Routes */}
-        <Route 
-          path="director/notes" 
+        <Route
+          path="director/notes"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <DirectorNotesPage />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="director/notes/search" 
+        <Route
+          path="director/notes/search"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <DirectorNotesSearchPage />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="director/notes/browse/:category" 
+        <Route
+          path="director/notes/browse/:category"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <NoteFolderBrowser />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="director/notes/edit/:fileId" 
+        <Route
+          path="director/notes/edit/:fileId"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <MarkdownNoteEditor />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="director/notes/rewards" 
+        <Route
+          path="director/notes/rewards"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <RewardsManager />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="director/notes/assistance" 
+        <Route
+          path="director/notes/assistance"
           element={
             <ProtectedRoute allowedRoles={['director']} fallback={<AccessDenied />}>
               <AssistanceManager />
             </ProtectedRoute>
-          } 
+          }
         />
         {/* Catch-all for undefined routes */}
         <Route path="*" element={<NotFound />} />
@@ -376,21 +342,21 @@ const ProtectedApp = () => {
 const YearSelectionCheck = () => {
   const [loading, setLoading] = useState(true);
   const [shouldRedirect, setShouldRedirect] = useState(false);
-  
+
   useEffect(() => {
     const checkAndSetDefaultYear = async () => {
       try {
         // Always fetch years from backend to validate state
         const { academicYearsApi } = await import('@/services/api');
         const response = await academicYearsApi.getAll();
-        
+
         let years = [];
         if (response.success && response.data) {
           years = response.data;
         } else if (Array.isArray(response)) {
           years = response;
         }
-        
+
         // If no years exist, clear localStorage and redirect to year management
         if (years.length === 0) {
           localStorage.removeItem('selected_academic_year_id');
@@ -401,9 +367,9 @@ const YearSelectionCheck = () => {
           setLoading(false);
           return;
         }
-        
+
         const selectedYearId = localStorage.getItem('selected_academic_year_id');
-        
+
         // Verify that the selected year actually exists in the database
         if (selectedYearId) {
           const yearExists = years.some((year: any) => year.id?.toString() === selectedYearId);
@@ -419,27 +385,29 @@ const YearSelectionCheck = () => {
             localStorage.removeItem('auto_open_academic_year');
           }
         }
-        
+
         // Find the active year and auto-select it
         const activeYear = years.find((year: any) => year.is_active);
-        
+
         if (activeYear) {
           // Set the active year as selected
           localStorage.setItem('selected_academic_year_id', activeYear.id?.toString() || '');
           localStorage.setItem('selected_academic_year_name', activeYear.year_name || '');
           localStorage.setItem('auto_open_academic_year', 'true');
+          // Dispatch custom event to notify other components
+          window.dispatchEvent(new Event('academicYearChanged'));
           setShouldRedirect(true);
         }
       } catch (error) {
-        console.error('Error fetching default year:', error);
+
       } finally {
         setLoading(false);
       }
     };
-    
+
     checkAndSetDefaultYear();
   }, []);
-  
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -447,7 +415,7 @@ const YearSelectionCheck = () => {
       </div>
     );
   }
-  
+
   if (shouldRedirect) {
     // If year is selected, go to dashboard
     return <Navigate to="/dashboard" replace />;
@@ -457,37 +425,57 @@ const YearSelectionCheck = () => {
   }
 };
 
-const App = () => {
+const AppContent = () => {
   const [showSplash, setShowSplash] = useState(true);
 
   const handleSplashComplete = () => {
     setShowSplash(false);
   };
 
+  // Disable right-click context menu globally for native app feel
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
   if (showSplash) {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
   return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <ProjectProvider>
+            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <div className="app-container bg-background text-foreground font-ios">
+                <Routes>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/*" element={<ProtectedApp />} />
+                </Routes>
+                <Toaster />
+              </div>
+            </Router>
+          </ProjectProvider>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
+
+const App = () => {
+  return (
     <ErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true} storageKey="theme-preference">
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AuthProvider>
-              <ProjectProvider>
-                <Router>
-                  <div className="app-container bg-background text-foreground font-ios">
-                    <Routes>
-                      <Route path="/login" element={<LoginPage />} />
-                      <Route path="/*" element={<ProtectedApp />} />
-                    </Routes>
-                    <Toaster />
-                  </div>
-                </Router>
-              </ProjectProvider>
-            </AuthProvider>
-          </TooltipProvider>
-        </QueryClientProvider>
+        <AppContent />
       </ThemeProvider>
     </ErrorBoundary>
   );

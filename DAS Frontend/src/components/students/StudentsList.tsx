@@ -51,7 +51,7 @@ export const StudentsList: React.FC<StudentsListProps> = ({ searchQuery }) => {
                 // If there's a search query, use the search API
                 if (searchQuery) {
                     const response = await studentsApi.search(searchQuery, undefined, undefined, studentsPerPage);
-                    
+
                     if (response.success && response.data) {
                         setStudents(response.data);
                         setTotalStudents(response.data.length);
@@ -62,16 +62,16 @@ export const StudentsList: React.FC<StudentsListProps> = ({ searchQuery }) => {
                         skip: (currentPage - 1) * studentsPerPage,
                         limit: studentsPerPage
                     });
-                    
+
                     if (response.success && response.data) {
                         setStudents(response.data);
-                        // For now, we'll set a fixed total. In a real implementation, 
+                        // For now, we'll set a fixed total. In a real implementation,
                         // this would come from the API response pagination info
                         setTotalStudents(response.data.length);
                     }
                 }
             } catch (error) {
-                console.error('Error fetching students:', error);
+
             } finally {
                 setLoading(false);
             }
@@ -123,17 +123,17 @@ export const StudentsList: React.FC<StudentsListProps> = ({ searchQuery }) => {
     };
 
     const handleViewStudent = (student: Student) => {
-        console.log('View student:', student);
+
         // Navigate to student details page
     };
 
     const handleEditStudent = (student: Student) => {
-        console.log('Edit student:', student);
+
         // Navigate to edit student page
     };
 
     const handleDeleteStudent = (student: Student) => {
-        console.log('Delete student:', student);
+
         // Show confirmation dialog and delete
     };
 

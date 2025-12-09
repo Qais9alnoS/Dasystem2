@@ -19,27 +19,27 @@ export const DirectorPasswordResetForm: React.FC = () => {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-    
+
     // Validation
     if (!username.trim()) {
       setMessage({ type: 'error', text: 'يرجى إدخال اسم المستخدم' });
       return;
     }
-    
+
     if (!role) {
       setMessage({ type: 'error', text: 'يرجى اختيار الدور' });
       return;
     }
-    
+
     setIsLoading(true);
-    
+
     try {
       // Call the auth API to reset password
       const response = await authApi.resetPassword({
         username,
         role
       });
-      
+
       if (response.success) {
         // Reset form
         setUsername('');
@@ -48,9 +48,9 @@ export const DirectorPasswordResetForm: React.FC = () => {
         throw new Error(response.message || 'فشل في إعادة تعيين كلمة المرور');
       }
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'فشل في إعادة تعيين كلمة المرور' 
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'فشل في إعادة تعيين كلمة المرور'
       });
     } finally {
       setIsLoading(false);
@@ -83,7 +83,7 @@ export const DirectorPasswordResetForm: React.FC = () => {
             </div>
           </Alert>
         )}
-        
+
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div>
             <Label htmlFor="username">اسم المستخدم</Label>
@@ -96,7 +96,7 @@ export const DirectorPasswordResetForm: React.FC = () => {
               required
             />
           </div>
-          
+
           <div>
             <Label htmlFor="role">الدور</Label>
             <Select value={role} onValueChange={(value: any) => setRole(value)}>
@@ -111,10 +111,10 @@ export const DirectorPasswordResetForm: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="pt-4">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading}
               className="w-full"
             >
@@ -122,7 +122,7 @@ export const DirectorPasswordResetForm: React.FC = () => {
             </Button>
           </div>
         </form>
-        
+
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
             <strong>ملاحظة:</strong> سيتم إعادة تعيين كلمة المرور إلى القيمة الافتراضية وإرسال إشعار عبر تيليجرام إلى المستخدم.

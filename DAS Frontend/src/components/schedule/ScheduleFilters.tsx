@@ -35,7 +35,7 @@ const SESSIONS = [
 export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) => {
   // Get user info from AuthContext
   const { state } = useAuth();
-  const userRole = state.user?.role || '';
+  const userRole = (state.user?.role as string) || '';
 
   // State
   const [academicYearId, setAcademicYearId] = useState<number | null>(null);
@@ -72,11 +72,11 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
   // Auto-set session type based on user role
   useEffect(() => {
     if (!userRole) return;
-    
+
     // Morning supervisors: auto-set to morning
     if (userRole === 'morning_supervisor' || userRole === 'morning_school') {
       setSessionType('morning');
-    } 
+    }
     // Evening supervisors: auto-set to evening
     else if (userRole === 'evening_supervisor' || userRole === 'evening_school') {
       setSessionType('evening');
@@ -89,7 +89,7 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
     try {
       // Get the globally selected academic year from localStorage
       const selectedYearId = localStorage.getItem('selected_academic_year_id');
-      
+
       if (selectedYearId) {
         setAcademicYearId(parseInt(selectedYearId, 10));
       } else {
@@ -149,7 +149,7 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
     if (gradeLevel) {
       const filtered = classes.filter(c => c.grade_level === gradeLevel);
       setFilteredClasses(filtered);
-      
+
       // Reset dependent selections
       setGradeNumber(null);
       setSection('');
@@ -179,7 +179,7 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
       });
 
       setAvailableSections(sections.sort());
-      
+
       // Reset section
       setSection('');
       setClassId(null);
@@ -242,7 +242,7 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
           }
         }
       } catch (error) {
-        console.error('Error checking existing schedules:', error);
+
       } finally {
         setCheckingExisting(false);
       }
@@ -298,7 +298,7 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
             required
           >
             <SelectTrigger id="session-type">
-              <SelectValue placeholder="اختر الفترة (صباحي أو مسائي)" />
+              <SelectValue placeholder="اختر الفترة" />
             </SelectTrigger>
             <SelectContent>
               {SESSIONS.map((session) => (
@@ -308,11 +308,6 @@ export const ScheduleFilters: React.FC<ScheduleFiltersProps> = ({ onComplete }) 
               ))}
             </SelectContent>
           </Select>
-          {!sessionType && (
-            <p className="text-xs text-muted-foreground">
-              يرجى اختيار الفترة (صباحي أو مسائي)
-            </p>
-          )}
         </div>
       ) : (
         <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">

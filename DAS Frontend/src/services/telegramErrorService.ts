@@ -37,9 +37,10 @@ class TelegramErrorService {
 
   constructor() {
     // Get API endpoint from environment or use default
-    this.apiEndpoint = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    this.enabled = import.meta.env.VITE_TELEGRAM_ERROR_REPORTING !== 'false';
-    
+    // Using process.env for Webpack (not import.meta.env which is Vite-specific)
+    this.apiEndpoint = process.env.API_BASE_URL || 'http://localhost:8000';
+    this.enabled = process.env.TELEGRAM_ERROR_REPORTING !== 'false';
+
     // Process queue periodically
     if (this.enabled) {
       setInterval(() => this.processQueue(), 5000); // Process every 5 seconds
@@ -178,7 +179,7 @@ class TelegramErrorService {
         }
       }
     } catch (error) {
-      console.warn('Error processing Telegram error queue:', error);
+
     } finally {
       this.isProcessing = false;
     }

@@ -52,6 +52,7 @@ class Student(BaseModel):
     payments = relationship("StudentPayment", back_populates="student")
     academics = relationship("StudentAcademic", back_populates="student")
     historical_balances = relationship("HistoricalBalance", back_populates="student")
+    behavior_records = relationship("StudentBehaviorRecord", back_populates="student")
 
 class StudentFinance(BaseModel):
     __tablename__ = "student_finances"
@@ -148,10 +149,17 @@ class StudentAcademic(BaseModel):
     # Grades
     board_grades = Column(Numeric(5,2))
     recitation_grades = Column(Numeric(5,2))
-    first_exam_grades = Column(Numeric(5,2))
+    
+    # Quiz grades (المذاكرات)
+    first_quiz_grade = Column(Numeric(5,2))
+    second_quiz_grade = Column(Numeric(5,2))
+    third_quiz_grade = Column(Numeric(5,2))
+    fourth_quiz_grade = Column(Numeric(5,2))
+    
+    # Exam grades (الامتحانات)
     midterm_grades = Column(Numeric(5,2))
-    second_exam_grades = Column(Numeric(5,2))
     final_exam_grades = Column(Numeric(5,2))
+    
     behavior_grade = Column(Numeric(5,2))
     activity_grade = Column(Numeric(5,2))
     
@@ -178,3 +186,20 @@ class HistoricalBalance(BaseModel):
     # Relationships
     student = relationship("Student", back_populates="historical_balances")
     academic_year = relationship("AcademicYear")
+
+class StudentBehaviorRecord(BaseModel):
+    """نموذج سجل السلوك الطلابي"""
+    __tablename__ = "student_behavior_records"
+    
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    record_type = Column(String(50), nullable=False)  # مشاغبة، مشاركة_مميزة، بطاقة_شكر، ملاحظة، إنذار، استدعاء_ولي_أمر، فصل
+    record_date = Column(Date, nullable=False)
+    description = Column(Text)
+    recorded_by = Column(Integer, ForeignKey("users.id"))  # المستخدم الذي سجل الحدث
+    severity = Column(String(20))  # low, medium, high (للإنذارات والفصل)
+    
+    # Relationships
+    student = relationship("Student", back_populates="behavior_records")
+    academic_year = relationship("AcademicYear")
+    recorded_by_user = relationship("User", foreign_keys=[recorded_by])

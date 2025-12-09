@@ -17,19 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { directorApi, studentsApi, teachersApi } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
-
-interface Reward {
-  id: number;
-  academic_year_id: number;
-  title: string;
-  reward_date: string;
-  recipient_name: string;
-  recipient_type: string;
-  amount: number;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { Reward } from '@/types/school';
 
 const RewardsManager: React.FC = () => {
   const navigate = useNavigate();
@@ -45,8 +33,15 @@ const RewardsManager: React.FC = () => {
   const [selectedRecipient, setSelectedRecipient] = useState<{ id: number; name: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const [formData, setFormData] = useState({
+
+  const [formData, setFormData] = useState<{
+    title: string;
+    reward_date: string;
+    recipient_name: string;
+    recipient_type: 'student' | 'teacher' | 'other';
+    amount: string;
+    description: string;
+  }>({
     title: '',
     reward_date: new Date().toISOString().split('T')[0],
     recipient_name: '',
@@ -71,7 +66,7 @@ const RewardsManager: React.FC = () => {
         setRewards(response.data);
       }
     } catch (error) {
-      console.error('Error fetching rewards:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل المكافئات',
@@ -88,7 +83,7 @@ const RewardsManager: React.FC = () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
-      
+
       searchTimeoutRef.current = setTimeout(async () => {
         try {
           if (formData.recipient_type === 'student') {
@@ -119,7 +114,7 @@ const RewardsManager: React.FC = () => {
             }
           }
         } catch (error) {
-          console.error('Error searching:', error);
+
           setSuggestions([]);
           setShowSuggestions(false);
         }
@@ -155,7 +150,7 @@ const RewardsManager: React.FC = () => {
   const handleRecipientNameChange = (value: string) => {
     setSearchQuery(value);
     setFormData(prev => ({ ...prev, recipient_name: value }));
-    
+
     // If name doesn't match selected recipient, clear selection
     if (selectedRecipient && selectedRecipient.name !== value) {
       setSelectedRecipient(null);
@@ -188,7 +183,7 @@ const RewardsManager: React.FC = () => {
     if ((formData.recipient_type === 'student' || formData.recipient_type === 'teacher') && !selectedRecipient) {
       // Check if the entered name exists in suggestions
       const nameExists = suggestions.some(s => s.name.toLowerCase() === formData.recipient_name.trim().toLowerCase());
-      
+
       if (!nameExists) {
         toast({
           title: 'خطأ في الإدخال',
@@ -218,7 +213,7 @@ const RewardsManager: React.FC = () => {
       resetForm();
       fetchRewards();
     } catch (error) {
-      console.error('Error saving reward:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في حفظ المكافأة',
@@ -233,7 +228,7 @@ const RewardsManager: React.FC = () => {
       title: reward.title,
       reward_date: reward.reward_date,
       recipient_name: reward.recipient_name,
-      recipient_type: reward.recipient_type,
+      recipient_type: reward.recipient_type as 'student' | 'teacher' | 'other',
       amount: reward.amount.toString(),
       description: reward.description || ''
     });
@@ -251,7 +246,7 @@ const RewardsManager: React.FC = () => {
       toast({ title: 'نجاح', description: 'تم حذف المكافأة' });
       fetchRewards();
     } catch (error) {
-      console.error('Error deleting reward:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في حذف المكافأة',
@@ -296,7 +291,7 @@ const RewardsManager: React.FC = () => {
           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Award className="h-8 w-8 text-yellow-500" />
+              <Award className="h-8 w-8 text-accent" />
               المكافئات
             </h1>
             <p className="text-muted-foreground">إدارة مكافئات الطلاب والمعلمين</p>
@@ -414,7 +409,7 @@ const RewardsManager: React.FC = () => {
                       }
                     }}
                     placeholder={
-                      formData.recipient_type === 'student' 
+                      formData.recipient_type === 'student'
                         ? 'ابحث عن طالب...'
                         : formData.recipient_type === 'teacher'
                         ? 'ابحث عن معلم...'
@@ -427,8 +422,8 @@ const RewardsManager: React.FC = () => {
                   )}
                   {showSuggestions && suggestions.length > 0 && (
                     <>
-                      <div 
-                        className="fixed inset-0 z-40" 
+                      <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setShowSuggestions(false)}
                       />
                       <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg max-h-60 overflow-y-auto">
@@ -471,7 +466,7 @@ const RewardsManager: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="recipient_type">نوع المستفيد</Label>
-                <Select value={formData.recipient_type} onValueChange={(v) => setFormData({ ...formData, recipient_type: v })}>
+                <Select value={formData.recipient_type} onValueChange={(v) => setFormData({ ...formData, recipient_type: v as 'student' | 'teacher' | 'other' })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

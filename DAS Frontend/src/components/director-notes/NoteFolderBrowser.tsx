@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { 
+import {
   Folder, FileText, Plus, MoreVertical, Home, ChevronRight,
-  ArrowLeft, Trash2, Edit2, Search, Palette 
+  ArrowLeft, Trash2, Edit2, Search, Palette
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,11 +74,11 @@ const NoteFolderBrowser: React.FC = () => {
     const state = location.state as { folderId?: number; openFolderId?: number; folderData?: any } | null;
     const targetFolderId = state?.folderId || state?.openFolderId;
     const folderData = state?.folderData;
-    
+
     if (targetFolderId && targetFolderId !== currentFolderId) {
       navigatedWithFolderId.current = true;
       setCurrentFolderId(targetFolderId);
-      
+
       // Build breadcrumb trail if we have folder data
       if (folderData?.title) {
         setBreadcrumbs([{ id: targetFolderId, name: folderData.title }]);
@@ -93,7 +93,7 @@ const NoteFolderBrowser: React.FC = () => {
       navigatedWithFolderId.current = false;
       return;
     }
-    
+
     setCurrentFolderId(null);
     setBreadcrumbs([]);
   }, [category]);
@@ -106,7 +106,7 @@ const NoteFolderBrowser: React.FC = () => {
 
   const loadFolderContents = async () => {
     if (!category) return;
-    
+
     try {
       setLoading(true);
       const response = await directorApi.listFolderContents(
@@ -114,14 +114,14 @@ const NoteFolderBrowser: React.FC = () => {
         category,
         currentFolderId
       );
-      
+
       // Backend returns items directly in response.data, not nested
       if (response.success && response.data) {
         const responseData = response.data as any;
         setItems(responseData.items || []);
       }
     } catch (error) {
-      console.error('Error loading folder contents:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل المحتويات',
@@ -139,7 +139,7 @@ const NoteFolderBrowser: React.FC = () => {
     const folderExists = items.some(
       item => item.is_folder && item.title.toLowerCase() === newFolderName.trim().toLowerCase()
     );
-    
+
     if (folderExists) {
       toast({
         title: 'خطأ',
@@ -167,9 +167,9 @@ const NoteFolderBrowser: React.FC = () => {
         loadFolderContents();
       }
     } catch (error: any) {
-      console.error('Error creating folder:', error);
-      const errorMessage = error?.message?.includes('already exists') 
-        ? 'يوجد مجلد بهذا الاسم بالفعل' 
+
+      const errorMessage = error?.message?.includes('already exists')
+        ? 'يوجد مجلد بهذا الاسم بالفعل'
         : 'فشل في إنشاء المجلد';
       toast({
         title: 'خطأ',
@@ -185,10 +185,10 @@ const NoteFolderBrowser: React.FC = () => {
     // Check if file already exists
     const fileName = newFileName.trim().endsWith('.md') ? newFileName.trim() : newFileName.trim() + '.md';
     const fileExists = items.some(
-      item => !item.is_folder && (item.title.toLowerCase() === newFileName.trim().toLowerCase() || 
+      item => !item.is_folder && (item.title.toLowerCase() === newFileName.trim().toLowerCase() ||
                                   item.title.toLowerCase() === fileName.toLowerCase())
     );
-    
+
     if (fileExists) {
       toast({
         title: 'خطأ',
@@ -219,9 +219,9 @@ const NoteFolderBrowser: React.FC = () => {
         navigate(`/director/notes/edit/${response.data.file_id}`);
       }
     } catch (error: any) {
-      console.error('Error creating file:', error);
-      const errorMessage = error?.message?.includes('already exists') 
-        ? 'يوجد ملف بهذا الاسم بالفعل' 
+
+      const errorMessage = error?.message?.includes('already exists')
+        ? 'يوجد ملف بهذا الاسم بالفعل'
         : 'فشل في إنشاء الملف';
       toast({
         title: 'خطأ',
@@ -249,7 +249,7 @@ const NoteFolderBrowser: React.FC = () => {
       });
       loadFolderContents();
     } catch (error) {
-      console.error('Error deleting item:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في الحذف',
@@ -269,18 +269,18 @@ const NoteFolderBrowser: React.FC = () => {
 
     try {
       await directorApi.renameFolder(renameItemId, renameValue.trim());
-      
+
       toast({
         title: 'نجاح',
         description: 'تم تغيير الاسم بنجاح',
       });
-      
+
       setShowRenameDialog(false);
       setRenameItemId(null);
       setRenameValue('');
       loadFolderContents();
     } catch (error) {
-      console.error('Error renaming item:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تغيير الاسم',
@@ -402,9 +402,9 @@ const NoteFolderBrowser: React.FC = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
                     {item.is_folder ? (
-                      <Folder className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />
+                      <Folder className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
                     ) : (
-                      <FileText className="h-6 w-6 text-gray-500 flex-shrink-0 mt-1" />
+                      <FileText className="h-6 w-6 text-muted-foreground flex-shrink-0 mt-1" />
                     )}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium truncate">{item.title}</h3>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  GraduationCap, Users, BookOpen, Clipboard, 
-  Sparkles, DollarSign, Calendar, FileText, 
-  File, ChevronRight, CreditCard 
+import {
+  GraduationCap, Users, BookOpen, Clipboard,
+  Sparkles, DollarSign, Calendar, FileText,
+  File, ChevronRight, CreditCard
 } from 'lucide-react';
 import { UniversalSearchResult, GroupedSearchResults, CATEGORY_NAMES } from '@/types/search';
 
@@ -30,11 +30,11 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
 // Highlight matching text in result
 const highlightText = (text: string, query: string): React.ReactNode => {
   if (!query.trim()) return text;
-  
+
   const parts = text.split(new RegExp(`(${query})`, 'gi'));
   return (
     <>
-      {parts.map((part, i) => 
+      {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
           <mark key={i} className="bg-[hsl(var(--primary))]/20 text-[hsl(var(--primary))] px-0.5 rounded">
             {part}
@@ -193,7 +193,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
           </div>
         );
       })}
-      
+
       {/* Invisible element to trigger infinite scroll */}
       <div ref={loadMoreRef} className="h-1" />
     </div>

@@ -407,6 +407,11 @@ class UniversalSearchService:
         if not query or not text:
             return 0.0
         
+        # Normalize Arabic text for both query and text to ensure consistent matching
+        if self.arabic_processor.is_arabic_text(query) or self.arabic_processor.is_arabic_text(text):
+            query = self.arabic_processor.normalize_arabic_text(query)
+            text = self.arabic_processor.normalize_arabic_text(text)
+        
         query = query.lower()
         text = text.lower()
         
@@ -455,6 +460,15 @@ class UniversalSearchService:
                     subtitle=f"Grade {student.grade_level or 'N/A'} - {getattr(student, 'session_type', 'N/A')}",
                     description=f"Phone: {phone or 'N/A'}",
                     relevance_score=relevance_score,
+                    data={
+                        "grade_level": getattr(student, 'grade_level', None),
+                        "grade_number": getattr(student, 'grade_number', None),
+                        "section": getattr(student, 'section', None),
+                        "session_type": getattr(student, 'session_type', None),
+                        "full_name": full_name,
+                        "father_phone": getattr(student, 'father_phone', None),
+                        "mother_phone": getattr(student, 'mother_phone', None),
+                    },
                     academic_year_id=getattr(student, 'academic_year_id', None),
                     session_type=getattr(student, 'session_type', None),
                     is_active=getattr(student, 'is_active', True),
@@ -462,15 +476,7 @@ class UniversalSearchService:
                     updated_at=getattr(student, 'updated_at', None),
                     url=f"/students/{student.id}",
                     category="Students",
-                    tags=["student", str(student.grade_level) if student.grade_level else "N/A"],
-                    data={
-                        "grade_level": getattr(student, 'grade_level', None),
-                        "grade_number": getattr(student, 'grade_number', None),
-                        "section": getattr(student, 'section', None),
-                        "full_name": full_name,
-                        "father_phone": getattr(student, 'father_phone', None),
-                        "mother_phone": getattr(student, 'mother_phone', None),
-                    }
+                    tags=["student", str(student.grade_level) if student.grade_level else "N/A"]
                 ))
         
         return results, scanned
@@ -1798,6 +1804,9 @@ def transform_search_results_for_frontend(results: Dict) -> Dict:
         
         # Add type-specific fields
         if result_type == "student":
+            # Get data from result's data field (includes grade_number, grade_level, etc.)
+            data = result.get("data", {})
+            
             # Extract student-specific information from subtitle and description
             subtitle = result.get("subtitle", "")
             if "Grade" in subtitle:
@@ -1805,6 +1814,16 @@ def transform_search_results_for_frontend(results: Dict) -> Dict:
                 if len(parts) >= 2:
                     result_data["grade"] = parts[0].replace("Grade ", "")
                     result_data["session"] = parts[1]
+            
+            # Add detailed grade information from data field
+            if data.get("grade_number"):
+                result_data["grade_number"] = data["grade_number"]
+            if data.get("grade_level"):
+                result_data["grade_level"] = data["grade_level"]
+            if data.get("section"):
+                result_data["section"] = data["section"]
+            if data.get("session_type"):
+                result_data["session_type"] = data["session_type"]
             
             # Add to current students
             transformed["students"]["current"].append(result_data)

@@ -14,6 +14,7 @@ from app.schemas.students import (
 from app.core.dependencies import get_current_user, get_school_user
 from app.models.users import User
 from app.utils.history_helper import log_student_action, log_finance_action
+from app.services.analytics_service import CacheManager
 
 router = APIRouter()
 
@@ -137,6 +138,10 @@ async def create_student(
     db.commit()
     db.refresh(new_student)
     
+    # Invalidate related caches
+    CacheManager.invalidate_analytics('overview')
+    CacheManager.invalidate_analytics('distribution')
+    
     # Log history
     log_student_action(
         db=db,
@@ -188,6 +193,10 @@ async def update_student(
     db.commit()
     db.refresh(student)
     
+    # Invalidate related caches
+    CacheManager.invalidate_analytics('overview')
+    CacheManager.invalidate_analytics('distribution')
+    
     # Log history
     log_student_action(
         db=db,
@@ -216,6 +225,10 @@ async def deactivate_student(
     
     student.is_active = False
     db.commit()
+    
+    # Invalidate related caches
+    CacheManager.invalidate_analytics('overview')
+    CacheManager.invalidate_analytics('distribution')
     
     # Log history
     log_student_action(
@@ -355,6 +368,10 @@ async def create_student_academic(
     db.commit()
     db.refresh(new_academic)
     
+    # Invalidate academic-related caches
+    CacheManager.invalidate_analytics('grades')
+    CacheManager.invalidate_analytics('academic')
+    
     # Get student info for logging
     student = db.query(Student).filter(Student.id == student_id).first()
     
@@ -398,6 +415,10 @@ async def update_student_academic(
     
     db.commit()
     db.refresh(academic)
+    
+    # Invalidate academic-related caches
+    CacheManager.invalidate_analytics('grades')
+    CacheManager.invalidate_analytics('academic')
     
     # Get student info for logging
     student = db.query(Student).filter(Student.id == student_id).first()

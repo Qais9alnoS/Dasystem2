@@ -10,13 +10,13 @@ interface StudentFinanceCardProps {
   className?: string;
 }
 
-export const StudentFinanceCard: React.FC<StudentFinanceCardProps> = ({ 
-  student, 
-  onClick, 
-  className = '' 
+export const StudentFinanceCard: React.FC<StudentFinanceCardProps> = ({
+  student,
+  onClick,
+  className = ''
 }) => {
   const hasBalance = student.has_outstanding_balance;
-  
+
   const getGradeLabel = (level: string, number: number) => {
     const levelMap: Record<string, string> = {
       'primary': 'ابتدائي',
@@ -31,7 +31,7 @@ export const StudentFinanceCard: React.FC<StudentFinanceCardProps> = ({
   };
 
   return (
-    <Card 
+    <Card
       className={`ios-card hover:shadow-md transition-all duration-200 cursor-pointer border-r-4 ${
         hasBalance ? 'border-r-red-500' : 'border-r-green-500'
       } ${className}`}
@@ -51,20 +51,20 @@ export const StudentFinanceCard: React.FC<StudentFinanceCardProps> = ({
                 <CheckCircle className="w-4 h-4 text-green-500" />
               )}
             </div>
-            
+
             <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
               <div className="flex items-center gap-2">
                 <User className="w-3.5 h-3.5" />
                 <span>{student.father_name}</span>
               </div>
-              
+
               {(student.father_phone || student.mother_phone) && (
                 <div className="flex items-center gap-2">
                   <Phone className="w-3.5 h-3.5" />
                   <span>{student.father_phone || student.mother_phone}</span>
                 </div>
               )}
-              
+
               <div className="flex gap-2 mt-2">
                 <Badge variant="outline" className="text-xs">
                   {getGradeLabel(student.grade_level, student.grade_number)}

@@ -40,7 +40,7 @@ export const StudentRegistrationForm = () => {
                 academic_year_id: 1, // This should be dynamically set based on current academic year
                 is_active: true
             });
-            
+
             if (response.success) {
                 toast({
                     title: "نجاح",

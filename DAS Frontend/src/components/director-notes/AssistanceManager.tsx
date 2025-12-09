@@ -16,18 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { directorApi } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
-
-interface AssistanceRecord {
-  id: number;
-  academic_year_id: number;
-  title: string;
-  assistance_date: string;
-  organization: string;
-  amount: number;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { AssistanceRecord } from '@/types/school';
 
 const AssistanceManager: React.FC = () => {
   const navigate = useNavigate();
@@ -37,7 +26,7 @@ const AssistanceManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AssistanceRecord | null>(null);
-  
+
   const [formData, setFormData] = useState({
     title: '',
     assistance_date: new Date().toISOString().split('T')[0],
@@ -62,7 +51,7 @@ const AssistanceManager: React.FC = () => {
         setRecords(response.data);
       }
     } catch (error) {
-      console.error('Error fetching assistance records:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل المساعدات',
@@ -114,7 +103,7 @@ const AssistanceManager: React.FC = () => {
       resetForm();
       fetchRecords();
     } catch (error) {
-      console.error('Error saving assistance record:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في حفظ المساعدة',
@@ -143,7 +132,7 @@ const AssistanceManager: React.FC = () => {
       toast({ title: 'نجاح', description: 'تم حذف المساعدة' });
       fetchRecords();
     } catch (error) {
-      console.error('Error deleting assistance record:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في حذف المساعدة',
@@ -183,7 +172,7 @@ const AssistanceManager: React.FC = () => {
           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Heart className="h-8 w-8 text-red-500" />
+              <Heart className="h-8 w-8 text-destructive" />
               المساعدات
             </h1>
             <p className="text-muted-foreground">إدارة المساعدات والدعم المقدم</p>

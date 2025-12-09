@@ -14,6 +14,7 @@ from ..models.users import User
 from ..models.activities import Activity, ActivityRegistration
 from ..models.students import HistoricalBalance
 from ..models.director import Reward, AssistanceRecord
+from ..models.academic import AcademicYear
 from ..services.balance_transfer_service import BalanceTransferService
 from ..schemas.finance import (
     FinanceTransactionCreate, FinanceTransactionUpdate, FinanceTransactionResponse,
@@ -1730,8 +1731,10 @@ async def add_card_transaction(
     if not card:
         raise HTTPException(status_code=404, detail="Finance card not found")
     
-    transaction_data.card_id = card_id
-    new_transaction = FinanceCardTransaction(**transaction_data.dict())
+    # Add card_id to the transaction data
+    transaction_dict = transaction_data.dict()
+    transaction_dict['card_id'] = card_id
+    new_transaction = FinanceCardTransaction(**transaction_dict)
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)
@@ -1744,10 +1747,10 @@ async def add_card_transaction(
         entity_type="finance_card_transaction",
         entity_id=new_transaction.id,
         entity_name=f"{transaction_type} في {card.card_name}",
-        description=f"معاملة في الصندوق ({transaction_type}): {new_transaction.amount:,.0f} ل.س - {new_transaction.description}",
+        description=f"معاملة في الصندوق ({transaction_type}): {new_transaction.amount:,.0f} ل.س - {new_transaction.notes or 'بدون ملاحظات'}",
         current_user=current_user,
         amount=float(new_transaction.amount),
-        new_values={"type": transaction_type, "amount": float(new_transaction.amount), "category": new_transaction.category}
+        new_values={"type": transaction_type, "amount": float(new_transaction.amount), "payer_name": new_transaction.payer_name}
     )
     return new_transaction
 
@@ -2037,4 +2040,149 @@ async def get_filter_options(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch filter options: {str(e)}"
+        )
+
+@router.get("/analytics/income-completion")
+async def get_income_completion_stats(
+    academic_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get completed vs incomplete income statistics for donut chart"""
+    try:
+        # Get all finance cards for this academic year
+        cards = db.query(FinanceCard).filter(
+            FinanceCard.academic_year_id == academic_year_id
+        ).all()
+        
+        if not cards:
+            return {"completed_income": 0, "incomplete_income": 0}
+        
+        # Get all transactions for these cards
+        card_ids = [card.id for card in cards]
+        transactions = db.query(FinanceCardTransaction).filter(
+            FinanceCardTransaction.card_id.in_(card_ids),
+            FinanceCardTransaction.transaction_type == "income"
+        ).all()
+        
+        # Calculate completed and incomplete income
+        completed_income = Decimal("0")
+        incomplete_income = Decimal("0")
+        
+        for transaction in transactions:
+            if transaction.is_completed:
+                completed_income += transaction.amount
+            else:
+                incomplete_income += transaction.amount
+        
+        return {
+            "completed_income": float(completed_income),
+            "incomplete_income": float(incomplete_income)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch income completion stats: {str(e)}"
+        )
+
+@router.get("/analytics/transactions-by-period")
+async def get_transactions_by_period(
+    academic_year_id: int = Query(...),
+    period_type: str = Query(..., regex="^(weekly|monthly|yearly)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_finance_user)
+):
+    """Get all finance card transactions aggregated by time period (weekly, monthly, or yearly)"""
+    from datetime import timedelta
+    from collections import defaultdict
+    
+    try:
+        # Get academic year info for yearly aggregation
+        academic_year = db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first()
+        if not academic_year:
+            raise HTTPException(status_code=404, detail="Academic year not found")
+        
+        # Get all finance cards for this academic year
+        cards = db.query(FinanceCard).filter(
+            FinanceCard.academic_year_id == academic_year_id
+        ).all()
+        
+        if not cards:
+            return {"periods": [], "income_data": [], "expense_data": []}
+        
+        # Get all transactions for these cards
+        card_ids = [card.id for card in cards]
+        transactions = db.query(FinanceCardTransaction).filter(
+            FinanceCardTransaction.card_id.in_(card_ids)
+        ).order_by(FinanceCardTransaction.transaction_date).all()
+        
+        if not transactions:
+            return {"periods": [], "income_data": [], "expense_data": []}
+        
+        # Aggregate by period
+        period_data = defaultdict(lambda: {"income": Decimal("0"), "expense": Decimal("0")})
+        
+        for transaction in transactions:
+            trans_date = transaction.transaction_date
+            amount = transaction.amount
+            
+            if period_type == "weekly":
+                # Get ISO week number
+                year, week, _ = trans_date.isocalendar()
+                # Format: "2024-W01"
+                period_key = f"{year}-W{week:02d}"
+                # For display: "الأسبوع 1 - كانون الثاني 2024"
+                month_name = trans_date.strftime("%B %Y")
+                period_label = f"الأسبوع {week}"
+                
+            elif period_type == "monthly":
+                # Format: "2024-01"
+                period_key = trans_date.strftime("%Y-%m")
+                # For display: Arabic month name and year
+                import calendar
+                month_names_ar = {
+                    1: "كانون الثاني", 2: "شباط", 3: "آذار", 4: "نيسان",
+                    5: "أيار", 6: "حزيران", 7: "تموز", 8: "آب",
+                    9: "أيلول", 10: "تشرين الأول", 11: "تشرين الثاني", 12: "كانون الأول"
+                }
+                period_label = f"{month_names_ar[trans_date.month]} {trans_date.year}"
+                
+            else:  # yearly
+                # Use academic year format
+                period_key = str(academic_year_id)
+                period_label = academic_year.year_name  # e.g., "2024-2025"
+            
+            # Aggregate amounts
+            if transaction.transaction_type == "income":
+                period_data[period_key]["income"] += amount
+                period_data[period_key]["label"] = period_label
+            elif transaction.transaction_type == "expense":
+                period_data[period_key]["expense"] += amount
+                period_data[period_key]["label"] = period_label
+        
+        # Sort periods chronologically
+        sorted_periods = sorted(period_data.keys())
+        
+        # Build response
+        periods = []
+        income_data = []
+        expense_data = []
+        
+        for period_key in sorted_periods:
+            data = period_data[period_key]
+            periods.append(data.get("label", period_key))
+            income_data.append(float(data["income"]))
+            expense_data.append(float(data["expense"]))
+        
+        return {
+            "periods": periods,
+            "income_data": income_data,
+            "expense_data": expense_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch transaction analytics: {str(e)}"
         )

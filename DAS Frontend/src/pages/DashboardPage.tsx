@@ -6,27 +6,43 @@ import {
   SessionComparisonCard,
   FinancialSummaryCard,
   QuickActionsPanel,
-  AttendanceTrendsCard,
   FinanceTrendsCard,
   AcademicPerformanceCard,
   StudentDistributionCard,
   SessionFilter,
   PeriodFilter
 } from '@/components/dashboard';
+import FinanceAnalyticsDashboard from '@/components/analytics/FinanceAnalyticsDashboard';
+import SchoolGradesChart from '@/components/dashboard/SchoolGradesChart';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
-import '../utils/attendanceDebugger'; // Load debugger utility
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { Calendar } from 'lucide-react';
+import { Calendar, LayoutDashboard, GraduationCap } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { state: authState } = useAuth();
-  const [sessionFilter, setSessionFilter] = useState<SessionFilter>('both');
+  const userRole = authState.user?.role;
+
+  // Set initial session filter based on role
+  const getInitialSessionFilter = (): SessionFilter => {
+    if (userRole === 'morning_school') return 'morning';
+    if (userRole === 'evening_school') return 'evening';
+    return 'both';
+  };
+
+  const [sessionFilter, setSessionFilter] = useState<SessionFilter>(getInitialSessionFilter());
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('monthly');
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [academicYearId, setAcademicYearId] = useState<number>(1);
+  const [academicYearName, setAcademicYearName] = useState<string>('');
+
+  // Check if user is director or finance
+  const isDirector = userRole === 'director';
+  const isFinance = userRole === 'finance';
+  const isMorningSchool = userRole === 'morning_school';
+  const isEveningSchool = userRole === 'evening_school';
 
   // Dashboard data state
   const [dashboardData, setDashboardData] = useState<any>({
@@ -35,8 +51,7 @@ export const DashboardPage: React.FC = () => {
       teachers: { morning: 0, evening: 0, total: 0 },
       classes: { morning: 0, evening: 0, total: 0 },
       activities: 0,
-      netProfit: 0,
-      attendanceRate: 0
+      netProfit: 0
     },
     sessionData: {
       morning: { students: 0, teachers: 0, classes: 0 },
@@ -73,31 +88,41 @@ export const DashboardPage: React.FC = () => {
     setLoading(true);
     try {
       const storedYearId = localStorage.getItem('selected_academic_year_id');
+      const storedYearName = localStorage.getItem('selected_academic_year_name');
       const yearId = storedYearId ? parseInt(storedYearId) : 1;
       setAcademicYearId(yearId);
-      
+      if (storedYearName) {
+        setAcademicYearName(storedYearName);
+      }
+
       // Build query parameters
       const params: Record<string, string> = {
         academic_year_id: yearId.toString(),
         period_type: periodFilter
       };
-      
+
       // Only add session_type if a specific session is selected (not 'both')
       if (sessionFilter !== 'both') {
         params.session_type = sessionFilter;
       }
-      
+
       const queryParams = new URLSearchParams(params).toString();
 
       // When viewing both sessions, we need to fetch attendance data separately for morning and evening
       const promises = [
         api.get(`/analytics/overview?${queryParams}`),
         api.get(`/analytics/students/distribution?${queryParams}`),
-        api.get(`/analytics/finance/overview?${queryParams}`),
-        api.get(`/analytics/finance/income-trends?${queryParams}`),
-        api.get(`/analytics/finance/expense-trends?${queryParams}`),
         api.get(`/analytics/academic/performance?${queryParams}`)
       ];
+
+      // Only fetch finance data for directors (morning/evening school users don't have permission)
+      if (isDirector) {
+        promises.push(
+          api.get(`/analytics/finance/overview?${queryParams}`),
+          api.get(`/analytics/finance/income-trends?${queryParams}`),
+          api.get(`/analytics/finance/expense-trends?${queryParams}`)
+        );
+      }
 
       // Add attendance API calls
       if (sessionFilter === 'both') {
@@ -114,27 +139,44 @@ export const DashboardPage: React.FC = () => {
       }
 
       const results = await Promise.all(promises);
-      
-      const [
-        overviewRes, 
-        distributionRes, 
-        financialRes, 
-        incomeRes,
-        expenseRes,
-        academicRes
-      ] = results.slice(0, 6);
 
-      // Handle attendance data based on session filter (not used, keeping for compatibility)
-      let attendanceRes = results[6];
+      let overviewRes, distributionRes, academicRes, financialRes, incomeRes, expenseRes;
+
+      if (isDirector) {
+        [
+          overviewRes,
+          distributionRes,
+          academicRes,
+          financialRes,
+          incomeRes,
+          expenseRes
+        ] = results.slice(0, 6);
+      } else {
+        [
+          overviewRes,
+          distributionRes,
+          academicRes
+        ] = results.slice(0, 3);
+        // Set empty finance data for non-directors
+        financialRes = { data: { data: { summary: {}, collection: {} } } };
+        incomeRes = { data: null };
+        expenseRes = { data: null };
+      }
+
+      // Handle attendance data based on session filter
+      const attendanceStartIndex = isDirector ? 6 : 3;
+      let attendanceRes = results[attendanceStartIndex];
 
       // Process and set data
-      const overview = overviewRes.data as any || {};
-      const financial = financialRes.data as any || {};
+      const overview = (overviewRes.data as any) || {};
+      // financialRes.data has shape { success, data: { summary, collection, ... } }
+      const financialWrapper = (financialRes.data as any) || {};
+      const financial = financialWrapper.data || financialWrapper;
       let attendance: any;
 
       if (sessionFilter === 'both') {
-        const morningAttendanceRes = results[6];
-        const eveningAttendanceRes = results[7];
+        const morningAttendanceRes = results[attendanceStartIndex];
+        const eveningAttendanceRes = results[attendanceStartIndex + 1];
         const morningData = morningAttendanceRes.data as any || {};
         const eveningData = eveningAttendanceRes.data as any || {};
 
@@ -144,10 +186,10 @@ export const DashboardPage: React.FC = () => {
 
         // Create a map of dates with both morning and evening rates
         const dateMap = new Map();
-        
+
         morningAttendance.forEach((record: any) => {
-          dateMap.set(record.date, { 
-            date: record.date, 
+          dateMap.set(record.date, {
+            date: record.date,
             morning_rate: record.attendance_rate,
             morning_total: record.total,
             morning_present: record.present,
@@ -174,7 +216,7 @@ export const DashboardPage: React.FC = () => {
         });
 
         attendance = {
-          student_attendance: Array.from(dateMap.values()).sort((a, b) => 
+          student_attendance: Array.from(dateMap.values()).sort((a, b) =>
             new Date(a.date).getTime() - new Date(b.date).getTime()
           ),
           teacher_attendance: morningData.teacher_attendance || eveningData.teacher_attendance || [],
@@ -189,11 +231,6 @@ export const DashboardPage: React.FC = () => {
             [`${sessionFilter}_rate`]: record.attendance_rate
           }));
         }
-      }
-
-      // Debug attendance data (development only)
-      if (process.env.NODE_ENV === 'development' && attendance.student_attendance?.length > 0) {
-        console.log('Attendance Data Sample:', attendance.student_attendance[0]);
       }
 
       setDashboardData({
@@ -214,8 +251,7 @@ export const DashboardPage: React.FC = () => {
             total: overview.total_classes || 0
           },
           activities: overview.total_activities || 0,
-          netProfit: financial.summary?.net_profit || 0,
-          attendanceRate: attendance.overall_rate || 0
+          netProfit: financial.summary?.net_profit || 0
         },
         sessionData: {
           morning: {
@@ -257,57 +293,162 @@ export const DashboardPage: React.FC = () => {
 
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+
     } finally {
       setLoading(false);
     }
   }, [periodFilter, sessionFilter]);
 
-  // Fetch on mount and when filters change - no auto-refresh to avoid annoying reloads
+  // Fetch on mount and when filters change
   useEffect(() => {
     fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Auto-refresh mechanism (always enabled - every 30 seconds)
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchDashboardData();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(intervalId);
   }, [fetchDashboardData]);
 
   const handleRefresh = () => {
     fetchDashboardData();
   };
 
+  // Handle session filter change - prevent changing if locked to specific session
+  const handleSessionChange = (newSession: SessionFilter) => {
+    // Morning/Evening school users cannot change their locked session
+    if (isMorningSchool || isEveningSchool) return;
+    setSessionFilter(newSession);
+  };
+
   // Get current date in Arabic
   const today = new Date();
   const arabicDate = format(today, 'EEEE، dd MMMM yyyy', { locale: ar });
 
-  return (
-    <div className="space-y-3">
-      {/* Page Header with Date */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">لوحة تحكم المدير</h1>
-          <p className="text-sm text-muted-foreground mt-1">نظرة شاملة على جميع جوانب المدرسة</p>
-        </div>
-        
-        {/* Current Date Display */}
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <div className="text-right">
-            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-              اليوم
-            </p>
-            <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
-              {arabicDate}
-            </p>
+  // If finance role, show Finance Analytics Dashboard
+  if (isFinance) {
+    return (
+      <div className="min-h-screen bg-background p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Page Header with Date */}
+          <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+              <LayoutDashboard className="h-8 w-8 text-primary" />
+              لوحة التحكم
+            </h1>
+            <p className="text-muted-foreground mt-1">نظرة شاملة على الأداء المالي للمدرسة</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Academic Year Badge */}
+            {academicYearName && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/30 rounded-lg">
+                <GraduationCap className="h-4 w-4 text-primary" />
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                    العام الدراسي
+                  </p>
+                  <p className="text-sm font-bold text-primary">
+                    {academicYearName}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Current Date Display */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="text-right">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                  اليوم
+                </p>
+                <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
+                  {arabicDate}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Filter Bar */}
-      <DashboardFilterBar
-        sessionFilter={sessionFilter}
-        periodFilter={periodFilter}
-        onSessionChange={setSessionFilter}
-        onPeriodChange={setPeriodFilter}
-        onRefresh={handleRefresh}
-        lastUpdated={lastUpdated}
-      />
+        {/* Quick Actions Panel for Finance */}
+        <QuickActionsPanel
+          loading={loading}
+          academicYearId={academicYearId}
+          sessionFilter="both"
+          userRole="finance"
+        />
+
+        {/* Finance Analytics Dashboard */}
+        <FinanceAnalyticsDashboard compact={false} hideHeader={true} />
+      </div>
+    </div>
+  );
+  }
+
+  return (
+    <div className="min-h-screen bg-background p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Page Header with Date */}
+        <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <LayoutDashboard className="h-8 w-8 text-primary" />
+            لوحة التحكم
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {isDirector ? 'نظرة شاملة على جميع جوانب المدرسة' :
+             isMorningSchool ? 'نظرة شاملة على المدرسة الصباحية' :
+             'نظرة شاملة على المدرسة المسائية'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Academic Year Badge */}
+          {academicYearName && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/30 rounded-lg">
+              <GraduationCap className="h-4 w-4 text-primary" />
+              <div className="text-right">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                  العام الدراسي
+                </p>
+                <p className="text-sm font-bold text-primary">
+                  {academicYearName}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Current Date Display */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <div className="text-right">
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                اليوم
+              </p>
+              <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
+                {arabicDate}
+              </p>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        {/* Filter Bar - Only show for directors */}
+        {isDirector && (
+        <DashboardFilterBar
+          sessionFilter={sessionFilter}
+          periodFilter={periodFilter}
+          onSessionChange={handleSessionChange}
+          onPeriodChange={setPeriodFilter}
+          onRefresh={handleRefresh}
+          lastUpdated={lastUpdated}
+          sessionFilterDisabled={false}
+        />
+      )}
 
       {/* Quick Stats Grid */}
       <QuickStatsGrid
@@ -315,22 +456,24 @@ export const DashboardPage: React.FC = () => {
         teachers={dashboardData.quickStats.teachers}
         classes={dashboardData.quickStats.classes}
         activities={dashboardData.quickStats.activities}
-        netProfit={dashboardData.quickStats.netProfit}
-        attendanceRate={dashboardData.quickStats.attendanceRate}
         sessionFilter={sessionFilter}
         loading={loading}
       />
 
-      {/* Top Row: Quick Actions and History */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        {/* Quick Actions Panel */}
-        <QuickActionsPanel loading={loading} academicYearId={academicYearId} />
-        
-        {/* History Card - Fixed height for internal scrolling */}
+      {/* Quick Actions - Full Width */}
+      <QuickActionsPanel
+        loading={loading}
+        academicYearId={academicYearId}
+        sessionFilter={sessionFilter}
+        userRole={userRole}
+      />
+
+      {/* History Card - Full Width with fixed height for internal scrolling (Director only) */}
+      {isDirector && (
         <div className="h-[500px]">
           <HistoryCard />
         </div>
-      </div>
+      )}
 
       {/* Main Analytics Card - Full Width */}
       <SessionComparisonCard
@@ -342,26 +485,31 @@ export const DashboardPage: React.FC = () => {
         transportData={dashboardData.distribution.by_transportation}
         attendanceData={dashboardData.attendance.students}
         loading={loading}
+        periodFilter={periodFilter}
+        onPeriodChange={setPeriodFilter}
+        academicYearName={academicYearName}
       />
 
-      {/* Financial Summary - Full Width */}
-      <FinancialSummaryCard
-        totalIncome={dashboardData.financial.totalIncome}
-        totalExpenses={dashboardData.financial.totalExpenses}
-        netProfit={dashboardData.financial.netProfit}
-        collectionRate={dashboardData.financial.collectionRate}
-        loading={loading}
+      {/* School Grades Chart - Full Width (علامات الطلاب) */}
+      <SchoolGradesChart
+        academicYearId={academicYearId}
+        sessionFilter={sessionFilter}
       />
 
-      {/* Attendance Trends - Full Width (Only if data) */}
-      {(dashboardData.attendance.students.length > 0 || dashboardData.attendance.teachers.length > 0) && (
-        <AttendanceTrendsCard
-          studentAttendance={dashboardData.attendance.students}
-          teacherAttendance={dashboardData.attendance.teachers}
-          sessionFilter={sessionFilter}
-          loading={loading}
-        />
+      {/* Financial Overview - Embed full financial analytics UI (Director only) */}
+      {isDirector && (
+        <div className="mt-2">
+          <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h2 className="text-lg font-semibold">نظرة مالية شاملة</h2>
+            </div>
+            <div className="p-4">
+              <FinanceAnalyticsDashboard compact hideHeader />
+            </div>
+          </div>
+        </div>
       )}
+      </div>
     </div>
   );
 };

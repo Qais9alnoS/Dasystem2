@@ -22,7 +22,7 @@ class FinancialAnalytics:
     def __init__(self):
         self.time_helper = TimePeriodHelper()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_financial_overview(self, academic_year_id: int, period_type: str = "monthly") -> Dict[str, Any]:
         """Get comprehensive financial analytics"""
         db = SessionLocal()
@@ -89,7 +89,7 @@ class FinancialAnalytics:
         finally:
             db.close()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_income_trends(self, academic_year_id: int, period_type: str = "monthly") -> Dict[str, Any]:
         """Get income trends over time"""
         db = SessionLocal()
@@ -168,7 +168,7 @@ class FinancialAnalytics:
         finally:
             db.close()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_expense_trends(self, academic_year_id: int, period_type: str = "monthly") -> Dict[str, Any]:
         """Get expense trends over time"""
         db = SessionLocal()
@@ -253,7 +253,7 @@ class FinancialAnalytics:
         finally:
             db.close()
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_outstanding_payments(self, academic_year_id: int, limit: int = 50) -> Dict[str, Any]:
         """Get list of students with outstanding payments"""
         db = SessionLocal()
@@ -335,7 +335,7 @@ class FinancialAnalytics:
             }
         }
     
-    @cache_result(ttl_seconds=300)
+    @cache_result(ttl_seconds=60)
     def get_activity_financial_analysis(self, academic_year_id: int) -> Dict[str, Any]:
         """Analyze financial performance of activities"""
         db = SessionLocal()

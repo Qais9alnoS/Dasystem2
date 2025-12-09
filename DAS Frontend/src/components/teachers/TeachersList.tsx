@@ -51,7 +51,7 @@ export const TeachersList: React.FC<TeachersListProps> = ({ searchQuery }) => {
                 // If there's a search query, use the search API
                 if (searchQuery) {
                     const response = await teachersApi.search(searchQuery, (currentPage - 1) * teachersPerPage, teachersPerPage);
-                    
+
                     if (response.success && response.data) {
                         setTeachers(response.data);
                         setTotalTeachers(response.data.length);
@@ -62,16 +62,16 @@ export const TeachersList: React.FC<TeachersListProps> = ({ searchQuery }) => {
                         skip: (currentPage - 1) * teachersPerPage,
                         limit: teachersPerPage
                     });
-                    
+
                     if (response.success && response.data) {
                         setTeachers(response.data);
-                        // For now, we'll set a fixed total. In a real implementation, 
+                        // For now, we'll set a fixed total. In a real implementation,
                         // this would come from the API response pagination info
                         setTotalTeachers(response.data.length);
                     }
                 }
             } catch (error) {
-                console.error('Error fetching teachers:', error);
+
             } finally {
                 setLoading(false);
             }
@@ -103,17 +103,17 @@ export const TeachersList: React.FC<TeachersListProps> = ({ searchQuery }) => {
     };
 
     const handleViewTeacher = (teacher: Teacher) => {
-        console.log('View teacher:', teacher);
+
         // Navigate to teacher details page
     };
 
     const handleEditTeacher = (teacher: Teacher) => {
-        console.log('Edit teacher:', teacher);
+
         // Navigate to edit teacher page
     };
 
     const handleDeleteTeacher = (teacher: Teacher) => {
-        console.log('Delete teacher:', teacher);
+
         // Show confirmation dialog and delete
     };
 
@@ -187,7 +187,9 @@ export const TeachersList: React.FC<TeachersListProps> = ({ searchQuery }) => {
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm">
-                                                {teacher.qualifications || 'غير محدد'}
+                                                {Array.isArray(teacher.qualifications)
+                                                  ? teacher.qualifications.map(q => q.degree).join(', ')
+                                                  : (teacher.qualifications || 'غير محدد')}
                                             </div>
                                         </TableCell>
                                         <TableCell>

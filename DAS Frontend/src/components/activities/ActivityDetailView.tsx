@@ -56,7 +56,7 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
         setRegistrations(response.data);
       }
     } catch (error) {
-      console.error('Error loading registrations:', error);
+
     } finally {
       setLoading(false);
     }
@@ -112,24 +112,19 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <DialogTitle className="text-2xl mb-2">{activity.name}</DialogTitle>
-              <DialogDescription className="sr-only">
-                عرض تفاصيل النشاط الكاملة
-              </DialogDescription>
-              <div className="flex items-center gap-2">
-                <Badge>{getActivityTypeLabel(activity.activity_type)}</Badge>
-                {activity.is_active ? (
-                  <Badge variant="default">نشط</Badge>
-                ) : (
-                  <Badge variant="outline">غير نشط</Badge>
-                )}
-              </div>
+          <div className="flex-1">
+            <DialogTitle className="text-2xl mb-2">{activity.name}</DialogTitle>
+            <DialogDescription className="sr-only">
+              عرض تفاصيل النشاط الكاملة
+            </DialogDescription>
+            <div className="flex items-center gap-2">
+              <Badge>{getActivityTypeLabel(activity.activity_type)}</Badge>
+              {activity.is_active ? (
+                <Badge variant="default">نشط</Badge>
+              ) : (
+                <Badge variant="outline">غير نشط</Badge>
+              )}
             </div>
-            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-              <X className="h-5 w-5" />
-            </Button>
           </div>
         </DialogHeader>
 

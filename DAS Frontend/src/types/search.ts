@@ -2,22 +2,22 @@
  * Universal Search Types - TypeScript interfaces for the universal search system
  */
 
-export type SearchResultType = 
-  | 'student' 
-  | 'teacher' 
-  | 'class' 
-  | 'subject' 
-  | 'activity' 
-  | 'finance' 
+export type SearchResultType =
+  | 'student'
+  | 'teacher'
+  | 'class'
+  | 'subject'
+  | 'activity'
+  | 'finance'
   | 'finance_card'
-  | 'schedule' 
-  | 'director_note' 
+  | 'schedule'
+  | 'director_note'
   | 'academic_year'
   | 'page';
 
 export type SessionType = 'morning' | 'evening' | 'both';
 
-export type SearchScope = 
+export type SearchScope =
   | 'all'
   | 'students'
   | 'teachers'

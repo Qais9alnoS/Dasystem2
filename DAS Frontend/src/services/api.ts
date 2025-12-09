@@ -100,6 +100,16 @@ class ApiClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+    // Check if this is an authentication endpoint (login, register, etc.)
+    const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+
+    // Temporarily suppress console errors for auth endpoints to avoid logging expected 401 errors
+    let originalConsoleError: typeof console.error | null = null;
+    if (isAuthEndpoint) {
+      originalConsoleError = console.error;
+      console.error = () => {}; // Suppress console errors
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -112,13 +122,30 @@ class ApiClient {
 
       clearTimeout(timeoutId);
 
+      // Restore console.error if it was suppressed
+      if (isAuthEndpoint && originalConsoleError) {
+        console.error = originalConsoleError;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        
+
         // Handle authentication errors
         if (response.status === 401) {
+          // For auth endpoints (like login), 401 is expected for wrong credentials
+          // Don't log to console as this is normal behavior
+          if (isAuthEndpoint) {
+            // Return error response without throwing to avoid console error
+            return {
+              success: false,
+              message: errorData?.detail || 'اسم المستخدم أو كلمة المرور غير صحيحة',
+              errors: errorData?.errors,
+              detail: errorData?.detail
+            };
+          }
+
+          // For other endpoints, throw error normally
           // Don't automatically logout - let AuthContext handle it
-          // Only clear and redirect after multiple failed attempts
           throw new ApiError(
             errorData?.detail || 'Authentication required',
             401,
@@ -134,7 +161,7 @@ class ApiClient {
             .map((err: any) => err.msg || err.message)
             .filter(Boolean)
             .join(', ');
-          
+
           throw new ApiError(
             validationMessages || errorData?.detail || 'خطأ في التحقق من البيانات',
             response.status,
@@ -152,7 +179,7 @@ class ApiClient {
       }
 
       const data = await response.json();
-      
+
       // Handle both response formats:
       // 1. Direct data (standard API response)
       // 2. Wrapped response with success/data properties
@@ -175,6 +202,11 @@ class ApiClient {
     } catch (error) {
       clearTimeout(timeoutId);
 
+      // Restore console.error if it was suppressed
+      if (isAuthEndpoint && originalConsoleError) {
+        console.error = originalConsoleError;
+      }
+
       // Retry logic for network errors
       if (attempt < this.retryAttempts && error instanceof TypeError) {
         await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
@@ -190,6 +222,11 @@ class ApiClient {
         0,
         'NETWORK_ERROR'
       );
+    } finally {
+      // Final safety check to restore console.error
+      if (isAuthEndpoint && originalConsoleError && console.error !== originalConsoleError) {
+        console.error = originalConsoleError;
+      }
     }
   }
 
@@ -243,7 +280,7 @@ class ApiClient {
           // If not valid JSON, proceed with sanitization
         }
       }
-      
+
       // Sanitize strings
       return data
         .replace(/</g, '&lt;')
@@ -608,7 +645,7 @@ export const academicYearsApi = {
   initializeFirstYear: async (academicYear: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>) => {
     return apiClient.post<AcademicYear>('/academic/initialize-first-year', academicYear);
   },
-  
+
   updateConfiguration: async (key: string, value: string, config_type: string = "string", description?: string, category?: string) => {
     return apiClient.put<any>(`/advanced/config/${key}`, { value, config_type, description, category });
   },
@@ -858,8 +895,7 @@ export const financeManagerApi = {
     section?: string;
     session_type?: string;
   }) => {
-    console.log('API getStudentsFinance - Raw params:', params);
-    
+
     const filteredParams = Object.entries(params)
       .filter(([key, v]) => {
         // Filter out undefined, null, "all", empty string, and NaN values
@@ -868,12 +904,9 @@ export const financeManagerApi = {
         return true;
       })
       .map(([k, v]) => [k, String(v)]);
-    
-    console.log('API getStudentsFinance - Filtered params:', filteredParams);
-    
+
     const queryString = '?' + new URLSearchParams(filteredParams).toString();
-    console.log('API getStudentsFinance - Query string:', queryString);
-    
+
     return apiClient.get<StudentFinanceSummary[]>(`/finance/manager/students${queryString}`);
   },
 
@@ -943,6 +976,16 @@ export const financeManagerApi = {
 
   deleteCardTransaction: async (transaction_id: number) => {
     return apiClient.delete<void>(`/finance/cards/transactions/${transaction_id}`);
+  },
+
+  // Analytics - Transactions by Period
+  getTransactionsByPeriod: async (academic_year_id: number, period_type: 'weekly' | 'monthly' | 'yearly') => {
+    return apiClient.get<{periods: string[], income_data: number[], expense_data: number[]}>(`/finance/analytics/transactions-by-period?academic_year_id=${academic_year_id}&period_type=${period_type}`);
+  },
+
+  // Analytics - Income Completion Stats
+  getIncomeCompletionStats: async (academic_year_id: number) => {
+    return apiClient.get<{completed_income: number, incomplete_income: number}>(`/finance/analytics/income-completion?academic_year_id=${academic_year_id}`);
   },
 
   // Activities Finance
@@ -1045,12 +1088,12 @@ export const schedulesApi = {
 
   analyzeConflicts: async (academic_year_id: number, session_type: string) => {
     const params = '?' + new URLSearchParams({ academic_year_id: academic_year_id.toString(), session_type }).toString();
-    return apiClient.get<any>(`/schedules/analysis/conflicts${params}`);
+    return apiClient.get<any>(`/schedules/analysis/conflicts/${params}`);
   },
 
   getConstraints: async (academic_year_id?: number) => {
     const params = academic_year_id ? `?academic_year_id=${academic_year_id}` : '';
-    return apiClient.get<ScheduleConstraint[]>(`/schedules/constraints${params}`);
+    return apiClient.get<ScheduleConstraint[]>(`/schedules/constraints/${params}`);
   },
 
   createConstraint: async (constraint: Omit<ScheduleConstraint, 'id' | 'created_at' | 'updated_at'>) => {
@@ -1195,15 +1238,15 @@ export const schedulesApi = {
       academic_year_id: params.academic_year_id.toString(),
       session_type: params.session_type
     });
-    
+
     if (params.class_id !== undefined && params.class_id !== null) {
       queryParams.append('class_id', params.class_id.toString());
     }
-    
+
     if (params.section !== undefined && params.section !== null && params.section !== '') {
       queryParams.append('section', String(params.section));
     }
-    
+
     return apiClient.delete<{
       message: string;
       deleted_count: number;
@@ -1227,7 +1270,7 @@ export const schedulesApi = {
       class_id: params.class_id.toString(),
       section: String(params.section)
     });
-    
+
     return apiClient.delete<{
       message: string;
       deleted_count: number;
@@ -1278,14 +1321,14 @@ export const searchApi = {
     limit?: number;
   }) => {
     const { filters, ...otherParams } = options || {};
-    const searchParams: any = { 
-      query, 
+    const searchParams: any = {
+      query,
       ...otherParams,
       ...(filters?.academic_year_id && { academic_year_id: filters.academic_year_id }),
       ...(filters?.session_type && { session_type: filters.session_type }),
       ...(filters?.include_inactive !== undefined && { include_inactive: filters.include_inactive })
     };
-    
+
     const queryString = '?' + new URLSearchParams(
       Object.entries(searchParams)
         .filter(([_, v]) => v !== undefined && v !== null)
@@ -1530,6 +1573,122 @@ export const directorApi = {
   },
 };
 
+// Analytics API
+export const analyticsApi = {
+  // Overview
+  getOverview: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/overview?${params.toString()}`);
+  },
+
+  // Student Distribution
+  getStudentDistribution: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/students/distribution?${params.toString()}`);
+  },
+
+  // Finance Overview
+  getFinanceOverview: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/finance/overview?${params.toString()}`);
+  },
+
+  // Income Trends
+  getIncomeTrends: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/finance/income-trends?${params.toString()}`);
+  },
+
+  // Expense Trends
+  getExpenseTrends: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/finance/expense-trends?${params.toString()}`);
+  },
+
+  // Attendance Data
+  getAttendance: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/attendance?${params.toString()}`);
+  },
+
+  // Academic Performance
+  getAcademicPerformance: async (academic_year_id: number, period_type: string = 'monthly', session_type?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString(), period_type });
+    if (session_type && session_type !== 'both') {
+      params.append('session_type', session_type);
+    }
+    return apiClient.get<any>(`/analytics/academic/performance?${params.toString()}`);
+  },
+
+  // School Grades (New endpoint for the grades table)
+  getSchoolGrades: async (academic_year_id: number, subject?: string) => {
+    const params = new URLSearchParams({ academic_year_id: academic_year_id.toString() });
+    if (subject && subject !== 'all') {
+      params.append('subject', subject);
+    }
+    return apiClient.get<any>(`/analytics/grades/school-wide?${params.toString()}`);
+  },
+
+  // Student Attendance Trend (weekly or monthly)
+  getStudentAttendanceTrend: async (student_id: number, academic_year_id: number, period_type: 'weekly' | 'monthly' = 'weekly') => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString(),
+      period_type
+    });
+    return apiClient.get<any>(`/analytics/students/${student_id}/attendance-trend?${params.toString()}`);
+  },
+
+  // Student Grades Timeline
+  getStudentGradesTimeline: async (student_id: number, academic_year_id: number) => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString()
+    });
+    return apiClient.get<any>(`/analytics/students/${student_id}/grades-timeline?${params.toString()}`);
+  },
+
+  // Student Grades by Subject
+  getStudentGradesBySubject: async (student_id: number, academic_year_id: number) => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString()
+    });
+    return apiClient.get<any>(`/analytics/students/${student_id}/grades-by-subject?${params.toString()}`);
+  },
+
+  // Student Financial Summary
+  getStudentFinancialSummary: async (student_id: number, academic_year_id: number) => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString()
+    });
+    return apiClient.get<any>(`/analytics/students/${student_id}/financial-summary?${params.toString()}`);
+  },
+
+  // Student Behavior Records
+  getStudentBehaviorRecords: async (student_id: number, academic_year_id: number) => {
+    const params = new URLSearchParams({
+      academic_year_id: academic_year_id.toString()
+    });
+    return apiClient.get<any>(`/analytics/students/${student_id}/behavior-records?${params.toString()}`);
+  },
+};
+
 // History API
 export const historyApi = {
   getHistory: async (filters?: HistoryFilters) => {
@@ -1634,6 +1793,7 @@ export const api = {
   financeManager: financeManagerApi,
   monitoring: monitoringApi,
   director: directorApi,
+  analytics: analyticsApi,
   files: filesApi,
   history: historyApi,
 };

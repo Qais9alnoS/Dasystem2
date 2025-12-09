@@ -7,16 +7,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { activitiesApi } from '@/services/api';
 import { Activity } from '@/types/school';
 import { ActivityFormDialog } from '@/components/activities/ActivityFormDialog';
 import { ParticipantSelectionDialog } from '@/components/activities/ParticipantSelectionDialog';
 import { ActivityDetailView } from '@/components/activities/ActivityDetailView';
-import { 
-  Plus, 
-  Search, 
-  Grid3x3, 
-  List, 
+import {
+  Plus,
+  Search,
+  Grid3x3,
+  List,
   Calendar,
   Users,
   DollarSign,
@@ -25,7 +26,8 @@ import {
   Edit,
   Trash2,
   Eye,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 
 const ActivitiesManagementPage: React.FC = () => {
@@ -35,6 +37,9 @@ const ActivitiesManagementPage: React.FC = () => {
   // State
   const [activeTab, setActiveTab] = useState<'activities' | 'reports'>('activities');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const viewModeContainerRef = React.useRef<HTMLDivElement>(null);
+  const [viewModeIndicatorStyle, setViewModeIndicatorStyle] = useState<React.CSSProperties>({});
+  const [viewModeInitialized, setViewModeInitialized] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +62,36 @@ const ActivitiesManagementPage: React.FC = () => {
       }
     }
   }, []);
+
+  // Update view mode indicator position
+  useEffect(() => {
+    const updateViewModeIndicator = () => {
+      if (!viewModeContainerRef.current) return;
+
+      const activeButton = viewModeContainerRef.current.querySelector(`[data-view="${viewMode}"]`) as HTMLElement;
+      if (activeButton) {
+        const containerRect = viewModeContainerRef.current.getBoundingClientRect();
+        const activeRect = activeButton.getBoundingClientRect();
+
+        setViewModeIndicatorStyle({
+          left: `${activeRect.left - containerRect.left}px`,
+          width: `${activeRect.width}px`,
+          opacity: 1,
+        });
+
+        if (!viewModeInitialized) {
+          setViewModeInitialized(true);
+        }
+      }
+    };
+
+    updateViewModeIndicator();
+    window.addEventListener('resize', updateViewModeIndicator);
+
+    return () => {
+      window.removeEventListener('resize', updateViewModeIndicator);
+    };
+  }, [viewMode, viewModeInitialized]);
 
   // Check if we should open add dialog from navigation state
   useEffect(() => {
@@ -95,7 +130,7 @@ const ActivitiesManagementPage: React.FC = () => {
         setActivities(response.data);
       }
     } catch (error) {
-      console.error('Error fetching activities:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل النشاطات',
@@ -158,7 +193,7 @@ const ActivitiesManagementPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error saving activity:', error);
+
       throw error;
     }
   };
@@ -207,37 +242,39 @@ const ActivitiesManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="p-4 space-y-4">
-          {/* Title and Add Button */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">إدارة النشاطات</h1>
-              <p className="text-sm text-muted-foreground">
-                إدارة النشاطات المدرسية والفعاليات
-              </p>
-            </div>
-            <Button size="lg" className="gap-2" onClick={handleAddActivity}>
-              <Plus className="h-5 w-5" />
-              نشاط جديد
-            </Button>
+    <div className="min-h-screen bg-background p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <Sparkles className="h-8 w-8 text-primary" />
+              إدارة النشاطات
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              إدارة النشاطات المدرسية والفعاليات
+            </p>
           </div>
+          <Button className="gap-2" onClick={handleAddActivity}>
+            <Plus className="h-5 w-5" />
+            نشاط جديد
+          </Button>
+        </div>
 
-          {/* Tabs */}
-          <SegmentedControl
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as 'activities' | 'reports')}
-            options={[
-              { value: 'activities', label: 'النشاطات' },
-              { value: 'reports', label: 'التقارير' },
-            ]}
-          />
+        {/* Tabs */}
+        <SegmentedControl
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as 'activities' | 'reports')}
+          options={[
+            { value: 'activities', label: 'النشاطات' },
+            { value: 'reports', label: 'التقارير' },
+          ]}
+        />
 
-          {/* Filters - Only show on activities tab */}
-          {activeTab === 'activities' && (
-            <div className="space-y-3">
+        {/* Filters - Only show on activities tab */}
+        {activeTab === 'activities' && (
+          <Card className="ios-card">
+            <CardContent className="pt-6 space-y-3">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -288,30 +325,50 @@ const ActivitiesManagementPage: React.FC = () => {
                   </SelectContent>
                 </Select>
 
-                <div className="mr-auto flex gap-1">
+                <div ref={viewModeContainerRef} className="mr-auto relative flex gap-1 bg-muted p-1 rounded-lg">
+                  {/* Animated indicator blob */}
+                  <div
+                    className="absolute h-[calc(100%-8px)] top-1 rounded-md bg-primary shadow-sm transition-all duration-300 ease-out pointer-events-none z-0"
+                    style={{
+                      ...viewModeIndicatorStyle,
+                      opacity: viewModeInitialized ? viewModeIndicatorStyle.opacity : 0,
+                    }}
+                  />
                   <Button
-                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    data-view="grid"
+                    variant="ghost"
                     size="icon"
                     onClick={() => setViewMode('grid')}
+                    className={cn(
+                      "relative z-10 transition-colors duration-200 hover:bg-transparent",
+                      viewMode === 'grid'
+                        ? "text-primary-foreground hover:text-primary-foreground/90"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
                     <Grid3x3 className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    data-view="list"
+                    variant="ghost"
                     size="icon"
                     onClick={() => setViewMode('list')}
+                    className={cn(
+                      "relative z-10 transition-colors duration-200 hover:bg-transparent",
+                      viewMode === 'list'
+                        ? "text-primary-foreground hover:text-primary-foreground/90"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
                     <List className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+        {/* Content */}
         {activeTab === 'activities' ? (
           loading ? (
             <div className="flex items-center justify-center h-64">
@@ -340,7 +397,19 @@ const ActivitiesManagementPage: React.FC = () => {
               }
             >
               {filteredActivities.map((activity) => (
-                <Card key={activity.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                <Card
+                  key={activity.id}
+                  className="ios-card hover:shadow-md transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-primary"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleViewDetails(activity)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleViewDetails(activity);
+                    }
+                  }}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -355,11 +424,6 @@ const ActivitiesManagementPage: React.FC = () => {
                             <Badge variant="outline">غير نشط</Badge>
                           )}
                         </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(activity)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -400,11 +464,27 @@ const ActivitiesManagementPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => handleEditActivity(activity)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleEditActivity(activity);
+                        }}
+                      >
                         <Edit className="h-4 w-4 ml-1" />
                         تعديل
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => handleManageParticipants(activity)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleManageParticipants(activity);
+                        }}
+                      >
                         <Users className="h-4 w-4 ml-1" />
                         المشاركون
                       </Button>
@@ -416,7 +496,7 @@ const ActivitiesManagementPage: React.FC = () => {
           )
         ) : (
           // Reports Tab
-          <Card>
+          <Card className="ios-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
@@ -434,48 +514,48 @@ const ActivitiesManagementPage: React.FC = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Activity Form Dialog */}
+        {selectedAcademicYear && (
+          <ActivityFormDialog
+            open={formDialogOpen}
+            onOpenChange={setFormDialogOpen}
+            activity={selectedActivity}
+            academicYearId={selectedAcademicYear}
+            onSave={handleSaveActivity}
+          />
+        )}
+
+        {/* Participants Selection Dialog */}
+        {selectedAcademicYear && selectedActivity && (
+          <ParticipantSelectionDialog
+            open={participantsDialogOpen}
+            onOpenChange={setParticipantsDialogOpen}
+            activity={selectedActivity}
+            academicYearId={selectedAcademicYear}
+            onSave={() => {
+              fetchActivities();
+            }}
+          />
+        )}
+
+        {/* Activity Detail View */}
+        {selectedActivity && (
+          <ActivityDetailView
+            open={detailViewOpen}
+            onOpenChange={setDetailViewOpen}
+            activity={selectedActivity}
+            onEdit={() => {
+              setDetailViewOpen(false);
+              handleEditActivity(selectedActivity);
+            }}
+            onManageParticipants={() => {
+              setDetailViewOpen(false);
+              handleManageParticipants(selectedActivity);
+            }}
+          />
+        )}
       </div>
-
-      {/* Activity Form Dialog */}
-      {selectedAcademicYear && (
-        <ActivityFormDialog
-          open={formDialogOpen}
-          onOpenChange={setFormDialogOpen}
-          activity={selectedActivity}
-          academicYearId={selectedAcademicYear}
-          onSave={handleSaveActivity}
-        />
-      )}
-
-      {/* Participants Selection Dialog */}
-      {selectedAcademicYear && selectedActivity && (
-        <ParticipantSelectionDialog
-          open={participantsDialogOpen}
-          onOpenChange={setParticipantsDialogOpen}
-          activity={selectedActivity}
-          academicYearId={selectedAcademicYear}
-          onSave={() => {
-            fetchActivities();
-          }}
-        />
-      )}
-
-      {/* Activity Detail View */}
-      {selectedActivity && (
-        <ActivityDetailView
-          open={detailViewOpen}
-          onOpenChange={setDetailViewOpen}
-          activity={selectedActivity}
-          onEdit={() => {
-            setDetailViewOpen(false);
-            handleEditActivity(selectedActivity);
-          }}
-          onManageParticipants={() => {
-            setDetailViewOpen(false);
-            handleManageParticipants(selectedActivity);
-          }}
-        />
-      )}
     </div>
   );
 };

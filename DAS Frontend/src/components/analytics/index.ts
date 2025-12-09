@@ -13,9 +13,7 @@ export { default as MetricCard } from './MetricCard';
 export { default as TimePeriodToggle } from './TimePeriodToggle';
 
 // Dashboard Components
-export { default as AnalyticsDashboard } from './AnalyticsDashboard';
 export { default as FinanceAnalyticsDashboard } from './FinanceAnalyticsDashboard';
-export { default as DirectorAnalyticsDashboard } from './DirectorAnalyticsDashboard';
 export { default as StudentAnalyticsPage } from './StudentAnalyticsPage';
 
 // Theme Configuration

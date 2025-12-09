@@ -41,7 +41,7 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
           setIsFirstRun((response as any).is_first_run);
         }
       } catch (error) {
-        console.error('Error checking first run status:', error);
+
         toast({
           title: "خطأ",
           description: "فشل التحقق من حالة التشغيل الأول",
@@ -57,7 +57,7 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.year_name.trim()) {
       toast({
         title: "خطأ",
@@ -94,23 +94,25 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
         if (resultData.id) {
           localStorage.setItem('selected_academic_year_id', resultData.id.toString());
           localStorage.setItem('selected_academic_year_name', resultData.year_name);
+          // Dispatch custom event to notify other components
+          window.dispatchEvent(new Event('academicYearChanged'));
         }
 
         toast({
           title: "نجح",
           description: "تم إنشاء السنة الدراسية الأولى بنجاح"
         });
-        
+
         // Mark first run as complete
         localStorage.setItem('first_run_completed', 'true');
-        
+
         // Call onComplete callback to indicate setup is complete
         onComplete();
       } else {
         throw new Error(response.message || 'Failed to create first academic year');
       }
     } catch (error: any) {
-      console.error('Error creating first academic year:', error);
+
       toast({
         title: "خطأ",
         description: error.message || "فشل إنشاء السنة الدراسية الأولى",
@@ -142,7 +144,7 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
   return (
     <div className="min-h-screen bg-background">
       <IOSNavbar title="الإعداد الأولي" largeTitle={true} />
-      
+
       <div className="p-4 max-w-2xl mx-auto">
         <Card>
           <CardHeader>
@@ -156,7 +158,7 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
               </div>
             </div>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <Alert>
@@ -205,8 +207,8 @@ export function FirstRunSetup({ onComplete }: FirstRunSetupProps) {
               </div>
 
               <div className="flex space-x-3 space-x-reverse">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={creating}
                   className="flex-1"
                 >

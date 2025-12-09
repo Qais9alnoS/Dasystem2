@@ -20,7 +20,7 @@ const AddEditGradePage = () => {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [existingClasses, setExistingClasses] = useState<Class[]>([]);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     session_type: 'morning' as SessionType,
@@ -31,7 +31,7 @@ const AddEditGradePage = () => {
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [newSubject, setNewSubject] = useState({ subject_name: '', weekly_hours: 1 });
-  
+
   // Statistics
   const [studentsInGrade, setStudentsInGrade] = useState<Student[]>([]);
   const [teachersInGrade, setTeachersInGrade] = useState<Teacher[]>([]);
@@ -81,28 +81,28 @@ const AddEditGradePage = () => {
 
   const loadExistingClasses = async () => {
     if (!selectedAcademicYear) return;
-    
+
     try {
       const response = await api.academic.getClasses({ academic_year_id: selectedAcademicYear });
       const allClasses = Array.isArray(response) ? response : (response?.data || []);
       setExistingClasses(allClasses);
     } catch (error) {
-      console.error('Failed to load existing classes:', error);
+
     }
   };
 
   const loadGradeData = async (id: number) => {
     try {
       setLoading(true);
-      
+
       // Load class data
       const classResponse = await api.classes.getById(id);
       const classData = classResponse.data;
-      
+
       if (!classData) {
         throw new Error('Class data not found');
       }
-      
+
       setFormData({
         session_type: classData.session_type,
         grade_level: classData.grade_level,
@@ -115,7 +115,7 @@ const AddEditGradePage = () => {
       const classSubjects = Array.isArray(subjectsResponse) ? subjectsResponse : (subjectsResponse?.data || []);
       setSubjects(classSubjects);
     } catch (error) {
-      console.error('Failed to load grade data:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل بيانات الصف',
@@ -144,14 +144,14 @@ const AddEditGradePage = () => {
       if (gradeId) {
         // In edit mode, we have a class ID to filter by
         const classId = parseInt(gradeId);
-        
+
         // Get all teachers
-        const teachersResponse = await api.teachers.getAll({ 
+        const teachersResponse = await api.teachers.getAll({
           academic_year_id: selectedAcademicYear,
           session_type: formData.session_type
         });
         const allTeachers = Array.isArray(teachersResponse) ? teachersResponse : (teachersResponse?.data || []);
-        
+
         // Get assignments for each teacher and filter those assigned to this class
         const teacherAssignmentsPromises = allTeachers.map(async (teacher: Teacher) => {
           if (teacher.id) {
@@ -160,19 +160,19 @@ const AddEditGradePage = () => {
                 academic_year_id: selectedAcademicYear
               });
               const assignments = assignmentsResponse.success && assignmentsResponse.data ? assignmentsResponse.data : [];
-              
+
               // Check if this teacher has any assignment to this class
               const hasAssignmentToThisClass = assignments.some((a: any) => a.class_id === classId);
-              
+
               return hasAssignmentToThisClass ? teacher : null;
             } catch (error) {
-              console.error(`Failed to load assignments for teacher ${teacher.id}:`, error);
+
               return null;
             }
           }
           return null;
         });
-        
+
         const teachersResults = await Promise.all(teacherAssignmentsPromises);
         const filteredTeachers = teachersResults.filter((t): t is Teacher => t !== null);
         setTeachersInGrade(filteredTeachers);
@@ -181,14 +181,14 @@ const AddEditGradePage = () => {
         setTeachersInGrade([]);
       }
     } catch (error) {
-      console.error('Failed to load students/teachers:', error);
+
     }
   };
 
   const handleLoadDefaultSubjects = () => {
     const key = `${formData.grade_level}-${formData.grade_number}`;
     const defaultSubjectsForGrade = defaultSubjects[key];
-    
+
     if (defaultSubjectsForGrade) {
       setSubjects(defaultSubjectsForGrade.map((subj, index) => ({
         id: -(index + 1), // Temporary negative ID for new subjects
@@ -197,7 +197,7 @@ const AddEditGradePage = () => {
         weekly_hours: subj.weekly_hours,
         is_active: true,
       })));
-      
+
       toast({
         title: 'نجح',
         description: 'تم تحميل المواد الافتراضية',
@@ -314,10 +314,10 @@ const AddEditGradePage = () => {
 
         // Smart update subjects: preserve existing subjects to keep teacher assignments
         const existingSubjectsResponse = await api.academic.getSubjects({ class_id: classId });
-        const existingSubjects = Array.isArray(existingSubjectsResponse) 
-          ? existingSubjectsResponse 
+        const existingSubjects = Array.isArray(existingSubjectsResponse)
+          ? existingSubjectsResponse
           : (existingSubjectsResponse?.data || []);
-        
+
         // Create maps for efficient lookup
         const existingSubjectsMap = new Map<number, Subject>(
           existingSubjects.filter((s: Subject) => s.id !== undefined).map((s: Subject) => [s.id!, s])
@@ -329,7 +329,7 @@ const AddEditGradePage = () => {
         // Process each new subject
         for (const newSubject of subjects) {
           const normalizedName = newSubject.subject_name.toLowerCase().trim();
-          
+
           // Find existing subject with same name (case-insensitive)
           const existingSubject = Array.from(existingSubjectsMap.values()).find(
             (s) => s.subject_name.toLowerCase().trim() === normalizedName
@@ -367,10 +367,10 @@ const AddEditGradePage = () => {
               });
             } catch (error: any) {
               const errorMessage = error.response?.data?.detail || error.message || '';
-              const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') || 
+              const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') ||
                                      errorMessage.includes('already exists') ||
                                      errorMessage.includes('مادة باسم');
-              
+
               if (isDuplicateName) {
                 toast({
                   title: '⚠️ مادة مكررة',
@@ -390,7 +390,7 @@ const AddEditGradePage = () => {
         // Only delete if they have no teacher assignments (to preserve assignments)
         let hasDeleteErrors = false;
         const failedSubjects: string[] = [];
-        
+
         for (const [subjectId, existingSubject] of existingSubjectsMap.entries()) {
           if (existingSubject.id) {
             try {
@@ -400,20 +400,16 @@ const AddEditGradePage = () => {
               // If deletion fails, show warning to user
               const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'خطأ غير معروف';
               const statusCode = error.response?.status || error.status;
-              
-              console.log('DEBUG - Full Error:', error);
-              console.log('DEBUG - Status Code:', statusCode);
-              console.log('DEBUG - Error Message:', errorMessage);
-              
+
               // Show toast for any deletion error (most likely due to assignments)
               // Since the error message exists, it means deletion failed
               if (errorMessage && errorMessage !== 'خطأ غير معروف') {
                 hasDeleteErrors = true;
                 failedSubjects.push(existingSubject.subject_name);
-                console.log('DEBUG - Cannot delete subject:', existingSubject.subject_name, errorMessage);
+
               } else {
                 // Other error (e.g., not found), log but don't throw to allow process to continue
-                console.warn(`Could not delete subject ${existingSubject.id}:`, errorMessage);
+
               }
             }
           }
@@ -463,10 +459,10 @@ const AddEditGradePage = () => {
           } catch (error: any) {
             // Check if error is about duplicate subject name
             const errorMessage = error.response?.data?.detail || error.message || '';
-            const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') || 
+            const isDuplicateName = errorMessage.includes('يوجد بالفعل مادة باسم') ||
                                    errorMessage.includes('already exists') ||
                                    errorMessage.includes('مادة باسم');
-            
+
             if (isDuplicateName) {
               toast({
                 title: '⚠️ مادة مكررة',
@@ -484,7 +480,7 @@ const AddEditGradePage = () => {
 
       navigate('/school-info');
     } catch (error: any) {
-      console.error('Save error:', error);
+
       toast({
         title: 'خطأ',
         description: error.response?.data?.detail || error.message || 'فشل في حفظ الصف',
@@ -511,7 +507,8 @@ const AddEditGradePage = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                <BookOpen className="h-8 w-8 text-primary" />
                 {isEditMode ? 'تعديل الصف' : 'إضافة صف جديد'}
               </h1>
               <p className="text-muted-foreground mt-1">
@@ -718,7 +715,7 @@ const AddEditGradePage = () => {
                 <div className="text-3xl font-bold text-primary mb-4">
                   {studentsInGrade.length}
                 </div>
-                
+
                 {formData.section_count > 1 && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium">توزيع الطلاب حسب الشعب:</p>

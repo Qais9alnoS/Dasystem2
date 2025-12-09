@@ -38,23 +38,23 @@ export const StudentStats = () => {
         const fetchStats = async () => {
             try {
                 setLoading(true);
-                
+
                 // Fetch all students to calculate stats
                 const response = await studentsApi.getAll();
-                
+
                 if (response.success && response.data) {
                     const students = response.data;
                     const totalStudents = students.length;
                     const activeStudents = students.filter(s => s.is_active).length;
                     const transportStudents = students.filter(s => s.transportation_type !== 'walking').length;
                     const specialNeedsStudents = students.filter(s => s.has_special_needs).length;
-                    
+
                     // Session distribution
                     const morningStudents = students.filter(s => s.session_type === 'morning').length;
                     const eveningStudents = students.filter(s => s.session_type === 'evening').length;
                     const morningPercentage = totalStudents > 0 ? Math.round((morningStudents / totalStudents) * 100) : 0;
                     const eveningPercentage = totalStudents > 0 ? Math.round((eveningStudents / totalStudents) * 100) : 0;
-                    
+
                     // Grade distribution
                     const primaryStudents = students.filter(s => s.grade_level === 'primary').length;
                     const intermediateStudents = students.filter(s => s.grade_level === 'intermediate').length;
@@ -62,7 +62,7 @@ export const StudentStats = () => {
                     const primaryPercentage = totalStudents > 0 ? Math.round((primaryStudents / totalStudents) * 100) : 0;
                     const intermediatePercentage = totalStudents > 0 ? Math.round((intermediateStudents / totalStudents) * 100) : 0;
                     const secondaryPercentage = totalStudents > 0 ? Math.round((secondaryStudents / totalStudents) * 100) : 0;
-                    
+
                     // Update stats
                     setStats([
                         {
@@ -102,7 +102,7 @@ export const StudentStats = () => {
                             trend: { value: 2, isPositive: false }
                         }
                     ]);
-                    
+
                     setSessionStats([
                         {
                             session: 'الفترة الصباحية',
@@ -117,25 +117,25 @@ export const StudentStats = () => {
                             color: 'bg-purple-500'
                         }
                     ]);
-                    
+
                     setGradeDistribution([
-                        { 
-                            grade: 'الابتدائي', 
-                            count: primaryStudents, 
-                            percentage: primaryPercentage, 
-                            color: 'bg-primary' 
+                        {
+                            grade: 'الابتدائي',
+                            count: primaryStudents,
+                            percentage: primaryPercentage,
+                            color: 'bg-primary'
                         },
-                        { 
-                            grade: 'الإعدادي', 
-                            count: intermediateStudents, 
-                            percentage: intermediatePercentage, 
-                            color: 'bg-secondary' 
+                        {
+                            grade: 'الإعدادي',
+                            count: intermediateStudents,
+                            percentage: intermediatePercentage,
+                            color: 'bg-secondary'
                         },
-                        { 
-                            grade: 'الثانوي', 
-                            count: secondaryStudents, 
-                            percentage: secondaryPercentage, 
-                            color: 'bg-accent' 
+                        {
+                            grade: 'الثانوي',
+                            count: secondaryStudents,
+                            percentage: secondaryPercentage,
+                            color: 'bg-accent'
                         }
                     ]);
                 }

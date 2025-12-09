@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,11 +12,8 @@ import {
     Calendar,
     Save,
     X,
-    CheckCircle,
     AlertTriangle,
-    BookOpen,
-    Users,
-    GraduationCap
+    BookOpen
 } from 'lucide-react';
 import { IOSSwitch } from '@/components/ui/ios-switch';
 import { academicYearsApi } from '@/services/api';
@@ -50,7 +46,6 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
     mode = 'create'
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showPreview, setShowPreview] = useState(false);
     const { toast } = useToast();
 
     const {
@@ -72,10 +67,10 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
 
     const handleFormSubmit = async (data: AcademicYearFormData) => {
         if (isSubmitting) {
-            console.log('Already submitting, ignoring duplicate submission');
+
             return;
         }
-        
+
         setIsSubmitting(true);
         try {
             // Convert form data to API format
@@ -84,12 +79,12 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
                 description: data.description,
                 is_active: data.is_active
             };
-            
+
             // Only call onSubmit - let the parent handle the API call
             if (onSubmit) {
                 await onSubmit(apiData);
             }
-            
+
             // If this is edit mode, close the form after successful update
             if (mode === 'edit' && onCancel) {
                 // Small delay to allow toast to be seen
@@ -100,7 +95,7 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
         } catch (error: any) {
             // Check if this is a duplicate year error
             const errorMessage = error instanceof Error ? error.message : 'حدث خطأ أثناء الحفظ';
-            
+
             // Show a more user-friendly error message for duplicate years
             if (errorMessage.includes('already exists') || errorMessage.includes('موجودة')) {
                 toast({
@@ -125,27 +120,6 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
         const nextYear = currentYear + 1;
         setValue('year_name', `${currentYear}-${nextYear}`);
     };
-
-    const upcomingFeatures = [
-        {
-            title: 'إعدادات الفصول الدراسية',
-            description: 'تحديد مواعيد بداية ونهاية كل فصل دراسي',
-            icon: Calendar,
-            status: 'قريباً'
-        },
-        {
-            title: 'إدارة الطلاب المنقولين',
-            description: 'نقل الطلاب من السنة السابقة تلقائياً',
-            icon: Users,
-            status: 'قريباً'
-        },
-        {
-            title: 'إعدادات الدرجات',
-            description: 'تكوين نظام الدرجات والتقييم',
-            icon: GraduationCap,
-            status: 'قريباً'
-        }
-    ];
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -251,51 +225,9 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
                     </CardContent>
                 </Card>
 
-                {/* Preview Card */}
-                {showPreview && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center space-x-2 space-x-reverse">
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                                <span>معاينة السنة الدراسية</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">اسم السنة الدراسية</Label>
-                                    <p className="text-lg font-semibold">{watchedValues.year_name || '-'}</p>
-                                </div>
-                                <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">الحالة</Label>
-                                    <div className="flex items-center space-x-2 space-x-reverse mt-1">
-                                        <Badge variant={watchedValues.is_active ? "default" : "secondary"}>
-                                            {watchedValues.is_active ? 'نشطة' : 'غير نشطة'}
-                                        </Badge>
-                                    </div>
-                                </div>
-                            </div>
-                            {watchedValues.description && (
-                                <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">الوصف</Label>
-                                    <p className="text-sm mt-1">{watchedValues.description}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
                 {/* Action Buttons */}
                 <div className="flex items-center justify-between">
                     <div className="flex space-x-2 space-x-reverse">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowPreview(!showPreview)}
-                        >
-                            {showPreview ? 'إخفاء المعاينة' : 'عرض المعاينة'}
-                        </Button>
-
                         {onCancel && (
                             <Button
                                 type="button"
@@ -321,32 +253,6 @@ export const AcademicYearForm: React.FC<AcademicYearFormProps> = ({
                     </Button>
                 </div>
             </form>
-
-            {/* Upcoming Features */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>الميزات القادمة</CardTitle>
-                    <CardDescription>
-                        ميزات إضافية ستتوفر قريباً لإدارة السنوات الدراسية
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {upcomingFeatures.map((feature, index) => (
-                            <div key={index} className="p-4 border rounded-lg opacity-60">
-                                <div className="flex items-center justify-between mb-2">
-                                    <feature.icon className="w-5 h-5 text-muted-foreground" />
-                                    <Badge variant="outline" className="text-xs">
-                                        {feature.status}
-                                    </Badge>
-                                </div>
-                                <h4 className="font-medium text-sm mb-1">{feature.title}</h4>
-                                <p className="text-xs text-muted-foreground">{feature.description}</p>
-                            </div>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     );
 };

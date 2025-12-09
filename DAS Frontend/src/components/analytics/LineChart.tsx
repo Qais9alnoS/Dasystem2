@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import echarts, { type EChartsOption, type ECharts } from '@/lib/echarts-custom';
 import { getChartTheme, chartAnimation } from './chartTheme';
 
 interface DataPoint {
@@ -22,6 +22,7 @@ interface LineChartProps {
     color?: string;
   }>;
   loading?: boolean;
+  color?: string; // Custom color for single series
 }
 
 const LineChart: React.FC<LineChartProps> = ({
@@ -34,10 +35,11 @@ const LineChart: React.FC<LineChartProps> = ({
   xAxisType = 'category',
   yAxisLabel,
   series,
-  loading = false
+  loading = false,
+  color
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ECharts | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -56,13 +58,12 @@ const LineChart: React.FC<LineChartProps> = ({
     const hasData = data && data.length > 0;
     const chartData = hasData ? data : [{ name: 'لا توجد بيانات', value: 0 }];
 
-    // Prepare options - explicitly disable dataZoom and timeline
-    const option: echarts.EChartsOption = {
-      ...theme,
-      dataZoom: undefined,
-      timeline: undefined,
-      toolbox: undefined,
-      visualMap: undefined,
+    // Filter theme to only include components we have imported
+    const { timeline, visualMap, dataZoom, markPoint, ...filteredTheme } = theme;
+
+    // Prepare chart options
+    const option: EChartsOption = {
+      ...filteredTheme,
       title: title ? {
         text: title,
         subtext: subtitle,
@@ -102,7 +103,9 @@ const LineChart: React.FC<LineChartProps> = ({
           fontSize: 12
         },
         ...theme.legend
-      } : undefined,
+      } : {
+        show: false
+      },
       grid: {
         ...theme.grid,
         top: title ? '15%' : '10%',
@@ -177,16 +180,20 @@ const LineChart: React.FC<LineChartProps> = ({
         smooth,
         areaStyle: showArea ? {
           opacity: 0.3,
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: color ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: `${color}4D` }, // 30% opacity
+            { offset: 1, color: `${color}0D` }  // 5% opacity
+          ]) : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
             { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
           ])
         } : undefined,
         itemStyle: {
-          color: theme.color[0]
+          color: color || theme.color[0]
         },
         lineStyle: {
-          width: 2
+          width: 2,
+          color: color || theme.color[0]
         },
         symbol: 'circle',
         symbolSize: 6,
@@ -241,7 +248,7 @@ const LineChart: React.FC<LineChartProps> = ({
       window.removeEventListener('resize', handleResize);
       observer.disconnect();
     };
-  }, [data, title, subtitle, showArea, smooth, xAxisType, yAxisLabel, series, loading]);
+  }, [data, title, subtitle, showArea, smooth, xAxisType, yAxisLabel, series, loading, color]);
 
   useEffect(() => {
     return () => {

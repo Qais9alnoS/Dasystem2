@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Folder,
   Plus,
+  School,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ import { directorApi } from "@/services/api";
 interface QuickActionsPanelProps {
   loading?: boolean;
   academicYearId?: number;
+  sessionFilter?: 'morning' | 'evening' | 'both';
+  userRole?: string;
 }
 
 interface QuickAction {
@@ -33,6 +36,8 @@ interface QuickAction {
 export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   loading = false,
   academicYearId,
+  sessionFilter = 'both',
+  userRole,
 }) => {
   const navigate = useNavigate();
   const [recentFolders, setRecentFolders] = useState<
@@ -40,70 +45,109 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   >([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
 
-  // Using app's main colors: blue, amber, coral-orange
-  const quickActions: QuickAction[] = [
-    {
-      label: "التحليلات الشاملة",
-      icon: BarChart3,
-      path: "/analytics",
-      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950",
-    },
+  const isDirector = userRole === 'director';
+  const isMorningSchool = userRole === 'morning_school';
+  const isEveningSchool = userRole === 'evening_school';
+  const isFinance = userRole === 'finance';
+
+  // Using app's main colors: primary (blue), accent (amber), secondary (orange)
+  const allQuickActions: (QuickAction & { roles?: string[] })[] = [
     {
       label: "إدارة الطلاب",
       icon: Users,
       path: "/students/personal-info",
-      color: "text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950",
+      color: "text-primary bg-primary/10",
+      roles: ['director', 'morning_school', 'evening_school'],
     },
     {
       label: "إدارة المعلمين",
       icon: GraduationCap,
       path: "/teachers",
-      color: "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950",
+      color: "text-primary bg-primary/10",
+      roles: ['director', 'morning_school', 'evening_school'],
     },
     {
       label: "نشاط جديد",
       icon: Trophy,
       path: "/activities",
-      color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950",
+      color: "text-accent bg-accent/10",
+      roles: ['director'], // Director only
     },
     {
       label: "جدول جديد",
       icon: Calendar,
       path: "/schedules",
-      color: "text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-950",
+      color: "text-accent bg-accent/10",
+      roles: ['director', 'morning_school', 'evening_school'],
     },
     {
       label: "قيد مالي جديد",
       icon: DollarSign,
       path: "/finance",
-      color:
-        "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950",
+      color: "text-secondary bg-secondary/10",
+      roles: ['director'], // Director only
     },
     {
       label: "ملاحظات المدير",
       icon: FileText,
       path: "/director/notes",
-      color:
-        "text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950",
+      color: "text-secondary bg-secondary/10",
+      roles: ['director'], // Director only
     },
     {
       label: "إدارة المستخدمين",
       icon: UserCog,
       path: "/user-management",
-      color: "text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950",
+      color: "text-primary bg-primary/10",
+      roles: ['director'], // Director only
     },
     {
       label: "الصفحة اليومية",
       icon: ClipboardList,
       path: "/daily",
-      color: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950",
+      color: "text-accent bg-accent/10",
+      roles: ['director', 'morning_school', 'evening_school'],
+    },
+    {
+      label: "معلومات المدرسة",
+      icon: School,
+      path: "/school-info",
+      color: "text-secondary bg-secondary/10",
+      roles: ['director', 'morning_school', 'evening_school'],
+    },
+    // Finance-specific actions
+    {
+      label: "الصندوق",
+      icon: DollarSign,
+      path: "/finance?tab=treasury",
+      color: "text-primary bg-primary/10",
+      roles: ['finance'],
+    },
+    {
+      label: "الطلاب المالية",
+      icon: Users,
+      path: "/finance?tab=students",
+      color: "text-accent bg-accent/10",
+      roles: ['finance'],
+    },
+    {
+      label: "السنوات الدراسية",
+      icon: Calendar,
+      path: "/academic-years",
+      color: "text-secondary bg-secondary/10",
+      roles: ['finance'],
     },
   ];
 
-  // Fetch real folders from director notes API
+  // Filter actions based on user role
+  const quickActions = allQuickActions.filter(action =>
+    !action.roles || action.roles.includes(userRole || 'director')
+  );
+
+  // Fetch real folders from director notes API (only for directors)
   useEffect(() => {
     const fetchRecentFolders = async () => {
-      if (!academicYearId) return;
+      if (!academicYearId || !isDirector) return;
 
       setLoadingFolders(true);
       try {
@@ -135,7 +179,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
               allFolders.push(...folders);
             }
           } catch (error) {
-            console.warn(`Failed to fetch folders for ${category}:`, error);
+
           }
         }
 
@@ -144,7 +188,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 
         setRecentFolders(topFolders);
       } catch (error) {
-        console.error("Error fetching folders:", error);
+
         setRecentFolders([]);
       } finally {
         setLoadingFolders(false);
@@ -175,20 +219,20 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <CardTitle className="text-lg">اختصارات سريعة</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 space-y-3 overflow-auto">
+      <CardContent className="flex-1 space-y-2 overflow-auto">
         {/* Quick Actions Grid */}
         <div className="grid grid-cols-3 gap-2">
           {quickActions.map((action, index) => (
             <Button
               key={index}
               variant="ghost"
-              className={`h-auto flex-col gap-2 p-3 hover:scale-105 transition-transform ${action.color} border border-transparent hover:border-current`}
+              className={`h-auto flex-col gap-1.5 p-2.5 hover:scale-105 transition-transform ${action.color} border border-transparent hover:border-current`}
               onClick={() => navigate(action.path)}
             >
-              <action.icon className="h-5 w-5" />
+              <action.icon className="h-4 w-4" />
               <span className="text-xs font-medium text-center leading-tight">
                 {action.label}
               </span>
@@ -197,136 +241,167 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
         </div>
 
         {/* Divider */}
-        <div className="border-t border-border my-3"></div>
+        <div className="border-t border-border my-2"></div>
 
-        {/* Recent Notes Folders */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Folder className="h-4 w-4" />
-              مجلدات حديثة
-            </h4>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs h-auto py-1"
-              onClick={() => navigate("/director/notes")}
-            >
-              عرض الكل ←
-            </Button>
-          </div>
-          <div className="space-y-1.5">
-            {loadingFolders ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              </div>
-            ) : recentFolders.length > 0 ? (
-              recentFolders.map((folder) => (
-                <button
-                  key={folder.id}
-                  className="w-full flex items-center justify-between p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-right"
-                  onClick={() =>
-                    navigate(`/director/notes/browse/${folder.category}`, {
-                      state: {
-                        folderId: folder.id,
-                        folderData: {
-                          title: folder.name,
-                        },
-                      },
-                    })
-                  }
+        {/* Recent Notes Folders - Director only */}
+        {isDirector && (
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Folder className="h-4 w-4" />
+                  مجلدات حديثة
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-auto py-0.5 px-2"
+                  onClick={() => navigate("/director/notes")}
                 >
-                  <div className="flex items-center gap-2">
-                    <Folder className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium">{folder.name}</span>
+                  عرض الكل ←
+                </Button>
+              </div>
+              <div className="space-y-1">
+                {loadingFolders ? (
+                  <div className="flex items-center justify-center py-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                   </div>
-                </button>
-              ))
-            ) : (
-              <p className="text-xs text-center text-muted-foreground py-2">
-                لا توجد مجلدات
-              </p>
-            )}
-          </div>
-        </div>
+                ) : recentFolders.length > 0 ? (
+                  recentFolders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      className="w-full flex items-center justify-between p-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-right"
+                      onClick={() =>
+                        navigate(`/director/notes/browse/${folder.category}`, {
+                          state: {
+                            folderId: folder.id,
+                            folderData: {
+                              title: folder.name,
+                            },
+                          },
+                        })
+                      }
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Folder className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs font-medium">{folder.name}</span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-center text-muted-foreground py-1.5">
+                    لا توجد مجلدات
+                  </p>
+                )}
+              </div>
+            </div>
 
-        {/* Divider */}
-        <div className="border-t border-border my-3"></div>
+            {/* Divider */}
+            <div className="border-t border-border my-2"></div>
+          </>
+        )}
 
-        {/* Quick Create Grid - 4x4 with + cards */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        {/* Quick Create Grid - Filtered based on role */}
+        <div className="space-y-1.5">
+          <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
             إنشاء سريع
           </h4>
           <div className="grid grid-cols-2 gap-2">
-            {/* نشاط - Opens activity page with add popup */}
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-20 flex-col gap-2 border-dashed border-2 hover:bg-amber-50 dark:hover:bg-amber-950 hover:border-amber-400 transition-all"
-              onClick={() =>
-                navigate("/activities", {
-                  state: { openAddDialog: true },
-                })
-              }
-            >
-              <Plus className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                نشاط
-              </span>
-            </Button>
+            {/* نشاط - Opens activity page with add popup (Director only) */}
+            {isDirector && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 flex-col gap-1.5 border-dashed border-2 hover:bg-accent/10 hover:border-accent transition-all"
+                onClick={() =>
+                  navigate("/activities", {
+                    state: { openAddDialog: true },
+                  })
+                }
+              >
+                <Plus className="h-5 w-5 text-accent" />
+                <span className="text-xs font-medium text-accent">
+                  نشاط
+                </span>
+              </Button>
+            )}
 
-            {/* جدول - Opens schedules page in "اختيار الصف" section */}
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-20 flex-col gap-2 border-dashed border-2 hover:bg-blue-50 dark:hover:bg-blue-950 hover:border-blue-400 transition-all"
-              onClick={() =>
-                navigate("/schedules", {
-                  state: { scrollToClassSelection: true },
-                })
-              }
-            >
-              <Plus className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                جدول
-              </span>
-            </Button>
+            {/* جدول - Opens schedules page in "اختيار الصف" section (Not for finance) */}
+            {!isFinance && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 flex-col gap-1.5 border-dashed border-2 hover:bg-primary/10 hover:border-primary transition-all"
+                onClick={() =>
+                  navigate("/schedules", {
+                    state: { scrollToClassSelection: true },
+                  })
+                }
+              >
+                <Plus className="h-5 w-5 text-primary" />
+                <span className="text-xs font-medium text-primary">
+                  جدول
+                </span>
+              </Button>
+            )}
 
-            {/* كارد مالي - Opens finance page with add card popup */}
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-20 flex-col gap-2 border-dashed border-2 hover:bg-orange-50 dark:hover:bg-orange-950 hover:border-orange-400 transition-all"
-              onClick={() =>
-                navigate("/finance", {
-                  state: { openAddCardDialog: true },
-                })
-              }
-            >
-              <Plus className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-              <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                كارد مالي
-              </span>
-            </Button>
+            {/* طالب جديد - Opens students page with add dialog (Morning/Evening only) */}
+            {(isMorningSchool || isEveningSchool) && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 flex-col gap-1.5 border-dashed border-2 hover:bg-accent/10 hover:border-accent transition-all"
+                onClick={() =>
+                  navigate("/students/personal-info", {
+                    state: { openAddDialog: true },
+                  })
+                }
+              >
+                <Plus className="h-5 w-5 text-accent" />
+                <span className="text-xs font-medium text-accent">
+                  طالب
+                </span>
+              </Button>
+            )}
 
-            {/* ملاحظة - Same as before */}
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-20 flex-col gap-2 border-dashed border-2 hover:bg-blue-50 dark:hover:bg-blue-950 hover:border-blue-400 transition-all"
-              onClick={() =>
-                navigate("/director/notes", {
-                  state: { openAddDialog: true },
-                })
-              }
-            >
-              <Plus className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                ملاحظة
-              </span>
-            </Button>
+            {/* كارد مالي - Opens finance page with add card popup (Director and Finance) */}
+            {(isDirector || isFinance) && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 flex-col gap-1.5 border-dashed border-2 hover:bg-secondary/10 hover:border-secondary transition-all"
+                onClick={() =>
+                  navigate("/finance", {
+                    state: { openAddCardDialog: true },
+                  })
+                }
+              >
+                <Plus className="h-5 w-5 text-secondary" />
+                <span className="text-xs font-medium text-secondary">
+                  كارد مالي
+                </span>
+              </Button>
+            )}
+
+            {/* ملاحظة - Same as before (Director only) */}
+            {isDirector && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 flex-col gap-1.5 border-dashed border-2 hover:bg-primary/10 hover:border-primary transition-all"
+                onClick={() =>
+                  navigate("/director/notes", {
+                    state: { openAddDialog: true },
+                  })
+                }
+              >
+                <Plus className="h-5 w-5 text-primary" />
+                <span className="text-xs font-medium text-primary">
+                  ملاحظة
+                </span>
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>

@@ -205,10 +205,17 @@ class StudentPaymentResponse(StudentPaymentBase):
 class StudentAcademicBase(BaseModel):
     board_grades: Optional[Decimal] = None
     recitation_grades: Optional[Decimal] = None
-    first_exam_grades: Optional[Decimal] = None
+    
+    # Quiz grades (المذاكرات)
+    first_quiz_grade: Optional[Decimal] = None
+    second_quiz_grade: Optional[Decimal] = None
+    third_quiz_grade: Optional[Decimal] = None
+    fourth_quiz_grade: Optional[Decimal] = None
+    
+    # Exam grades (الامتحانات)
     midterm_grades: Optional[Decimal] = None
-    second_exam_grades: Optional[Decimal] = None
     final_exam_grades: Optional[Decimal] = None
+    
     behavior_grade: Optional[Decimal] = None
     activity_grade: Optional[Decimal] = None
     absence_days: int = 0

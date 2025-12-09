@@ -20,7 +20,7 @@ const SchoolInfoManagementPage = () => {
   const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasDefaultClasses, setHasDefaultClasses] = useState(false);
-  
+
   // Determine session type based on user role
   const getUserSessionType = (): SessionType | undefined => {
     if (authState.user?.role === 'morning_school') return 'morning';
@@ -32,7 +32,7 @@ const SchoolInfoManagementPage = () => {
   useEffect(() => {
     // Check if academic year is passed from search navigation
     const stateYearId = (location.state as any)?.academicYearId;
-    
+
     if (stateYearId) {
       // Use the year from navigation state
       setSelectedAcademicYear(stateYearId);
@@ -46,7 +46,7 @@ const SchoolInfoManagementPage = () => {
         }
       }
     }
-    
+
     // Listen for academic year changes
     const handleYearChange = (event: CustomEvent) => {
       const newYearId = event.detail?.yearId;
@@ -54,9 +54,9 @@ const SchoolInfoManagementPage = () => {
         setSelectedAcademicYear(newYearId);
       }
     };
-    
+
     window.addEventListener('academicYearChanged' as any, handleYearChange);
-    
+
     return () => {
       window.removeEventListener('academicYearChanged' as any, handleYearChange);
     };
@@ -70,10 +70,10 @@ const SchoolInfoManagementPage = () => {
 
   const loadData = async () => {
     if (!selectedAcademicYear) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Load classes filtered by academic year and session type (for non-directors)
       const sessionTypeFilter = getUserSessionType();
       const classesParams: any = { academic_year_id: selectedAcademicYear };
@@ -83,25 +83,25 @@ const SchoolInfoManagementPage = () => {
       const classesResponse = await api.academic.getClasses(classesParams);
       const allClasses = Array.isArray(classesResponse) ? classesResponse : (classesResponse?.data || []);
       setClasses(allClasses);
-      
+
       // Check if default classes exist
       setHasDefaultClasses(allClasses.length > 0);
-      
+
       // Load students (filter by session type for non-directors)
       const studentsResponse = await api.students.getAll({ academic_year_id: selectedAcademicYear });
       let allStudents = Array.isArray(studentsResponse) ? studentsResponse : (studentsResponse?.data || []);
-      
+
       // Filter students by session type if not a director
       if (sessionTypeFilter) {
         allStudents = allStudents.filter((s: Student) => s.session_type === sessionTypeFilter);
       }
       setStudents(allStudents);
-      
+
       // Load teachers
       const teachersResponse = await api.teachers.getAll({ academic_year_id: selectedAcademicYear });
       const allTeachers = Array.isArray(teachersResponse) ? teachersResponse : (teachersResponse?.data || []);
       setTeachers(allTeachers);
-      
+
       // Load teacher assignments for all teachers
       const assignmentsPromises = allTeachers.map(async (teacher: Teacher) => {
         if (teacher.id) {
@@ -111,18 +111,18 @@ const SchoolInfoManagementPage = () => {
             });
             return response.success && response.data ? response.data : [];
           } catch (error) {
-            console.error(`Failed to load assignments for teacher ${teacher.id}:`, error);
+
             return [];
           }
         }
         return [];
       });
-      
+
       const allAssignments = await Promise.all(assignmentsPromises);
       const flatAssignments = allAssignments.flat();
       setTeacherAssignments(flatAssignments);
     } catch (error) {
-      console.error('Failed to load data:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في تحميل البيانات',
@@ -143,10 +143,10 @@ const SchoolInfoManagementPage = () => {
 
     try {
       setLoading(true);
-      
+
       // Get the session type to create classes for
       const sessionType = getUserSessionType() || 'morning'; // Default to morning if director hasn't specified
-      
+
       for (const template of defaultGradeTemplates) {
         const classData = {
           academic_year_id: selectedAcademicYear,
@@ -158,8 +158,7 @@ const SchoolInfoManagementPage = () => {
 
         // Create class
         const createdClassResponse = await api.classes.create(classData);
-        console.log('Created class response:', createdClassResponse);
-        
+
         // Extract class from response - handle both direct Class and ApiResponse<Class>
         let createdClass: Class;
         if ('data' in createdClassResponse && createdClassResponse.data) {
@@ -168,13 +167,12 @@ const SchoolInfoManagementPage = () => {
           // Assume response is directly a Class object
           createdClass = createdClassResponse as unknown as Class;
         }
-        
+
         if (!createdClass || !createdClass.id) {
           throw new Error('Failed to create class: Invalid response - missing class ID');
         }
-        
+
         const classId = createdClass.id;
-        console.log('Extracted class ID:', classId);
 
         // Create default subjects for this class
         for (const subject of template.subjects) {
@@ -184,14 +182,11 @@ const SchoolInfoManagementPage = () => {
             weekly_hours: subject.weekly_hours,
             is_active: true,
           };
-          console.log('Creating subject with data:', subjectData);
-          
+
           try {
             await api.subjects.create(subjectData);
           } catch (subjectError: any) {
-            console.error('Failed to create subject:', subjectError);
-            console.error('Subject data:', subjectData);
-            console.error('Error response:', subjectError.response?.data);
+
             throw subjectError;
           }
         }
@@ -205,7 +200,7 @@ const SchoolInfoManagementPage = () => {
       // Reload data
       loadData();
     } catch (error: any) {
-      console.error('Full error:', error);
+
       toast({
         title: 'خطأ',
         description: error.response?.data?.detail || error.message || 'فشل في إنشاء الصفوف الافتراضية',
@@ -224,9 +219,9 @@ const SchoolInfoManagementPage = () => {
 
     try {
       setLoading(true);
-      
+
       await api.classes.delete(classId);
-      
+
       toast({
         title: 'نجح',
         description: 'تم حذف الصف بنجاح',
@@ -235,7 +230,7 @@ const SchoolInfoManagementPage = () => {
       // Reload data
       loadData();
     } catch (error: any) {
-      console.error('Failed to delete class:', error);
+
       toast({
         title: 'خطأ',
         description: error.response?.data?.detail || error.message || 'فشل في حذف الصف',
@@ -265,7 +260,10 @@ const SchoolInfoManagementPage = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">داشبورد معلومات المدرسة</h1>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <BookOpen className="h-8 w-8 text-primary" />
+              داشبورد معلومات المدرسة
+            </h1>
             <p className="text-muted-foreground mt-1">نظرة عامة على إحصائيات المدرسة</p>
           </div>
         </div>
@@ -410,11 +408,11 @@ const SchoolInfoManagementPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {classes.map((cls) => {
                       const studentsInClass = students.filter(
-                        s => s.grade_level === cls.grade_level && 
+                        s => s.grade_level === cls.grade_level &&
                              s.grade_number === cls.grade_number &&
                              s.session_type === cls.session_type
                       );
-                      
+
                       const teachersCount = cls.id ? getTeachersForClass(cls.id) : 0;
 
                       return (

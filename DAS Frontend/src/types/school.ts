@@ -46,6 +46,7 @@ export interface Class {
     grade_number: number; // 1-6 for primary, 1-3 for others
     section_count: number;
     max_students_per_section?: number;
+    quizzes_count?: 2 | 4; // عدد المذاكرات في الفصل (2 أو 4)
     created_at?: string;
 }
 
@@ -242,10 +243,19 @@ export interface StudentAcademic {
     // العلامات - Grades (based on Arabic specifications)
     board_grades?: number; // علامات السبور
     recitation_grades?: number; // علامات التسميع
-    first_exam_grades?: number; // علامات المذاكرة الأولى
+
+    // المذاكرات (1-4)
+    first_quiz_grade?: number;   // المذاكرة الأولى
+    second_quiz_grade?: number;  // المذاكرة الثانية
+    third_quiz_grade?: number;   // المذاكرة الثالثة
+    fourth_quiz_grade?: number;  // المذاكرة الرابعة
+
+    // الامتحانات
+    first_exam_grades?: number;  // علامات المذاكرة الأولى (قديم - للتوافق)
     midterm_grades?: number; // علامات الفحص النصفي
-    second_exam_grades?: number; // علامات المذاكرة الثانية
+    second_exam_grades?: number; // علامات المذاكرة الثانية (قديم - للتوافق)
     final_exam_grades?: number; // علامات الفحص النهائي
+
     behavior_grade?: number; // علامة السلوك
     activity_grade?: number; // علامات النشاط
 
@@ -508,6 +518,7 @@ export interface Activity {
     requirements?: string;
     is_active: boolean;
     current_participants?: number;
+    images?: string[]; // Activity images
 
     // Financial Fields - الحقول المالية
     total_cost: number; // التكلفة الإجمالية للنشاط
@@ -846,8 +857,9 @@ export interface Reward {
     recipient_name: string;
     recipient_type: 'student' | 'teacher' | 'other';
     amount: number;
-    description: string;
+    description?: string;
     created_at?: string;
+    updated_at?: string;
 }
 
 export interface AssistanceRecord {
@@ -857,6 +869,7 @@ export interface AssistanceRecord {
     assistance_date: string;
     organization: string;
     amount: number;
-    description: string;
+    description?: string;
     created_at?: string;
+    updated_at?: string;
 }

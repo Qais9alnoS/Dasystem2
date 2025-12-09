@@ -18,10 +18,10 @@ interface CalendarWidgetProps {
 
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ events = [], loading = false }) => {
   const today = new Date();
-  
+
   // Format Arabic date
   const arabicDate = format(today, 'EEEE، dd MMMM yyyy', { locale: ar });
-  
+
   // Mock events if none provided
   const displayEvents: CalendarEvent[] = events.length > 0 ? events : [
     { title: 'امتحان الرياضيات - الصف السادس', date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), type: 'exam' },
@@ -59,7 +59,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ events = [], loa
     const date = new Date(dateString);
     const now = new Date();
     const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'اليوم';
     if (diffDays === 1) return 'غداً';
     if (diffDays === 2) return 'بعد يومين';

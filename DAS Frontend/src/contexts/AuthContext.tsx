@@ -105,10 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setApiToken(response.data.access_token); // Set token for API client
                 dispatch({ type: 'AUTH_SUCCESS', payload: response.data });
             } else {
-                throw new Error(response.message || 'Login failed');
+                // Handle failed login (wrong credentials) without console error
+                dispatch({
+                    type: 'AUTH_ERROR',
+                    payload: response.message || response.detail || 'اسم المستخدم أو كلمة المرور غير صحيحة'
+                });
             }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Login failed';
+            // Handle unexpected errors (network issues, etc.)
+            const errorMessage = error instanceof Error ? error.message : 'حدث خطأ أثناء تسجيل الدخول';
             dispatch({
                 type: 'AUTH_ERROR',
                 payload: errorMessage
@@ -119,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const refreshToken = async () => {
         try {
             const response = await authApi.refresh();
-            
+
             if (response.success && response.data) {
                 // Do NOT store in localStorage - only keep in memory
                 // Update state with new token
@@ -141,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Add automatic token refresh before token expires
     useEffect(() => {
         let refreshTimeout: NodeJS.Timeout | null = null;
-        
+
         if (state.token && state.isAuthenticated) {
             // Set up token refresh before it expires
             // Assuming token expires in 15 minutes, refresh after 10 minutes
@@ -149,11 +154,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 try {
                     await refreshToken();
                 } catch (error) {
-                    console.error('Automatic token refresh failed:', error);
+
                 }
             }, 10 * 60 * 1000); // 10 minutes
         }
-        
+
         return () => {
             if (refreshTimeout) {
                 clearTimeout(refreshTimeout);

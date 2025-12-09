@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { FinanceCard } from './FinanceCard';
@@ -36,7 +37,7 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
       loadDashboard();
     }
   }, [academicYearId]);
-  
+
   // Handle preselected card from search navigation
   useEffect(() => {
     if (preselectedCardId && openCardPopup && dashboard) {
@@ -77,7 +78,7 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
       navigate('/finance?tab=students');
       return;
     }
-    
+
     setSelectedCard(card.card_id);
     setShowDetailModal(true);
   };
@@ -128,14 +129,14 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
         matchesType = selectedCardType === 'custom';
       }
     }
-    
+
     // Filter by search query
     let matchesSearch = true;
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       matchesSearch = card.card_name.toLowerCase().includes(query);
     }
-    
+
     return matchesType && matchesSearch;
   }) || [];
 
@@ -145,21 +146,16 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
 
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
-      <Card className="ios-card">
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث عن كارد مالي بالاسم..."
-              className="w-full pr-10 pl-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <DollarSign className="h-8 w-8 text-primary" />
+            الصندوق
+          </h1>
+          <p className="text-muted-foreground mt-1">إدارة المعاملات المالية والكاردات</p>
+        </div>
+      </div>
 
       {/* Header Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -223,6 +219,22 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
         </Card>
       </div>
 
+      {/* Search Bar */}
+      <Card className="ios-card">
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[hsl(var(--muted-foreground))]" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن كارد مالي بالاسم..."
+              className="pr-12"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filter & Add Button */}
       <div className="flex justify-between items-center">
         <div className="flex gap-2">
@@ -255,7 +267,7 @@ export const TreasurySection: React.FC<TreasurySectionProps> = ({ academicYearId
             مخصص
           </Button>
         </div>
-        
+
         <Button onClick={handleAddCard} size="sm">
           <Plus className="w-4 h-4 ml-2" />
           إضافة كارد

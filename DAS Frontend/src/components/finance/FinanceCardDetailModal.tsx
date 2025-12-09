@@ -56,7 +56,7 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   const [transactionDescription, setTransactionDescription] = useState('');
   const [transactionStatus, setTransactionStatus] = useState<'completed' | 'pending'>('completed');
   const [responsiblePerson, setResponsiblePerson] = useState('');
-  
+
   // Edit transaction state
   const [editingTransaction, setEditingTransaction] = useState<number | null>(null);
   const [editTransactionData, setEditTransactionData] = useState<any>(null);
@@ -70,9 +70,9 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   // Set transaction type based on card type when card loads
   useEffect(() => {
     if (card) {
-      if (card.card_type === 'income') {
+      if (card.card.card_type === 'income') {
         setTransactionType('income');
-      } else if (card.card_type === 'expense') {
+      } else if (card.card.card_type === 'expense') {
         setTransactionType('expense');
       }
     }
@@ -81,12 +81,12 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
   const loadCardDetails = async () => {
     try {
       setLoading(true);
-      console.log('Loading card details:', { cardId, academicYearId });
+
       const response = await financeManagerApi.getFinanceCardDetailed(cardId, academicYearId);
-      console.log('Card details loaded:', response.data);
+
       setCard(response.data);
     } catch (error) {
-      console.error('Error loading card details:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل تحميل تفاصيل الكارد المالي',
@@ -143,12 +143,12 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
     try {
       setLoading(true);
       await financeManagerApi.addCardTransaction(cardId, {
-        card_id: cardId,
         transaction_type: transactionType,
         amount: parseFloat(transactionAmount),
         transaction_date: transactionDate,
         notes: transactionDescription,
         is_completed: transactionStatus === 'completed',
+        completion_percentage: 100,
         responsible_person: responsiblePerson || undefined
       });
 
@@ -337,19 +337,19 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
 
   const completedIncome = card?.transactions
     ?.filter(t => t.transaction_type === 'income' && t.is_completed)
-    ?.reduce((sum, t) => sum + t.amount, 0) || 0;
+    ?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
   const completedExpense = card?.transactions
     ?.filter(t => t.transaction_type === 'expense' && t.is_completed)
-    ?.reduce((sum, t) => sum + t.amount, 0) || 0;
+    ?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
   const pendingIncome = card?.transactions
     ?.filter(t => t.transaction_type === 'income' && !t.is_completed)
-    ?.reduce((sum, t) => sum + t.amount, 0) || 0;
+    ?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
   const pendingExpense = card?.transactions
     ?.filter(t => t.transaction_type === 'expense' && !t.is_completed)
-    ?.reduce((sum, t) => sum + t.amount, 0) || 0;
+    ?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
   const netAmount = completedIncome - completedExpense;
 
@@ -358,9 +358,9 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center justify-between">
-            <span>{card?.card_name}</span>
+            <span>{card?.card.card_name}</span>
             <Badge variant="outline" className="text-xs">
-              {card?.card_type === 'income' ? 'دخل' : card?.card_type === 'expense' ? 'خرج' : 'دخل وخرج'}
+              {card?.card.card_type === 'income' ? 'دخل' : card?.card.card_type === 'expense' ? 'خرج' : 'دخل وخرج'}
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -437,7 +437,7 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
                 {showTransactionForm && (
                   <div className="space-y-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
                     {/* Only show transaction type selector for 'both' card types */}
-                    {card?.card_type === 'both' ? (
+                    {card?.card.card_type === 'both' ? (
                       <div>
                         <Label>نوع المعاملة</Label>
                         <SegmentedControl
@@ -552,7 +552,7 @@ export const FinanceCardDetailModal: React.FC<FinanceCardDetailModalProps> = ({
                               // Edit mode
                               <div className="space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {card?.card_type === 'both' && (
+                                  {card?.card.card_type === 'both' && (
                                     <div>
                                       <Label className="text-xs">نوع المعاملة</Label>
                                       <SegmentedControl

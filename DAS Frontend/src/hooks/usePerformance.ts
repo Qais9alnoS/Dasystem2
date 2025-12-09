@@ -73,7 +73,7 @@ export const usePerformanceMonitor = (name: string) => {
 
         // Log performance metrics in development
         if (process.env.NODE_ENV === 'development') {
-            console.log(`Component ${name} render time: ${renderTime}ms`);
+
         }
     });
 

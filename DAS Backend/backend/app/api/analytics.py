@@ -361,6 +361,152 @@ async def compare_sessions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/grades/school-wide")
+async def get_school_wide_grades(
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    subject: Optional[str] = Query(None, description="Filter by subject name"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get school-wide grade averages for quizzes and exams by session
+    Returns average grades for morning and evening sessions for each assignment
+    """
+    try:
+        grades = analytics_service.get_school_wide_grades(
+            academic_year_id=academic_year_id,
+            subject_filter=subject
+        )
+        
+        return {
+            "success": True,
+            "data": grades
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/students/{student_id}/attendance-trend")
+async def get_student_attendance_trend(
+    student_id: int,
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    period_type: str = Query("weekly", description="weekly or monthly"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get student attendance trend by week or month
+    Returns attendance rate (percentage) for each period
+    """
+    try:
+        trend_data = analytics_service.get_student_attendance_trend(
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            period_type=period_type
+        )
+        
+        return {
+            "success": True,
+            "data": trend_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/students/{student_id}/grades-timeline")
+async def get_student_grades_timeline(
+    student_id: int,
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get student's average grades timeline across all subjects
+    Timeline order depends on class quizzes_count (2 or 4)
+    """
+    try:
+        timeline_data = analytics_service.get_student_grades_timeline(
+            student_id=student_id,
+            academic_year_id=academic_year_id
+        )
+        
+        return {
+            "success": True,
+            "data": timeline_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/students/{student_id}/grades-by-subject")
+async def get_student_grades_by_subject(
+    student_id: int,
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get student's average grades by subject
+    Shows average of all assessments for each subject
+    """
+    try:
+        subject_data = analytics_service.get_student_grades_by_subject(
+            student_id=student_id,
+            academic_year_id=academic_year_id
+        )
+        
+        return {
+            "success": True,
+            "data": subject_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/students/{student_id}/financial-summary")
+async def get_student_financial_summary(
+    student_id: int,
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get student's financial summary (paid vs remaining balance)
+    Returns data for pie chart display
+    """
+    try:
+        financial_data = analytics_service.get_student_financial_summary(
+            student_id=student_id,
+            academic_year_id=academic_year_id
+        )
+        
+        return {
+            "success": True,
+            "data": financial_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/students/{student_id}/behavior-records")
+async def get_student_behavior_records(
+    student_id: int,
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get student's behavior records
+    Returns all behavior records sorted by date (most recent first)
+    """
+    try:
+        records = analytics_service.get_student_behavior_records(
+            student_id=student_id,
+            academic_year_id=academic_year_id
+        )
+        
+        return {
+            "success": True,
+            "data": records
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/cache/clear")
 async def clear_analytics_cache(
     current_user = Depends(get_current_user)

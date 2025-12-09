@@ -62,11 +62,12 @@ fn main() {
             };
             let _ = main_window.set_background_color(Some(color));
             
-            #[cfg(debug_assertions)]
-            {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
-            }
+            // Devtools commented out to disable dimension indicator overlay
+            // #[cfg(debug_assertions)]
+            // {
+            //     let window = app.get_webview_window("main").unwrap();
+            //     window.open_devtools();
+            // }
             Ok(())
         })
         .run(tauri::generate_context!())

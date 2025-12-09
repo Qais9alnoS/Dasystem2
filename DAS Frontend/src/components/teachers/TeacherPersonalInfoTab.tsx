@@ -89,12 +89,12 @@ export const TeacherPersonalInfoTab: React.FC<TeacherPersonalInfoTabProps> = ({ 
         setFormData(updatedData);
         setShowQualificationDialog(false);
         setEditingQualification(null);
-        
+
         // Save to database immediately
         setIsSaving(true);
         try {
             const response = await teachersApi.update(teacher.id!, { qualifications });
-            
+
             if (response.success) {
                 toast({
                     title: "نجاح",
@@ -116,7 +116,7 @@ export const TeacherPersonalInfoTab: React.FC<TeacherPersonalInfoTabProps> = ({ 
     const handleDeleteQualification = async (id: string) => {
         const qualifications = (formData.qualifications || []).filter(q => q.id !== id);
         setFormData({ ...formData, qualifications });
-        
+
         // Save to database immediately
         setIsSaving(true);
         try {
@@ -152,7 +152,7 @@ export const TeacherPersonalInfoTab: React.FC<TeacherPersonalInfoTabProps> = ({ 
         setFormData({ ...formData, experience: experiences });
         setShowExperienceDialog(false);
         setEditingExperience(null);
-        
+
         // Save to database immediately
         setIsSaving(true);
         try {
@@ -178,7 +178,7 @@ export const TeacherPersonalInfoTab: React.FC<TeacherPersonalInfoTabProps> = ({ 
     const handleDeleteExperience = async (id: string) => {
         const experiences = (formData.experience || []).filter(e => e.id !== id);
         setFormData({ ...formData, experience: experiences });
-        
+
         // Save to database immediately
         setIsSaving(true);
         try {

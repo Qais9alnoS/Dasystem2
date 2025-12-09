@@ -4,13 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProject } from '@/contexts/ProjectContext';
-import { 
-  BookOpen, 
-  Users, 
-  Calendar, 
-  Settings, 
-  FileText, 
-  AlertCircle 
+import {
+  BookOpen,
+  Users,
+  Calendar,
+  Settings,
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 
 interface ProjectDashboardProps {
@@ -20,9 +20,9 @@ interface ProjectDashboardProps {
 export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId }) => {
   const navigate = useNavigate();
   const { state } = useProject();
-  
+
   const project = state.projects.find(p => p.id === projectId);
-  
+
   if (!project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -99,7 +99,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId })
           <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
           <TabsTrigger value="actions">الإجراءات</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="overview">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dashboardCards.map((card, index) => (
@@ -126,7 +126,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId })
             ))}
           </div>
         </TabsContent>
-        
+
         <TabsContent value="actions">
           <div className="space-y-4">
             <Card>
@@ -135,15 +135,15 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId })
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button 
-                    variant="default" 
+                  <Button
+                    variant="default"
                     className="w-full"
                     onClick={() => navigate('/project/generate')}
                   >
                     تشغيل الجدولة الآن
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full"
                     onClick={() => navigate('/project/settings')}
                   >

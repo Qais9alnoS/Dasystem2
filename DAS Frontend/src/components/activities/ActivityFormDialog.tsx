@@ -216,7 +216,7 @@ export const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
       await onSave(activityData);
       onOpenChange(false);
     } catch (error) {
-      console.error('Error saving activity:', error);
+
       toast({
         title: 'خطأ',
         description: 'فشل في حفظ النشاط',

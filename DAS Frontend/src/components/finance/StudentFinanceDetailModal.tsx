@@ -86,19 +86,19 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
       setLoading(true);
       const response = await financeManagerApi.getStudentFinanceDetailed(studentId, academicYearId);
       setStudent(response.data);
-      
+
       // Populate form with existing data
       if (response.data) {
         setSchoolFee(response.data.school_fee);
         setSchoolDiscountType(response.data.school_discount_type);
         setSchoolDiscountValue(response.data.school_discount_value);
-        setSchoolDiscountReason(response.data.school_discount_reason || '');
-        
+        setSchoolDiscountReason(''); // school_discount_reason not in type
+
         setBusFee(response.data.bus_fee);
         setBusDiscountType(response.data.bus_discount_type);
         setBusDiscountValue(response.data.bus_discount_value);
-        setBusDiscountReason(response.data.bus_discount_reason || '');
-        
+        setBusDiscountReason(''); // bus_discount_reason not in type
+
         setUniformType(response.data.uniform_type || '');
         setUniformAmount(response.data.uniform_amount);
         setCourseType(response.data.course_type || '');
@@ -130,9 +130,9 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
     // Validate payment amount doesn't exceed what is owed (only if total owed > 0)
     const amount = parseFloat(paymentAmount);
     if (student) {
-      const totalOwed = Number(student.total_owed) || 0;
+      const totalOwed = Number(student.total_amount) || 0;
       const totalPaid = Number(student.total_paid) || 0;
-      
+
       // Only validate if totalOwed > 0 (to avoid false positives when data is incomplete)
       if (totalOwed > 0 && (totalPaid + amount) > totalOwed) {
         const remaining = totalOwed - totalPaid;
@@ -160,8 +160,7 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
         academic_year_id: academicYearId,
         payment_amount: amount,
         payment_date: paymentDate,
-        receipt_number: receiptNumber || undefined,
-        payment_status: 'completed'
+        receipt_number: receiptNumber || undefined
       });
 
       toast({
@@ -177,7 +176,7 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
     } catch (error: any) {
       // استخراج رسالة الخطأ من صيغ مختلفة
       let errorMessage = 'فشل تسجيل الدفعة';
-      
+
       if (error?.message) {
         errorMessage = error.message;
       } else if (error?.details?.detail) {
@@ -185,7 +184,7 @@ export const StudentFinanceDetailModal: React.FC<StudentFinanceDetailModalProps>
       } else if (error?.response?.data?.detail) {
         errorMessage = error.response.data.detail;
       }
-      
+
       toast({
         title: 'خطأ في تسجيل الدفعة',
         description: errorMessage,

@@ -36,6 +36,7 @@ const teacherSchema = z.object({
     gender: z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
     birth_date: z.string().optional(),
     nationality: z.string().optional(),
+    session_type: z.enum(['morning', 'evening'], { required_error: 'نوع الدوام مطلوب' }),
 
     // Contact Information
     phone: z.string().optional(),
@@ -158,32 +159,41 @@ export const TeacherRegistrationForm: React.FC<TeacherRegistrationFormProps> = (
                     is_active: true,
                     full_name: data.full_name,
                     gender: data.gender,
+                    session_type: data.session_type,
                     birth_date: data.birth_date || undefined,
                     nationality: data.nationality || undefined,
                     phone: data.phone || undefined,
                     detailed_address: data.detailed_address || undefined,
                     transportation_type: data.transportation_type || undefined,
-                    qualifications: data.qualifications,
-                    experience: data.experience || undefined,
+                    qualifications: data.qualifications ? [{
+                        degree: data.qualifications,
+                        specialization: '',
+                        institution: ''
+                    }] : undefined,
+                    experience: data.experience ? [{
+                        job_title: data.experience,
+                        institution: '',
+                        start_date: ''
+                    }] : undefined,
                     free_time_slots: data.free_time_slots || undefined,
                     notes: data.notes || undefined
                 };
-                
-                // Type assertion to ensure TypeScript knows all required fields are present
-                response = await teachersApi.create(teacherData as Omit<Teacher, 'id' | 'created_at' | 'updated_at'>);
+
+                // Create teacher with properly typed data
+                response = await teachersApi.create(teacherData as any);
             } else {
                 // For edit mode, we would need an ID
                 // response = await teachersApi.update(teacherId, data);
                 throw new Error('Edit mode not implemented yet');
             }
-            
+
             if (response.success) {
                 toast({
                     title: "نجاح",
                     description: `تم ${mode === 'create' ? 'تسجيل' : 'تحديث'} بيانات المعلم بنجاح!`,
                     variant: "default"
                 });
-                
+
                 // Reset form or redirect
                 if (onSubmit) {
                     await onSubmit(data);

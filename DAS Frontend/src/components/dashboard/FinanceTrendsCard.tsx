@@ -21,7 +21,7 @@ export const FinanceTrendsCard: React.FC<FinanceTrendsCardProps> = ({
   const getComparisonData = () => {
     const studentPayments = incomeTrends?.student_payments || [];
     const expenses = expenseTrends?.expense_trend || [];
-    
+
     // Get all unique periods
     const periods = new Set([
       ...studentPayments.map((d: any) => d.period),
@@ -29,7 +29,7 @@ export const FinanceTrendsCard: React.FC<FinanceTrendsCardProps> = ({
     ]);
 
     return Array.from(periods).sort().map((period: any) => ({
-      name: period ? new Date(period).toLocaleDateString('ar-SY', { 
+      name: period ? new Date(period).toLocaleDateString('ar-SY', {
         month: 'short',
         ...(periodFilter === 'daily' && { day: 'numeric' })
       }) : '',
@@ -107,7 +107,7 @@ export const FinanceTrendsCard: React.FC<FinanceTrendsCardProps> = ({
             </h4>
             <PieChart
               data={(incomeTrends?.by_category || []).map((c: any) => ({
-                name: c.category === 'student_payment' ? 'مدفوعات الطلاب' : 
+                name: c.category === 'student_payment' ? 'مدفوعات الطلاب' :
                       c.category === 'other' ? 'دخل آخر' : c.category,
                 value: c.total
               }))}
@@ -143,13 +143,13 @@ export const FinanceTrendsCard: React.FC<FinanceTrendsCardProps> = ({
               متوسط الدخل
             </p>
             <p className="text-lg font-bold text-green-800 dark:text-green-200">
-              {getIncomeData().length > 0 
+              {getIncomeData().length > 0
                 ? Math.round(getIncomeData().reduce((a: number, b: number) => a + b, 0) / getIncomeData().length).toLocaleString('ar-SY')
                 : 0}
             </p>
             <p className="text-xs text-green-600 dark:text-green-400">ل.س</p>
           </div>
-          
+
           <div className="text-center p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
             <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
               متوسط المصروفات
@@ -168,8 +168,8 @@ export const FinanceTrendsCard: React.FC<FinanceTrendsCardProps> = ({
             </p>
             <p className="text-lg font-bold text-blue-800 dark:text-blue-200">
               {(() => {
-                const avgIncome = getIncomeData().length > 0 
-                  ? getIncomeData().reduce((a: number, b: number) => a + b, 0) / getIncomeData().length 
+                const avgIncome = getIncomeData().length > 0
+                  ? getIncomeData().reduce((a: number, b: number) => a + b, 0) / getIncomeData().length
                   : 0;
                 const avgExpense = getExpenseData().length > 0
                   ? getExpenseData().reduce((a: number, b: number) => a + b, 0) / getExpenseData().length

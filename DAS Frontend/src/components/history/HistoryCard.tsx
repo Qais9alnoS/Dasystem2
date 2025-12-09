@@ -12,6 +12,10 @@ import {
   ACTION_CATEGORY_LABELS,
   ENTITY_TYPE_LABELS,
   SEVERITY_COLORS,
+  SEVERITY_LABELS,
+  USER_ROLE_LABELS,
+  FIELD_NAME_LABELS,
+  formatClassName,
 } from "@/types/history";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +78,9 @@ const categoryIcons: Record<string, React.ReactNode> = {
   activity: <Target className="w-4 h-4" />,
 };
 
+const statsBadgeClasses =
+  "gap-1 bg-secondary/10 text-secondary border border-secondary/30 dark:bg-secondary/20 dark:text-secondary-foreground dark:border-secondary/40";
+
 export const HistoryCard: React.FC = () => {
   const [history, setHistory] = useState<HistoryLog[]>([]);
   const [statistics, setStatistics] = useState<HistoryStatistics | null>(null);
@@ -121,7 +128,7 @@ export const HistoryCard: React.FC = () => {
           }));
         }
       } catch (error) {
-        console.error("Failed to fetch history:", error);
+
       } finally {
         setLoading(false);
       }
@@ -137,7 +144,7 @@ export const HistoryCard: React.FC = () => {
         setStatistics(response.data);
       }
     } catch (error) {
-      console.error("Failed to fetch statistics:", error);
+
     }
   }, []);
 
@@ -219,7 +226,9 @@ export const HistoryCard: React.FC = () => {
               key={field}
               className="text-sm text-gray-600 dark:text-gray-400 mr-4"
             >
-              <span className="font-medium">{field}</span>:{" "}
+              <span className="font-medium">
+                {FIELD_NAME_LABELS[field] || field}
+              </span>:{" "}
               <span className="text-red-600 dark:text-red-400">
                 {String(change.old)}
               </span>
@@ -338,20 +347,20 @@ export const HistoryCard: React.FC = () => {
         {/* Statistics */}
         {statistics && (
           <div className="flex gap-3 mt-3 flex-wrap">
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="outline" className={statsBadgeClasses}>
               <Calendar className="w-3 h-3" />
               اليوم: {statistics.actions_today}
             </Badge>
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="outline" className={statsBadgeClasses}>
               <Calendar className="w-3 h-3" />
               هذا الأسبوع: {statistics.actions_week}
             </Badge>
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="outline" className={statsBadgeClasses}>
               <Calendar className="w-3 h-3" />
               هذا الشهر: {statistics.actions_month}
             </Badge>
             {statistics.most_active_user && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="outline" className={statsBadgeClasses}>
                 <User className="w-3 h-3" />
                 الأكثر نشاطاً: {statistics.most_active_user}
               </Badge>
@@ -392,14 +401,16 @@ export const HistoryCard: React.FC = () => {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{log.description}</span>
+                        <span className="font-medium">
+                          {log.entity_type === 'class' ? formatClassName(log.description) : log.description}
+                        </span>
                         {actionIcons[log.action_type]}
                       </div>
 
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-600 dark:text-gray-400">
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3" />
-                          {log.user_name} ({log.user_role})
+                          {log.user_name} ({USER_ROLE_LABELS[log.user_role || ''] || log.user_role})
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -450,7 +461,7 @@ export const HistoryCard: React.FC = () => {
                 <div className="flex items-center gap-2">
                   {categoryIcons[selectedLog.action_category]}
                   <h3 className="font-semibold text-lg dark:text-gray-100">
-                    {selectedLog.description}
+                    {selectedLog.entity_type === 'class' ? formatClassName(selectedLog.description) : selectedLog.description}
                   </h3>
                 </div>
 
@@ -487,7 +498,7 @@ export const HistoryCard: React.FC = () => {
                       الأهمية:
                     </span>{" "}
                     <Badge className={getSeverityClass(selectedLog.severity)}>
-                      {selectedLog.severity}
+                      {SEVERITY_LABELS[selectedLog.severity] || selectedLog.severity}
                     </Badge>
                   </div>
                   <div className="col-span-2">
@@ -495,7 +506,7 @@ export const HistoryCard: React.FC = () => {
                       المستخدم:
                     </span>{" "}
                     <span className="dark:text-gray-300">
-                      {selectedLog.user_name} ({selectedLog.user_role})
+                      {selectedLog.user_name} ({USER_ROLE_LABELS[selectedLog.user_role || ''] || selectedLog.user_role})
                     </span>
                   </div>
                   <div className="col-span-2">

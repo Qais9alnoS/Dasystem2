@@ -147,7 +147,7 @@ export const projectService = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    
+
     // Simulate async operation
     await new Promise(resolve => setTimeout(resolve, 1000));
     return project;
@@ -178,7 +178,7 @@ export const projectService = {
   ): Promise<any> {
     // This will be replaced with actual Tauri command: invoke('update_project_data', { projectId, dataType, data })
     await new Promise(resolve => setTimeout(resolve, 500));
-    console.log(`Mock: Updating ${dataType} for project ${projectId}:`, data);
+
     return { success: true };
   },
 
@@ -197,7 +197,7 @@ export const projectService = {
   async deleteProject(projectId: number): Promise<void> {
     // This will be replaced with actual Tauri command: invoke('delete_project', { projectId })
     await new Promise(resolve => setTimeout(resolve, 400));
-    console.log(`Mock: Deleting project ${projectId}`);
+
   },
 
   async exportSchedules(projectId: number, format: 'pdf' | 'excel' | 'csv'): Promise<string> {

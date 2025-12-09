@@ -69,7 +69,7 @@ export const QuickSearch = () => {
       setIsSearching(true);
       try {
         const response = await searchApi.quick(searchQuery, 10);
-        
+
         if (response.success && response.data) {
           // Transform API response to match our UI structure
           const transformedResults: QuickSearchResult[] = [
@@ -87,7 +87,7 @@ export const QuickSearch = () => {
               subjects: teacher.subjects
             })) || [])
           ];
-          
+
           setResults(transformedResults);
           setIsOpen(true);
         } else {
@@ -95,7 +95,7 @@ export const QuickSearch = () => {
           setIsOpen(false);
         }
       } catch (error: any) {
-        console.error('Quick search error:', error);
+
         toast({
           title: "خطأ في البحث السريع",
           description: error.message || "حدث خطأ أثناء البحث",
@@ -118,7 +118,7 @@ export const QuickSearch = () => {
     } else if (result.type === 'teacher') {
       navigate(`/teachers/${result.id}`);
     }
-    
+
     // Clear search
     setSearchQuery('');
     setIsOpen(false);
@@ -186,8 +186,8 @@ export const QuickSearch = () => {
                       {result.name}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {result.type === 'student' 
-                        ? `${result.grade} - شعبة ${result.section}` 
+                      {result.type === 'student'
+                        ? `${result.grade} - شعبة ${result.section}`
                         : result.subjects?.join(', ')}
                     </p>
                   </div>

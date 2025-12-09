@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, GraduationCap, DollarSign, X } from 'lucide-react';
+import { User, GraduationCap, DollarSign, BarChart3, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
@@ -8,7 +8,7 @@ interface StudentNavigationPopupProps {
   onClose: () => void;
   studentName: string;
   userRole: string;
-  onNavigate: (destination: 'personal' | 'academic' | 'finance') => void;
+  onNavigate: (destination: 'personal' | 'academic' | 'finance' | 'analytics') => void;
 }
 
 export const StudentNavigationPopup: React.FC<StudentNavigationPopupProps> = ({
@@ -18,7 +18,7 @@ export const StudentNavigationPopup: React.FC<StudentNavigationPopupProps> = ({
   userRole,
   onNavigate
 }) => {
-  const handleNavigation = (destination: 'personal' | 'academic' | 'finance') => {
+  const handleNavigation = (destination: 'personal' | 'academic' | 'finance' | 'analytics') => {
     onNavigate(destination);
     onClose();
   };
@@ -26,6 +26,7 @@ export const StudentNavigationPopup: React.FC<StudentNavigationPopupProps> = ({
   // Determine which options to show based on user role
   const showPersonalInfo = ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'].includes(userRole);
   const showAcademicInfo = ['director', 'morning_school', 'evening_school', 'morning_supervisor', 'evening_supervisor'].includes(userRole);
+  const showAnalytics = ['director', 'morning_school', 'evening_school'].includes(userRole);
   const showFinanceInfo = ['director', 'finance'].includes(userRole);
 
   return (
@@ -78,6 +79,24 @@ export const StudentNavigationPopup: React.FC<StudentNavigationPopupProps> = ({
                 <div className="flex-1 text-right">
                   <div className="font-semibold text-base">معلومات دراسية</div>
                   <div className="text-sm text-muted-foreground">العلامات والنشاط الدراسي</div>
+                </div>
+              </div>
+            </Button>
+          )}
+
+          {showAnalytics && (
+            <Button
+              onClick={() => handleNavigation('analytics')}
+              variant="outline"
+              className="h-auto py-4 px-6 justify-start rounded-2xl hover:bg-primary/5 hover:border-primary transition-all group"
+            >
+              <div className="flex items-center gap-4 w-full">
+                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                  <BarChart3 className="h-6 w-6 text-purple-600" />
+                </div>
+                <div className="flex-1 text-right">
+                  <div className="font-semibold text-base">تحليلات الطلاب</div>
+                  <div className="text-sm text-muted-foreground">التقارير والإحصائيات</div>
                 </div>
               </div>
             </Button>
